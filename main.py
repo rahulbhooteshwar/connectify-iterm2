@@ -20,6 +20,7 @@ import inquirer
 from inquirer.themes import GreenPassion
 import shutil
 import threading
+import glob
 
 # Custom theme for better visibility
 class CustomTheme(GreenPassion):
@@ -32,6 +33,8 @@ class SSHManager:
     def __init__(self, config_file="~/.ssh_manager_config.json"):
         self.config_file = Path(config_file).expanduser()
         self.config = self.load_config()
+        # Start background cleanup of old temp password files
+        self.cleanup_old_temp_files()
 
     def load_config(self):
         """Load SSH configuration from JSON file"""
@@ -130,6 +133,62 @@ class SSHManager:
             # Return empty dict if no passwords stored yet or error occurred
             return {}
 
+    def cleanup_old_temp_files(self):
+        """Clean up old temporary password files in background (non-blocking)"""
+        def cleanup_worker():
+            try:
+                import time
+                import os
+
+                # Find all ssh temp password files in home directory
+                home_dir = Path.home()
+                pattern = str(home_dir / ".ssh_pass_*")
+                temp_files = glob.glob(pattern)
+
+                current_time = time.time()
+                cleanup_threshold = 5 * 60  # 5 minutes in seconds
+                cleaned_count = 0
+
+                for temp_file_path in temp_files:
+                    try:
+                        temp_file = Path(temp_file_path)
+                        filename = temp_file.name
+
+                        # Extract timestamp from filename: .ssh_pass_TIMESTAMP_UUID
+                        if filename.startswith('.ssh_pass_'):
+                            parts = filename.split('_')
+                            if len(parts) >= 3:  # ['.ssh', 'pass', 'timestamp', 'uuid']
+                                try:
+                                    file_timestamp = int(parts[2])
+                                    file_age = current_time - file_timestamp
+
+                                    # If file is older than 5 minutes, remove it
+                                    if file_age > cleanup_threshold:
+                                        temp_file.unlink()
+                                        cleaned_count += 1
+                                except (ValueError, IndexError):
+                                    # If we can't parse timestamp, check file modification time as fallback
+                                    file_mtime = temp_file.stat().st_mtime
+                                    file_age = current_time - file_mtime
+                                    if file_age > cleanup_threshold:
+                                        temp_file.unlink()
+                                        cleaned_count += 1
+                    except (OSError, FileNotFoundError):
+                        # File might have been deleted by another process, ignore
+                        pass
+
+                # Only print if we actually cleaned something (for debugging)
+                if cleaned_count > 0:
+                    print(f"🧹 Cleaned up {cleaned_count} old temporary password file(s)")
+
+            except Exception as e:
+                # Silently handle any errors in background cleanup
+                pass
+
+        # Run cleanup in background thread
+        cleanup_thread = threading.Thread(target=cleanup_worker, daemon=True)
+        cleanup_thread.start()
+
 
 
     def filter_hosts(self, filter_term=None):
@@ -174,7 +233,7 @@ class SSHManager:
 
         return filtered_hosts
 
-    def display_host_menu(self, hosts):
+    def display_host_menu(self, hosts, has_active_filter=False):
         """Display interactive menu for host selection with tag-based visual grouping and search"""
         if not hosts:
             print("No hosts found matching your criteria.")
@@ -190,6 +249,7 @@ class SSHManager:
         # Add search functionality option
         search_option = "🔍 Search/Filter hosts..."
         all_hosts = hosts.copy()  # Keep reference to all hosts
+        internal_filter_active = False  # Track if internal search filter is active
 
         while True:
             # Group hosts by tags
@@ -212,6 +272,10 @@ class SSHManager:
 
             # Add search option at the top
             choices.append((search_option, "search"))
+
+            # Add clear filter option if there's an active filter (command-line or internal search)
+            if has_active_filter or internal_filter_active:
+                choices.append(("🗑️  Clear filter and show all hosts", "clear_filter"))
 
             # Add separator
             if hosts:
@@ -273,17 +337,20 @@ class SSHManager:
                     if search_answer and search_answer['search_term']:
                         # Filter hosts based on search term
                         hosts = self.filter_hosts_internal(all_hosts, search_answer['search_term'])
+                        internal_filter_active = True  # Mark that internal filter is active
                         if not hosts:
                             print(f"No hosts found matching '{search_answer['search_term']}'")
                             input("Press Enter to continue...")
                     else:
                         # Empty search term, show all hosts
                         hosts = all_hosts
+                        internal_filter_active = False
                     continue
 
                 elif selected == "clear_filter":
-                    # Reset to show all hosts
+                    # Reset to show all hosts and clear internal filter
                     hosts = all_hosts
+                    internal_filter_active = False
                     continue
 
                 elif selected is not None:  # Valid host selected
@@ -341,10 +408,11 @@ class SSHManager:
         print("\nOptions:")
         print("  0. Exit")
         print("  s. Search/filter hosts")
+        print("  c. Clear current filter (show all hosts)")
 
         while True:
             try:
-                choice = input(f"\nSelect host (1-{len(host_list)}, 0=exit, s=search): ").strip().lower()
+                choice = input(f"\nSelect host (1-{len(host_list)}, 0=exit, s=search, c=clear filter): ").strip().lower()
 
                 if choice == '0' or choice == 'exit' or choice == 'q':
                     return None
@@ -359,6 +427,13 @@ class SSHManager:
                             continue
                     else:
                         continue
+                elif choice == 'c' or choice == 'clear':
+                    # Clear terminal and filter by returning to display all hosts
+                    import os
+                    os.system('clear')
+                    print("🗑️  Filter cleared, showing all hosts...\n")
+                    all_hosts = self.config.get('hosts', [])
+                    return self.display_simple_host_menu(all_hosts)
                 elif choice.isdigit():
                     choice_num = int(choice)
                     if 1 <= choice_num <= len(host_list):
@@ -366,7 +441,7 @@ class SSHManager:
                     else:
                         print(f"Please enter a number between 1 and {len(host_list)}")
                 else:
-                    print("Invalid choice. Please enter a number, 's' for search, or '0' to exit.")
+                    print("Invalid choice. Please enter a number, 's' for search, 'c' to clear filter, or '0' to exit.")
             except KeyboardInterrupt:
                 print("\nOperation cancelled.")
                 return None
@@ -424,7 +499,7 @@ class SSHManager:
                                   capture_output=True, text=True, check=True)
 
             if result.stdout.strip() == "not_running":
-                print("📱 iTerm2 not running, launching it first...")
+                # print("📱 iTerm2 not running, launching it first...")
 
                 # Launch iTerm2
                 launch_script = '''
@@ -437,7 +512,7 @@ class SSHManager:
 
                 # Wait a moment for iTerm2 to fully start
                 time.sleep(2)
-                print("✅ iTerm2 launched successfully")
+                # print("✅ iTerm2 launched successfully")
 
         except subprocess.CalledProcessError as e:
             # If AppleScript fails, try launching iTerm2 directly
@@ -480,10 +555,12 @@ class SSHManager:
                     if not test_password:
                         print("⚠ Warning: Password storage may have failed")
 
-        # Generate unique temporary file name for password
+        # Generate unique temporary file name for password with timestamp
         temp_pass_file = None
         if host.get('auth_method') == 'password' and password:
-            temp_filename = f".ssh_pass_{uuid.uuid4().hex}"
+            import time
+            timestamp = int(time.time())  # Unix timestamp
+            temp_filename = f".ssh_pass_{timestamp}_{uuid.uuid4().hex[:8]}"
             temp_pass_file = Path.home() / temp_filename
 
         # Build SSH command
@@ -530,12 +607,12 @@ class SSHManager:
 
             # Schedule background cleanup using separate subprocess
             if temp_file_created and temp_pass_file:
-                # print(f"🕐 Password file will be cleaned up in 10 seconds (background)...")
+                # print(f"🕐 Password file will be cleaned up in 60 seconds (background)...")
 
                 # Use subprocess to run cleanup independently
                 cleanup_command = [
                     'python3', '-c',
-                    f'import time, os; time.sleep(10); '
+                    f'import time, os; time.sleep(60); '
                     f'os.remove("{temp_pass_file}") if os.path.exists("{temp_pass_file}") else None'
                 ]
 
@@ -828,18 +905,31 @@ Built with ❤️  by RB (Rahul Bhooteshwar)
     if args.ui or args.silent:
         # Launch web interface
         try:
-            from web_interface import launch_web_interface
+            from api_server import launch_api_server
             if args.silent:
                 # Silent mode: fixed port, no browser, background
-                print("🔇 Starting SSH Session Manager Web Interface in silent mode...")
+                print("🔇 Starting SSH Session Manager API Server in silent mode...")
                 print("🌐 Server will run on http://localhost:7890")
                 print("📋 Use Ctrl+C to stop the server")
-                launch_web_interface(args.config, False, 7890, silent=True)
+                launch_api_server(args.config, 7890, "127.0.0.1", silent=True)
             else:
                 # Normal UI mode
-                launch_web_interface(args.config, args.share, args.port, silent=False)
-        except ImportError:
+                print("🌐 Starting SSH Session Manager Web Interface...")
+                print(f"🚀 Server will be available at http://localhost:{args.port}")
+                if not args.share:
+                    # Open browser automatically for local development
+                    import webbrowser
+                    import threading
+                    def open_browser():
+                        import time
+                        time.sleep(1.5)  # Wait for server to start
+                        webbrowser.open(f"http://localhost:{args.port}")
+                    threading.Thread(target=open_browser, daemon=True).start()
+
+                launch_api_server(args.config, args.port, "0.0.0.0" if args.share else "127.0.0.1", silent=False)
+        except ImportError as e:
             print("❌ Web interface dependencies not installed.")
+            print(f"Missing: {e}")
             print("Please run: uv sync")
             sys.exit(1)
         except Exception as e:
@@ -848,20 +938,50 @@ Built with ❤️  by RB (Rahul Bhooteshwar)
         return
 
     # Main functionality: filter and launch
-    hosts = manager.filter_hosts(args.filter)
+    initial_filter = args.filter
 
-    if not hosts:
-        print(f"No hosts found{' matching \"' + args.filter + '\"' if args.filter else ''}.")
-        return
+    while True:
+        hosts = manager.filter_hosts(initial_filter)
 
-    # Choose menu style based on user preference
-    if args.simple:
-        selected_host = manager.display_simple_host_menu(hosts)
-    else:
-        selected_host = manager.display_host_menu(hosts)
+        if not hosts:
+            if initial_filter:
+                print(f"No hosts found matching \"{initial_filter}\".")
+            else:
+                print("No hosts found.")
+            return
 
-    if selected_host:
-        manager.launch_iterm_session(selected_host)
+        # Choose menu style based on user preference
+        if args.simple:
+            selected_host = manager.display_simple_host_menu(hosts)
+        else:
+            selected_host = manager.display_host_menu(hosts, has_active_filter=bool(initial_filter))
+
+        if selected_host == "clear_filter":
+            # This handles command-line filter clearing only
+            # Internal filter clearing is handled within display_host_menu
+            import os
+            os.system('clear')
+            print("🗑️  Filter cleared, showing all hosts...\n")
+            initial_filter = None
+            continue
+        elif selected_host:
+            manager.launch_iterm_session(selected_host)
+
+            # Clear terminal and return to main menu
+            import os
+            os.system('clear')
+            print("🔄 Returning to host selection...\n")
+
+            # Clear the initial filter after first use to show all hosts
+            initial_filter = None
+        else:
+            # User cancelled selection or pressed Ctrl+C
+            print("👋 Goodbye!")
+            sys.exit(0)
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n👋 Goodbye!")
+        sys.exit(0)

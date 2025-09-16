@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSH Session Manager</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="header-left">
+                <h1 class="header-title">
+                    <i class="fas fa-terminal"></i>
+                    SSH Session Manager
+                </h1>
+                <span class="host-count" id="hostCount">0 hosts</span>
+            </div>
+            <div class="header-right">
+                <div class="auth-legend">
+                    <span class="legend-item">
+                        <i class="fas fa-key"></i> SSH Key
+                    </span>
+                    <span class="legend-item">
+                        <i class="fas fa-lock"></i> Password
+                    </span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Search and Filter Controls -->
+    <div class="controls">
+        <div class="search-container">
+            <i class="fas fa-search search-icon"></i>
+            <input
+                type="text"
+                id="searchBox"
+                class="search-input"
+                placeholder="🔍 Search hosts by name or tags..."
+                autocomplete="off"
+            >
+            <button id="clearSearch" class="clear-search-btn" title="Clear search">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <div class="filter-container">
+            <i class="fas fa-tags filter-icon"></i>
+            <select id="tagFilter" class="tag-filter">
+                <option value="">All Tags</option>
+            </select>
+        </div>
+
+        <div class="view-controls">
+            <button id="refreshBtn" class="control-btn" title="Refresh hosts">
+                <i class="fas fa-sync-alt"></i>
+            </button>
+            <button id="gridViewBtn" class="control-btn active" title="Grid view">
+                <i class="fas fa-th"></i>
+            </button>
+            <button id="listViewBtn" class="control-btn" title="List view">
+                <i class="fas fa-list"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+        <!-- Loading State -->
+        <div id="loadingState" class="loading-state">
+            <div class="loading-spinner">
+                <i class="fas fa-spinner fa-spin"></i>
+            </div>
+            <p>Loading SSH hosts...</p>
+        </div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="empty-state" style="display: none;">
+            <div class="empty-icon">
+                <i class="fas fa-server"></i>
+            </div>
+            <h3>No SSH Hosts Found</h3>
+            <p class="empty-message">No hosts match your search criteria.</p>
+            <button id="clearFiltersBtn" class="clear-filters-btn">
+                <i class="fas fa-times-circle"></i>
+                Clear Filters
+            </button>
+        </div>
+
+        <!-- Hosts Container -->
+        <div id="hostsContainer" class="hosts-container" style="display: none;">
+            <!-- Host groups will be dynamically inserted here -->
+        </div>
+    </main>
+
+    <!-- Connection Status Toast -->
+    <div id="connectionToast" class="connection-toast">
+        <div class="toast-content">
+            <i class="toast-icon"></i>
+            <div class="toast-text">
+                <div class="toast-title"></div>
+                <div class="toast-message"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay for Connections -->
+    <div id="connectionOverlay" class="connection-overlay">
+        <div class="connection-modal">
+            <div class="connection-spinner">
+                <i class="fas fa-satellite-dish fa-spin"></i>
+            </div>
+            <h3>Launching SSH Session</h3>
+            <p class="connection-host"></p>
+            <div class="connection-progress">
+                <div class="progress-bar">
+                    <div class="progress-fill"></div>
+                </div>
+                <p class="progress-text">Connecting to iTerm2...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <p>
+                <strong>💡 Quick Guide:</strong> Click any tile to connect instantly! Use search to filter hosts.
+            </p>
+            <p class="footer-credit">
+                Built with ❤️ by <strong>RB (Rahul Bhooteshwar)</strong>
+            </p>
+        </div>
+    </footer>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

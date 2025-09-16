@@ -320,6 +320,25 @@ sudo rm /usr/local/bin/launch
 - SSH keys use standard SSH key authentication
 - Temporary password files are created with secure permissions and automatically cleaned up
 
+## 🚀 macOS Shortcuts Integration
+
+Create convenient shortcuts to launch the SSH Manager web interface with a single click:
+
+### Quick Setup
+1. **Open Shortcuts app** on macOS
+2. **Create new shortcut** → Add "Run Shell Script" action
+3. **Paste this path**: `/path/to/your/ssh-manager/shortcut_script.sh`
+4. **Name it** "SSH Manager" and optionally add to Dock
+
+### What it does:
+- ✅ Checks if server is running on port 7890
+- 🚀 Launches server in silent mode if needed
+- 🌐 Opens `http://localhost:7890` in your browser
+- 📱 Works with Siri voice commands
+
+### Detailed Setup Guide
+See **[MACOS_SHORTCUT_SETUP.md](MACOS_SHORTCUT_SETUP.md)** for complete step-by-step instructions, troubleshooting, and advanced features.
+
 ## License
 
 MIT License
