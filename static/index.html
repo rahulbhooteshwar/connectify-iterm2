@@ -4,12 +4,939 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SSH Session Manager</title>
-    <link rel="stylesheet" href="/static/styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="icon" href="/static/ssh.png">
+    <style>
+        /* CSS Variables for theming */
+        :root {
+          --primary-color: #667eea;
+          --primary-dark: #5a6fd8;
+          --secondary-color: #764ba2;
+          --accent-color: #f093fb;
+          --success-color: #10b981;
+          --warning-color: #f59e0b;
+          --error-color: #ef4444;
+          --info-color: #3b82f6;
+
+          /* Tag Colors */
+          --tag-production: #dc3545;
+          --tag-staging: #fd7e14;
+          --tag-development: #198754;
+          --tag-testing: #6f42c1;
+          --tag-database: #0dcaf0;
+          --tag-web: #0d6efd;
+          --tag-api: #6610f2;
+          --tag-default: #6c757d;
+
+          /* UI Colors */
+          --bg-primary: #ffffff;
+          --bg-secondary: #f8fafc;
+          --bg-tertiary: #f1f5f9;
+          --text-primary: #1e293b;
+          --text-secondary: #64748b;
+          --text-muted: #94a3b8;
+          --border-color: #e2e8f0;
+          --border-light: #f1f5f9;
+          --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+          --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+          --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+          --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+
+          --spacing-xs: 0.25rem;
+          --spacing-sm: 0.5rem;
+          --spacing-md: 1rem;
+          --spacing-lg: 1.5rem;
+          --spacing-xl: 2rem;
+          --spacing-2xl: 3rem;
+
+          --radius-sm: 0.25rem;
+          --radius-md: 0.5rem;
+          --radius-lg: 0.75rem;
+          --radius-xl: 1rem;
+        }
+
+        /* Dark mode variables */
+        @media (prefers-color-scheme: dark) {
+          :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-tertiary: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #cbd5e1;
+            --text-muted: #64748b;
+            --border-color: #334155;
+            --border-light: #475569;
+          }
+        }
+
+        /* Reset and Base Styles */
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+        }
+
+        body {
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+          color: var(--text-primary);
+          line-height: 1.6;
+          min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+          background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+          color: white;
+          padding: var(--spacing-lg) var(--spacing-xl);
+          box-shadow: var(--shadow-lg);
+          position: sticky;
+          top: 0;
+          z-index: 100;
+        }
+
+        .header-content {
+          max-width: 100%;
+          margin: 0 auto;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+
+        .header-left {
+          display: flex;
+          align-items: center;
+          gap: var(--spacing-lg);
+        }
+
+        .header-title {
+          font-size: 1.75rem;
+          font-weight: 700;
+          display: flex;
+          align-items: center;
+          gap: var(--spacing-sm);
+          margin: 0;
+        }
+
+        .host-count {
+          background: rgba(255, 255, 255, 0.2);
+          padding: var(--spacing-xs) var(--spacing-sm);
+          border-radius: var(--radius-xl);
+          font-size: 0.875rem;
+          font-weight: 500;
+          backdrop-filter: blur(10px);
+        }
+
+        .auth-legend {
+          display: flex;
+          gap: var(--spacing-lg);
+          font-size: 0.875rem;
+        }
+
+        .legend-item {
+          display: flex;
+          align-items: center;
+          gap: var(--spacing-xs);
+          opacity: 0.9;
+        }
+
+        /* Controls */
+        .controls {
+          background: var(--bg-primary);
+          padding: var(--spacing-lg) var(--spacing-xl);
+          box-shadow: var(--shadow-sm);
+          border-bottom: 1px solid var(--border-color);
+          position: sticky;
+          top: 88px;
+          z-index: 90;
+          display: grid;
+          grid-template-columns: 2fr 1fr auto;
+          gap: var(--spacing-lg);
+          align-items: center;
+        }
+
+        .search-container {
+          position: relative;
+          display: flex;
+          align-items: center;
+        }
+
+        .search-icon {
+          position: absolute;
+          left: var(--spacing-sm);
+          color: var(--text-muted);
+          z-index: 1;
+        }
+
+        .search-input {
+          width: 100%;
+          padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) 2.5rem;
+          border: 2px solid var(--border-color);
+          border-radius: var(--radius-lg);
+          font-size: 0.95rem;
+          background: var(--bg-primary);
+          color: var(--text-primary);
+          transition: all 0.2s ease;
+        }
+
+        .search-input:focus {
+          outline: none;
+          border-color: var(--primary-color);
+          box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .clear-search-btn {
+          position: absolute;
+          right: var(--spacing-sm);
+          background: none;
+          border: none;
+          color: var(--text-muted);
+          cursor: pointer;
+          padding: var(--spacing-xs);
+          border-radius: var(--radius-sm);
+          transition: all 0.2s ease;
+        }
+
+        .clear-search-btn:hover {
+          color: var(--error-color);
+          background: rgba(239, 68, 68, 0.1);
+        }
+
+        .filter-container {
+          position: relative;
+          display: flex;
+          align-items: center;
+        }
+
+        .filter-icon {
+          position: absolute;
+          left: var(--spacing-sm);
+          color: var(--text-muted);
+          z-index: 1;
+        }
+
+        .tag-filter {
+          width: 100%;
+          padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) 2.5rem;
+          border: 2px solid var(--border-color);
+          border-radius: var(--radius-lg);
+          font-size: 0.95rem;
+          background: var(--bg-primary);
+          color: var(--text-primary);
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .tag-filter:focus {
+          outline: none;
+          border-color: var(--primary-color);
+          box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .view-controls {
+          display: flex;
+          gap: var(--spacing-xs);
+        }
+
+        .control-btn {
+          background: var(--bg-secondary);
+          border: 2px solid var(--border-color);
+          color: var(--text-secondary);
+          padding: var(--spacing-sm);
+          border-radius: var(--radius-md);
+          cursor: pointer;
+          transition: all 0.2s ease;
+          font-size: 0.875rem;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 2.5rem;
+          height: 2.5rem;
+        }
+
+        .control-btn:hover {
+          background: var(--primary-color);
+          border-color: var(--primary-color);
+          color: white;
+          transform: translateY(-1px);
+        }
+
+        .control-btn.active {
+          background: var(--primary-color);
+          border-color: var(--primary-color);
+          color: white;
+        }
+
+        /* Main Content */
+        .main-content {
+          flex: 1;
+          padding: var(--spacing-xl);
+          max-width: 100%;
+          margin: 0 auto;
+          width: 100%;
+        }
+
+        /* Loading State */
+        .loading-state {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: var(--spacing-2xl);
+          text-align: center;
+        }
+
+        .loading-spinner {
+          font-size: 3rem;
+          color: var(--primary-color);
+          margin-bottom: var(--spacing-lg);
+        }
+
+        /* Empty State */
+        .empty-state {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: var(--spacing-2xl);
+          text-align: center;
+          background: var(--bg-primary);
+          border-radius: var(--radius-xl);
+          border: 3px dashed var(--border-color);
+          margin: var(--spacing-lg) 0;
+        }
+
+        .empty-icon {
+          font-size: 4rem;
+          color: var(--text-muted);
+          margin-bottom: var(--spacing-lg);
+          opacity: 0.7;
+        }
+
+        .empty-state h3 {
+          color: var(--text-primary);
+          font-weight: 600;
+          margin-bottom: var(--spacing-sm);
+        }
+
+        .empty-message {
+          color: var(--text-secondary);
+          margin-bottom: var(--spacing-lg);
+        }
+
+        .clear-filters-btn {
+          background: var(--primary-color);
+          color: white;
+          border: none;
+          padding: var(--spacing-sm) var(--spacing-lg);
+          border-radius: var(--radius-lg);
+          font-size: 0.95rem;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          display: flex;
+          align-items: center;
+          gap: var(--spacing-xs);
+        }
+
+        .clear-filters-btn:hover {
+          background: var(--primary-dark);
+          transform: translateY(-1px);
+        }
+
+        /* Hosts Container */
+        .hosts-container {
+          margin-top: var(--spacing-lg);
+        }
+
+        /* Host Groups */
+        .host-group {
+          margin-bottom: var(--spacing-2xl);
+        }
+
+        .group-header {
+          padding: var(--spacing-lg) var(--spacing-xl);
+          margin-bottom: var(--spacing-lg);
+          border-radius: var(--radius-xl);
+          font-size: 1.375rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          display: flex;
+          align-items: center;
+          gap: var(--spacing-sm);
+          position: relative;
+          overflow: hidden;
+        }
+
+        .group-header::before {
+          content: '';
+          position: absolute;
+          left: 0;
+          top: 0;
+          bottom: 0;
+          width: 6px;
+          background: currentColor;
+        }
+
+        /* Tag-specific colors */
+        .group-header.tag-production {
+          background: linear-gradient(135deg, rgba(220, 53, 69, 0.15) 0%, rgba(220, 53, 69, 0.08) 100%);
+          color: var(--tag-production);
+          border-left: 6px solid var(--tag-production);
+        }
+
+        .group-header.tag-staging {
+          background: linear-gradient(135deg, rgba(253, 126, 20, 0.15) 0%, rgba(253, 126, 20, 0.08) 100%);
+          color: var(--tag-staging);
+          border-left: 6px solid var(--tag-staging);
+        }
+
+        .group-header.tag-development,
+        .group-header.tag-dev {
+          background: linear-gradient(135deg, rgba(25, 135, 84, 0.15) 0%, rgba(25, 135, 84, 0.08) 100%);
+          color: var(--tag-development);
+          border-left: 6px solid var(--tag-development);
+        }
+
+        .group-header.tag-testing,
+        .group-header.tag-test {
+          background: linear-gradient(135deg, rgba(111, 66, 193, 0.15) 0%, rgba(111, 66, 193, 0.08) 100%);
+          color: var(--tag-testing);
+          border-left: 6px solid var(--tag-testing);
+        }
+
+        .group-header.tag-database,
+        .group-header.tag-db {
+          background: linear-gradient(135deg, rgba(13, 202, 240, 0.15) 0%, rgba(13, 202, 240, 0.08) 100%);
+          color: var(--tag-database);
+          border-left: 6px solid var(--tag-database);
+        }
+
+        .group-header.tag-web {
+          background: linear-gradient(135deg, rgba(13, 110, 253, 0.15) 0%, rgba(13, 110, 253, 0.08) 100%);
+          color: var(--tag-web);
+          border-left: 6px solid var(--tag-web);
+        }
+
+        .group-header.tag-api {
+          background: linear-gradient(135deg, rgba(102, 16, 242, 0.15) 0%, rgba(102, 16, 242, 0.08) 100%);
+          color: var(--tag-api);
+          border-left: 6px solid var(--tag-api);
+        }
+
+        .group-header.tag-untagged {
+          background: linear-gradient(135deg, rgba(108, 117, 125, 0.15) 0%, rgba(108, 117, 125, 0.08) 100%);
+          color: var(--tag-default);
+          border-left: 6px solid var(--tag-default);
+        }
+
+        .host-count-badge {
+          background: #6D6ACC;
+          color: white;
+          font-weight: bolder;
+          padding: var(--spacing-xs) var(--spacing-sm);
+          border-radius: var(--radius-xl);
+          font-size: 20px;
+          font-weight: 700;
+          margin-left: auto;
+          border: 1px solid rgba(0, 0, 0, 0.2);
+        }
+
+        /* Hosts Grid */
+        .hosts-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+          gap: var(--spacing-lg);
+          padding: 0;
+          width: 100%;
+        }
+
+        /* Force 3-column layout on larger screens */
+        @media (min-width: 1200px) {
+          .hosts-grid {
+            grid-template-columns: repeat(3, 1fr);
+          }
+        }
+
+        @media (min-width: 1600px) {
+          .hosts-grid {
+            grid-template-columns: repeat(4, 1fr);
+          }
+        }
+
+        @media (min-width: 2000px) {
+          .hosts-grid {
+            grid-template-columns: repeat(5, 1fr);
+          }
+        }
+
+        .hosts-list {
+          display: flex;
+          flex-direction: column;
+          gap: var(--spacing-sm);
+        }
+
+        /* Host Tile */
+        .host-tile {
+          background: var(--bg-primary);
+          border: 3px solid transparent;
+          border-radius: var(--radius-xl);
+          padding: var(--spacing-lg);
+          transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+          cursor: pointer;
+          position: relative;
+          overflow: hidden;
+          box-shadow: var(--shadow-md);
+        }
+
+        .host-tile::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: linear-gradient(135deg, transparent 0%, rgba(0, 0, 0, 0.02) 100%);
+          pointer-events: none;
+          border-radius: inherit;
+        }
+
+        .host-tile:hover {
+          transform: translateY(-4px) scale(1.01);
+          box-shadow: var(--shadow-xl);
+          border-color: var(--primary-color);
+        }
+
+        .host-tile.tag-production {
+          background: linear-gradient(135deg, rgba(220, 53, 69, 0.08) 0%, rgba(220, 53, 69, 0.15) 100%);
+          border-color: rgba(220, 53, 69, 0.3);
+        }
+
+        .host-tile.tag-production:hover {
+          border-color: var(--tag-production);
+          box-shadow: 0 12px 30px rgba(220, 53, 69, 0.3);
+        }
+
+        .host-tile.tag-staging {
+          background: linear-gradient(135deg, rgba(253, 126, 20, 0.08) 0%, rgba(253, 126, 20, 0.15) 100%);
+          border-color: rgba(253, 126, 20, 0.3);
+        }
+
+        .host-tile.tag-staging:hover {
+          border-color: var(--tag-staging);
+          box-shadow: 0 12px 30px rgba(253, 126, 20, 0.3);
+        }
+
+        .host-tile.tag-development,
+        .host-tile.tag-dev {
+          background: linear-gradient(135deg, rgba(25, 135, 84, 0.08) 0%, rgba(25, 135, 84, 0.15) 100%);
+          border-color: rgba(25, 135, 84, 0.3);
+        }
+
+        .host-tile.tag-development:hover,
+        .host-tile.tag-dev:hover {
+          border-color: var(--tag-development);
+          box-shadow: 0 12px 30px rgba(25, 135, 84, 0.3);
+        }
+
+        .host-tile.tag-testing,
+        .host-tile.tag-test {
+          background: linear-gradient(135deg, rgba(111, 66, 193, 0.08) 0%, rgba(111, 66, 193, 0.15) 100%);
+          border-color: rgba(111, 66, 193, 0.3);
+        }
+
+        .host-tile.tag-testing:hover,
+        .host-tile.tag-test:hover {
+          border-color: var(--tag-testing);
+          box-shadow: 0 12px 30px rgba(111, 66, 193, 0.3);
+        }
+
+        .host-tile.tag-database,
+        .host-tile.tag-db {
+          background: linear-gradient(135deg, rgba(13, 202, 240, 0.08) 0%, rgba(13, 202, 240, 0.15) 100%);
+          border-color: rgba(13, 202, 240, 0.3);
+        }
+
+        .host-tile.tag-database:hover,
+        .host-tile.tag-db:hover {
+          border-color: var(--tag-database);
+          box-shadow: 0 12px 30px rgba(13, 202, 240, 0.3);
+        }
+
+        .host-tile.tag-web {
+          background: linear-gradient(135deg, rgba(13, 110, 253, 0.08) 0%, rgba(13, 110, 253, 0.15) 100%);
+          border-color: rgba(13, 110, 253, 0.3);
+        }
+
+        .host-tile.tag-web:hover {
+          border-color: var(--tag-web);
+          box-shadow: 0 12px 30px rgba(13, 110, 253, 0.3);
+        }
+
+        .host-tile.tag-api {
+          background: linear-gradient(135deg, rgba(102, 16, 242, 0.08) 0%, rgba(102, 16, 242, 0.15) 100%);
+          border-color: rgba(102, 16, 242, 0.3);
+        }
+
+        .host-tile.tag-api:hover {
+          border-color: var(--tag-api);
+          box-shadow: 0 12px 30px rgba(102, 16, 242, 0.3);
+        }
+
+        .host-tile.tag-untagged {
+          background: linear-gradient(135deg, rgba(108, 117, 125, 0.08) 0%, rgba(108, 117, 125, 0.15) 100%);
+          border-color: rgba(108, 117, 125, 0.3);
+        }
+
+        .host-tile.tag-untagged:hover {
+          border-color: var(--tag-default);
+          box-shadow: 0 12px 30px rgba(108, 117, 125, 0.3);
+        }
+
+        /* Host Tile Content */
+        .host-name {
+          font-size: 1.125rem;
+          font-weight: 700;
+          color: var(--text-primary);
+          margin-bottom: var(--spacing-sm);
+          text-align: center;
+          border-bottom: 2px solid var(--border-light);
+          padding-bottom: var(--spacing-xs);
+          letter-spacing: 0.3px;
+        }
+
+        .host-connection {
+          color: var(--text-secondary);
+          text-align: center;
+          margin-bottom: var(--spacing-sm);
+          font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+          font-size: 0.75rem;
+          background: rgba(0, 0, 0, 0.03);
+          padding: var(--spacing-xs) var(--spacing-sm);
+          border-radius: var(--radius-md);
+          border: 1px solid var(--border-light);
+          font-weight: 500;
+        }
+
+        .host-details {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+
+        .auth-icon {
+          font-size: 1.25rem;
+          opacity: 0.8;
+        }
+
+        .host-tags {
+          font-size: 0.625rem;
+          padding: var(--spacing-xs) var(--spacing-sm);
+          border-radius: var(--radius-xl);
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          background: rgba(0, 0, 0, 0.8);
+          color: white;
+          border: 1px solid rgba(0, 0, 0, 0.2);
+          box-shadow: var(--shadow-sm);
+        }
+
+        /* List View Styles */
+        .host-tile.list-view {
+          border-radius: var(--radius-lg);
+          padding: var(--spacing-md) var(--spacing-lg);
+          display: flex;
+          align-items: center;
+          gap: var(--spacing-lg);
+          min-height: 4rem;
+        }
+
+        .host-tile.list-view:hover {
+          transform: translateX(4px);
+          scale: 1;
+        }
+
+        .host-tile.list-view .host-name {
+          margin: 0;
+          padding: 0;
+          border: none;
+          text-align: left;
+          flex: 1;
+        }
+
+        .host-tile.list-view .host-connection {
+          margin: 0;
+          flex: 2;
+          text-align: left;
+        }
+
+        .host-tile.list-view .host-details {
+          flex-shrink: 0;
+        }
+
+        /* Connection Toast */
+        .connection-toast {
+          position: fixed;
+          top: var(--spacing-lg);
+          right: var(--spacing-lg);
+          background: var(--bg-primary);
+          border: 1px solid var(--border-color);
+          border-radius: var(--radius-lg);
+          box-shadow: var(--shadow-xl);
+          padding: var(--spacing-lg);
+          max-width: 400px;
+          width: 350px;
+          transform: translateX(calc(100% + var(--spacing-lg)));
+          transition: transform 0.3s ease;
+          z-index: 1000;
+          overflow: hidden;
+        }
+
+        .connection-toast.show {
+          transform: translateX(0);
+        }
+
+        .toast-content {
+          display: flex;
+          align-items: flex-start;
+          gap: var(--spacing-sm);
+        }
+
+        .toast-icon {
+          font-size: 1.25rem;
+          margin-top: var(--spacing-xs);
+        }
+
+        .toast-title {
+          font-weight: 600;
+          color: var(--text-primary);
+          margin-bottom: var(--spacing-xs);
+        }
+
+        .toast-message {
+          color: var(--text-secondary);
+          font-size: 0.875rem;
+        }
+
+        .toast-success .toast-icon {
+          color: var(--success-color);
+        }
+
+        .toast-error .toast-icon {
+          color: var(--error-color);
+        }
+
+        /* Connection Overlay */
+        .connection-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.5);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+          opacity: 0;
+          visibility: hidden;
+          transition: all 0.3s ease;
+        }
+
+        .connection-overlay.show {
+          opacity: 1;
+          visibility: visible;
+        }
+
+        .connection-modal {
+          background: var(--bg-primary);
+          border-radius: var(--radius-xl);
+          padding: var(--spacing-2xl);
+          text-align: center;
+          box-shadow: var(--shadow-xl);
+          max-width: 400px;
+          transform: scale(0.9);
+          transition: transform 0.3s ease;
+        }
+
+        .connection-overlay.show .connection-modal {
+          transform: scale(1);
+        }
+
+        .connection-spinner {
+          font-size: 3rem;
+          color: var(--primary-color);
+          margin-bottom: var(--spacing-lg);
+        }
+
+        .connection-modal h3 {
+          color: var(--text-primary);
+          margin-bottom: var(--spacing-sm);
+        }
+
+        .connection-host {
+          color: var(--text-secondary);
+          font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+          margin-bottom: var(--spacing-lg);
+        }
+
+        .connection-progress {
+          margin-top: var(--spacing-lg);
+        }
+
+        .progress-bar {
+          background: var(--border-color);
+          border-radius: var(--radius-xl);
+          height: 0.5rem;
+          overflow: hidden;
+          margin-bottom: var(--spacing-sm);
+        }
+
+        .progress-fill {
+          background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
+          height: 100%;
+          width: 0%;
+          border-radius: inherit;
+          animation: progressFill 2s ease-in-out infinite;
+        }
+
+        @keyframes progressFill {
+          0% { width: 0%; }
+          50% { width: 70%; }
+          100% { width: 100%; }
+        }
+
+        .progress-text {
+          color: var(--text-secondary);
+          font-size: 0.875rem;
+        }
+
+        /* Footer */
+        .footer {
+          background: var(--bg-secondary);
+          border-top: 1px solid var(--border-color);
+          padding: var(--spacing-lg) var(--spacing-xl);
+          text-align: center;
+          margin-top: auto;
+        }
+
+        .footer-content p {
+          color: var(--text-secondary);
+          font-size: 0.875rem;
+          margin-bottom: var(--spacing-xs);
+        }
+
+        .footer-credit {
+          color: var(--text-muted);
+          font-size: 0.75rem;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+          .header {
+            padding: var(--spacing-md);
+          }
+
+          .header-content {
+            flex-direction: column;
+            gap: var(--spacing-md);
+            text-align: center;
+          }
+
+          .controls {
+            padding: var(--spacing-md);
+            grid-template-columns: 1fr;
+            gap: var(--spacing-md);
+          }
+
+          .main-content {
+            padding: var(--spacing-md);
+          }
+
+          .hosts-grid {
+            grid-template-columns: 1fr !important;
+            padding: 0;
+          }
+
+          .footer {
+            padding: var(--spacing-md);
+          }
+
+          .connection-toast {
+            left: var(--spacing-sm);
+            right: var(--spacing-sm);
+            width: auto;
+            max-width: none;
+            transform: translateY(-100vh);
+          }
+
+          .connection-toast.show {
+            transform: translateY(0);
+          }
+        }
+
+        @media (max-width: 480px) {
+          .header-title {
+            font-size: 1.25rem;
+          }
+
+          .group-header {
+            padding: var(--spacing-md);
+            font-size: 1.125rem;
+          }
+
+          .host-tile {
+            padding: var(--spacing-md);
+          }
+
+          .connection-modal {
+            margin: var(--spacing-md);
+            padding: var(--spacing-lg);
+          }
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .host-tile,
+        .host-group {
+          animation: fadeIn 0.5s ease-out;
+        }
+
+        /* Loading states */
+        .loading {
+          opacity: 0.6;
+          pointer-events: none;
+        }
+
+        .loading * {
+          cursor: wait !important;
+        }
+
+        /* Focus styles for accessibility */
+        .search-input:focus,
+        .tag-filter:focus,
+        .control-btn:focus,
+        .host-tile:focus {
+          outline: 2px solid var(--primary-color);
+          outline-offset: 2px;
+        }
+    </style>
 </head>
 <body>
     <!-- Header -->
@@ -18,7 +945,7 @@
             <div class="header-left">
                 <h1 class="header-title">
                     <i class="fas fa-terminal"></i>
-                    SSH Session Manager
+                    SSH Session Manager 2
                 </h1>
                 <span class="host-count" id="hostCount">0 hosts</span>
             </div>
@@ -140,6 +1067,597 @@
         </div>
     </footer>
 
-    <script src="/static/app.js"></script>
+    <script>
+        /**
+         * SSH Session Manager - Modern Web Interface
+         * JavaScript application for managing SSH connections
+         */
+
+        class SSHSessionManager {
+            constructor() {
+                // State management
+                this.hosts = [];
+                this.filteredHosts = [];
+                this.allTags = [];
+                this.currentView = 'grid'; // 'grid' or 'list'
+                this.isLoading = false;
+
+                // DOM elements
+                this.elements = {
+                    searchBox: document.getElementById('searchBox'),
+                    tagFilter: document.getElementById('tagFilter'),
+                    clearSearch: document.getElementById('clearSearch'),
+                    refreshBtn: document.getElementById('refreshBtn'),
+                    gridViewBtn: document.getElementById('gridViewBtn'),
+                    listViewBtn: document.getElementById('listViewBtn'),
+                    hostCount: document.getElementById('hostCount'),
+                    loadingState: document.getElementById('loadingState'),
+                    emptyState: document.getElementById('emptyState'),
+                    hostsContainer: document.getElementById('hostsContainer'),
+                    clearFiltersBtn: document.getElementById('clearFiltersBtn'),
+                    connectionToast: document.getElementById('connectionToast'),
+                    connectionOverlay: document.getElementById('connectionOverlay')
+                };
+
+                // Bind event listeners
+                this.bindEvents();
+
+                // Initialize the application
+                this.init();
+            }
+
+            async init() {
+                console.log('Initializing SSH Session Manager...');
+                await this.loadHosts();
+                await this.loadTags();
+                this.renderHosts();
+            }
+
+            bindEvents() {
+                // Search functionality
+                this.elements.searchBox.addEventListener('input',
+                    this.debounce(() => this.handleSearch(), 300)
+                );
+
+                // Clear search
+                this.elements.clearSearch.addEventListener('click', () => {
+                    this.elements.searchBox.value = '';
+                    this.handleSearch();
+                });
+
+                // Tag filter
+                this.elements.tagFilter.addEventListener('change', () => {
+                    this.handleTagFilter();
+                });
+
+                // View controls
+                this.elements.refreshBtn.addEventListener('click', () => {
+                    this.refresh();
+                });
+
+                this.elements.gridViewBtn.addEventListener('click', () => {
+                    this.setView('grid');
+                });
+
+                this.elements.listViewBtn.addEventListener('click', () => {
+                    this.setView('list');
+                });
+
+                // Clear filters
+                this.elements.clearFiltersBtn.addEventListener('click', () => {
+                    this.clearFilters();
+                });
+
+                // Keyboard shortcuts
+                document.addEventListener('keydown', (e) => {
+                    // Ctrl/Cmd + K to focus search
+                    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                        e.preventDefault();
+                        this.elements.searchBox.focus();
+                    }
+
+                    // Escape to clear search
+                    if (e.key === 'Escape') {
+                        this.clearFilters();
+                    }
+
+                    // F5 to refresh
+                    if (e.key === 'F5') {
+                        e.preventDefault();
+                        this.refresh();
+                    }
+                });
+            }
+
+            debounce(func, wait) {
+                let timeout;
+                return function executedFunction(...args) {
+                    const later = () => {
+                        clearTimeout(timeout);
+                        func(...args);
+                    };
+                    clearTimeout(timeout);
+                    timeout = setTimeout(later, wait);
+                };
+            }
+
+            async loadHosts() {
+                try {
+                    this.setLoading(true);
+
+                    const response = await (await fetch('/api/hosts')).json();
+                    const { data } = response;
+                    const { tag_groups, untagged_hosts } = data;
+
+                    this.hosts = [...Object.values(tag_groups).flat(), ...untagged_hosts];
+                    this.filteredHosts = [...this.hosts];
+                    this.updateHostCount();
+                    console.log(`Loaded ${this.hosts.length} hosts`);
+
+                } catch (error) {
+                    console.error('Error loading hosts:', error);
+                    this.showToast('Error loading hosts', 'error');
+                } finally {
+                    this.setLoading(false);
+                }
+            }
+
+            async loadTags() {
+                try {
+                    // Extract unique tags from hosts
+                    const tagsSet = new Set();
+                    this.hosts.forEach(host => {
+                        if (host.tags) {
+                            host.tags.forEach(tag => tagsSet.add(tag));
+                        }
+                    });
+
+                    this.allTags = Array.from(tagsSet).sort();
+                    this.populateTagFilter();
+                    console.log(`Loaded ${this.allTags.length} tags`);
+                } catch (error) {
+                    console.error('Error loading tags:', error);
+                }
+            }
+
+            populateTagFilter() {
+                const tagFilter = this.elements.tagFilter;
+                // Clear existing options except "All Tags"
+                tagFilter.innerHTML = '<option value="">All Tags</option>';
+
+                this.allTags.forEach(tag => {
+                    const option = document.createElement('option');
+                    option.value = tag;
+                    option.textContent = tag;
+                    tagFilter.appendChild(option);
+                });
+            }
+
+            handleSearch() {
+                const searchTerm = this.elements.searchBox.value.trim().toLowerCase();
+
+                if (searchTerm) {
+                    this.filteredHosts = this.hosts.filter(host => {
+                        const searchIn = [
+                            host.name,
+                            host.hostname,
+                            host.username,
+                            ...(host.tags || [])
+                        ].join(' ').toLowerCase();
+
+                        return searchIn.includes(searchTerm);
+                    });
+
+                    // Clear tag filter when searching
+                    this.elements.tagFilter.value = '';
+                } else {
+                    this.filteredHosts = [...this.hosts];
+                }
+
+                this.updateHostCount();
+                this.renderHosts();
+            }
+
+            handleTagFilter() {
+                const selectedTag = this.elements.tagFilter.value;
+
+                if (selectedTag) {
+                    this.filteredHosts = this.hosts.filter(host => {
+                        return host.tags && host.tags.includes(selectedTag);
+                    });
+
+                    // Clear search when filtering by tag
+                    this.elements.searchBox.value = '';
+                } else {
+                    this.filteredHosts = [...this.hosts];
+                }
+
+                this.updateHostCount();
+                this.renderHosts();
+            }
+
+            clearFilters() {
+                this.elements.searchBox.value = '';
+                this.elements.tagFilter.value = '';
+                this.filteredHosts = [...this.hosts];
+                this.updateHostCount();
+                this.renderHosts();
+            }
+
+            setView(view) {
+                this.currentView = view;
+
+                // Update button states
+                this.elements.gridViewBtn.classList.toggle('active', view === 'grid');
+                this.elements.listViewBtn.classList.toggle('active', view === 'list');
+
+                this.renderHosts();
+            }
+
+            setLoading(loading) {
+                this.isLoading = loading;
+
+                if (loading) {
+                    this.elements.loadingState.style.display = 'flex';
+                    this.elements.emptyState.style.display = 'none';
+                    this.elements.hostsContainer.style.display = 'none';
+                } else {
+                    this.elements.loadingState.style.display = 'none';
+                }
+
+                // Update refresh button
+                if (this.elements.refreshBtn) {
+                    const icon = this.elements.refreshBtn.querySelector('i');
+                    if (loading) {
+                        icon.classList.add('fa-spin');
+                    } else {
+                        icon.classList.remove('fa-spin');
+                    }
+                }
+            }
+
+            updateHostCount() {
+                const total = this.hosts.length;
+                const filtered = this.filteredHosts.length;
+
+                if (filtered === total) {
+                    this.elements.hostCount.textContent = `${total} host${total !== 1 ? 's' : ''}`;
+                } else {
+                    this.elements.hostCount.textContent = `${filtered} of ${total} hosts`;
+                }
+            }
+
+            renderHosts() {
+                if (this.isLoading) return;
+
+                if (this.filteredHosts.length === 0) {
+                    this.elements.emptyState.style.display = 'flex';
+                    this.elements.hostsContainer.style.display = 'none';
+                    return;
+                }
+
+                this.elements.emptyState.style.display = 'none';
+                this.elements.hostsContainer.style.display = 'block';
+
+                // Group hosts by tags
+                const grouped = this.groupHostsByTags(this.filteredHosts);
+
+                // Generate HTML
+                const html = this.generateHostsHTML(grouped);
+                this.elements.hostsContainer.innerHTML = html;
+
+                // Bind click events to host tiles
+                this.bindHostClickEvents();
+            }
+
+            groupHostsByTags(hosts) {
+                const tagGroups = {};
+                const untaggedHosts = [];
+
+                hosts.forEach(host => {
+                    const hostTags = host.tags || [];
+                    if (hostTags.length === 0) {
+                        untaggedHosts.push(host);
+                    } else {
+                        const primaryTag = hostTags[0];
+                        if (!tagGroups[primaryTag]) {
+                            tagGroups[primaryTag] = [];
+                        }
+                        tagGroups[primaryTag].push(host);
+                    }
+                });
+
+                return { tagGroups, untaggedHosts };
+            }
+
+            generateHostsHTML(grouped) {
+                let html = '';
+
+                // Add tagged groups
+                const sortedTags = Object.keys(grouped.tagGroups).sort();
+                for (const tag of sortedTags) {
+                    const hosts = grouped.tagGroups[tag];
+                    // For group headers, pass the single tag as array to maintain consistency
+                    const tagClass = this.getTagClass([tag]);
+
+                    html += `
+                        <div class="host-group">
+                            <div class="group-header ${tagClass}">
+                                <i class="fas fa-folder"></i>
+                                ${tag.toUpperCase()}
+                                <span class="host-count-badge">${hosts.length}</span>
+                            </div>
+                            <div class="${this.currentView === 'grid' ? 'hosts-grid' : 'hosts-list'}">
+                                ${hosts.map(host => this.generateHostTileHTML(host, tag)).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // Add untagged hosts
+                if (grouped.untaggedHosts.length > 0) {
+                    html += `
+                        <div class="host-group">
+                            <div class="group-header tag-untagged">
+                                <i class="fas fa-file"></i>
+                                UNTAGGED
+                                <span class="host-count-badge">${grouped.untaggedHosts.length}</span>
+                            </div>
+                            <div class="${this.currentView === 'grid' ? 'hosts-grid' : 'hosts-list'}">
+                                ${grouped.untaggedHosts.map(host => this.generateHostTileHTML(host, 'untagged')).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                return html;
+            }
+
+            generateHostTileHTML(host, primaryTag) {
+                const authIcon = host.auth_method === 'key' ? 'fas fa-key' : 'fas fa-lock';
+                // Pass all host tags to getTagClass and getTagColor instead of just primary tag
+                const hostTags = host.tags || [];
+                const tagClass = this.getTagClass(hostTags);
+                const tagsText = hostTags.length > 0 ? hostTags.join(', ') : 'NO TAGS';
+                const viewClass = this.currentView === 'list' ? 'list-view' : '';
+                const tagColor = this.getTagColor(hostTags);
+
+                return `
+                    <div class="host-tile ${tagClass} ${viewClass}" data-host-name="${host.name}" tabindex="0">
+                        <div class="host-name">${host.name}</div>
+                        <div class="host-connection">${host.username}@${host.hostname}:${host.port}</div>
+                        <div class="host-details">
+                            <div class="auth-icon">
+                                <i class="${authIcon}" title="${host.auth_method === 'key' ? 'SSH Key Authentication' : 'Password Authentication'}"></i>
+                            </div>
+                            <div class="host-tags" style="background-color: ${tagColor}; color: white;">${tagsText}</div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            getTagClass(tags) {
+                // If tags is a string (single tag), convert to array
+                const tagArray = Array.isArray(tags) ? tags : [tags];
+                // Filter out NON-PROD tags and convert to lowercase
+                const filteredTagsLower = tagArray
+                    .filter(tag => tag.toUpperCase() !== 'NON-PROD')
+                    .map(tag => tag.toLowerCase());
+
+                // Check for production tags (highest priority)
+                if (filteredTagsLower.some(tag =>
+                    tag === 'prod' ||
+                    tag === 'production'
+                )) {
+                    return 'tag-production';
+                }
+
+                // Check for staging tags
+                if (filteredTagsLower.some(tag =>
+                    tag === 'stage' ||
+                    tag === 'staging' ||
+                    tag === 'uat'
+                )) {
+                    return 'tag-staging';
+                }
+
+                // Check for development tags
+                if (filteredTagsLower.some(tag =>
+                    tag === 'dev' ||
+                    tag === 'development'
+                )) {
+                    return 'tag-development';
+                }
+
+                // Check for untagged
+                if (tagArray.length === 0 || tagArray[0] === 'untagged') {
+                    return 'tag-untagged';
+                }
+
+                // Everything else gets default styling
+                return 'tag-default';
+            }
+
+            getTagColor(tags) {
+                // If tags is a string (single tag), convert to array
+                const tagArray = Array.isArray(tags) ? tags : [tags];
+                // Filter out NON-PROD tags and convert to lowercase
+                const filteredTagsLower = tagArray
+                    .filter(tag => tag.toUpperCase() !== 'NON-PROD')
+                    .map(tag => tag.toLowerCase());
+
+                // Check for production tags (highest priority)
+                if (filteredTagsLower.some(tag =>
+                    tag === 'prod' ||
+                    tag === 'production'
+                )) {
+                    return '#dc3545'; // red
+                }
+
+                // Check for staging tags
+                if (filteredTagsLower.some(tag =>
+                    tag === 'stage' ||
+                    tag === 'staging' ||
+                    tag === 'uat'
+                )) {
+                    return '#fd7e14'; // orange
+                }
+
+                // Check for development tags
+                if (filteredTagsLower.some(tag =>
+                    tag === 'dev' ||
+                    tag === 'development'
+                )) {
+                    return '#198754'; // green
+                }
+
+                // Check for untagged
+                if (tagArray.length === 0 || tagArray[0] === 'untagged') {
+                    return '#6c757d'; // gray
+                }
+
+                // Everything else gets default gray
+                return '#6c757d'; // default gray
+            }
+
+            bindHostClickEvents() {
+                const hostTiles = document.querySelectorAll('.host-tile');
+                hostTiles.forEach(tile => {
+                    tile.addEventListener('click', () => {
+                        const hostName = tile.dataset.hostName;
+                        this.connectToHost(hostName);
+                    });
+
+                    // Add keyboard support
+                    tile.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            const hostName = tile.dataset.hostName;
+                            this.connectToHost(hostName);
+                        }
+                    });
+                });
+            }
+
+            async connectToHost(hostName) {
+                try {
+                    console.log(`Connecting to host: ${hostName}`);
+
+                    // Find host details
+                    const host = this.hosts.find(h => h.name === hostName);
+                    if (!host) {
+                        throw new Error(`Host "${hostName}" not found`);
+                    }
+
+                    // Show connection overlay
+                    this.showConnectionOverlay(host);
+
+                    const response = await fetch('/api/connect', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ host_name: hostName })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        this.showToast(`SSH session launched for ${hostName}`, 'success');
+                        console.log('Connection successful:', data);
+                    } else {
+                        throw new Error(data.detail || 'Connection failed');
+                    }
+
+                } catch (error) {
+                    console.error('Connection error:', error);
+                    this.showToast(`Connection failed: ${error.message}`, 'error');
+                } finally {
+                    // Hide connection overlay after a delay
+                    setTimeout(() => {
+                        this.hideConnectionOverlay();
+                    }, 2000);
+                }
+            }
+
+            showConnectionOverlay(host) {
+                const overlay = this.elements.connectionOverlay;
+                const hostElement = overlay.querySelector('.connection-host');
+
+                if (hostElement) {
+                    hostElement.textContent = `${host.username}@${host.hostname}:${host.port}`;
+                }
+
+                overlay.classList.add('show');
+            }
+
+            hideConnectionOverlay() {
+                this.elements.connectionOverlay.classList.remove('show');
+            }
+
+            showToast(message, type = 'info') {
+                const toast = this.elements.connectionToast;
+                const icon = toast.querySelector('.toast-icon');
+                const title = toast.querySelector('.toast-title');
+                const messageEl = toast.querySelector('.toast-message');
+
+                // Clear previous classes
+                toast.className = 'connection-toast';
+
+                // Set content based on type
+                switch (type) {
+                    case 'success':
+                        toast.classList.add('toast-success');
+                        icon.className = 'toast-icon fas fa-check-circle';
+                        title.textContent = 'Connection Successful';
+                        break;
+                    case 'error':
+                        toast.classList.add('toast-error');
+                        icon.className = 'toast-icon fas fa-exclamation-circle';
+                        title.textContent = 'Connection Failed';
+                        break;
+                    default:
+                        toast.classList.add('toast-info');
+                        icon.className = 'toast-icon fas fa-info-circle';
+                        title.textContent = 'Information';
+                }
+
+                messageEl.textContent = message;
+
+                // Show toast
+                toast.classList.add('show');
+
+                // Auto-hide after 5 seconds
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 5000);
+            }
+
+            async refresh() {
+                console.log('Refreshing hosts...');
+                await this.loadHosts();
+                await this.loadTags();
+                this.renderHosts();
+                this.showToast('Hosts refreshed successfully', 'success');
+            }
+        }
+
+        // Initialize the application when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM loaded, initializing SSH Session Manager...');
+            window.sshManager = new SSHSessionManager();
+        });
+
+        // Global error handler
+        window.addEventListener('error', (event) => {
+            console.error('Global error:', event.error);
+        });
+
+        // Handle unhandled promise rejections
+        window.addEventListener('unhandledrejection', (event) => {
+            console.error('Unhandled promise rejection:', event.reason);
+            event.preventDefault();
+        });
+    </script>
 </body>
 </html>
