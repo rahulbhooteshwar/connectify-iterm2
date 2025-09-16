@@ -1,6 +1,6 @@
 # SSH Session Manager - Standalone Executable
 
-.PHONY: help setup build install clean dev ui
+.PHONY: help setup build install clean dev ui fix-app
 
 help:
 	@echo "SSH Session Manager - Build and Install:"
@@ -10,6 +10,7 @@ help:
 	@echo "  make ui        Launch web interface"
 	@echo "  make build     Build standalone executable"
 	@echo "  make install   Build and install globally"
+	@echo "  make fix-app   Fix macOS Gatekeeper blocking the AppleScript app"
 	@echo "  make clean     Clean build artifacts"
 	@echo ""
 
@@ -35,6 +36,10 @@ install: build
 	@echo "🚀 Installing globally..."
 	@sudo cp ./dist/launch /usr/local/bin/launch
 	@echo "✅ Installation complete! Run 'launch' from anywhere."
+
+fix-app:
+	@echo "🔧 Fixing macOS Gatekeeper issue for SSH Manager Launcher app..."
+	@./fix_gatekeeper.sh
 
 clean:
 	@echo "🧹 Cleaning build artifacts..."

@@ -5,7 +5,10 @@
 
 PORT=7890
 URL="http://localhost:$PORT"
-LAUNCH_PATH="/Users/rahul.bhooteshwar/dev/iterm2-ssh-session-manager/dist/launch"
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LAUNCH_PATH="$SCRIPT_DIR/dist/launch"
 
 # Function to check if port is in use
 check_port() {
@@ -33,11 +36,36 @@ wait_for_server() {
     return 1
 }
 
+# Function to open or switch to browser tab
+open_or_switch_browser() {
+    local url="$1"
+
+    # Simple approach - just try Chrome with minimal AppleScript
+    if pgrep -x "Google Chrome" > /dev/null 2>&1; then
+        osascript -e '
+        tell application "Google Chrome"
+            repeat with w in windows
+                repeat with i from 1 to count of tabs of w
+                    if URL of tab i of w contains "localhost:7890" then
+                        set active tab index of w to i
+                        activate
+                        return
+                    end if
+                end repeat
+            end repeat
+        end tell' 2>/dev/null && echo "Switched to existing Chrome tab" && return 0
+    fi
+
+    # If Chrome didn't work, just open normally
+    echo "Opening new tab..."
+    open "$url"
+}
+
 # Main logic
 if check_port; then
     echo "Server is already running on port $PORT"
     echo "Opening browser..."
-    open "$URL"
+    open_or_switch_browser "$URL"
 else
     echo "Server not running. Starting server..."
 
@@ -47,7 +75,7 @@ else
     # Wait for server to be ready
     if wait_for_server; then
         echo "Opening browser..."
-        open "$URL"
+        open_or_switch_browser "$URL"
     else
         echo "Failed to start server. Please check the logs."
         exit 1
