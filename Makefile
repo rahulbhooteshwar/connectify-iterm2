@@ -37,10 +37,6 @@ install: build
 	@sudo cp ./dist/launch /usr/local/bin/launch
 	@echo "✅ Installation complete! Run 'launch' from anywhere."
 
-fix-app:
-	@echo "🔧 Fixing macOS Gatekeeper issue for SSH Manager Launcher app..."
-	@./fix_gatekeeper.sh
-
 clean:
 	@echo "🧹 Cleaning build artifacts..."
 	@rm -rf build/ dist/ __pycache__/ *.egg-info/
