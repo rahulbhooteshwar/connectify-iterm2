@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 import threading
 import time
+import logging
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
@@ -146,27 +147,139 @@ static_dir = Path(__file__).parent / "static"
 static_dir.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
+# Cache for static file content and existence check
+_static_file_cache = {
+    'html_content': None,
+    'html_exists': None,
+    'last_check': 0,
+    'cache_duration': 300  # 5 minutes cache
+}
+
+def get_cached_html_content():
+    """Get HTML content with caching to avoid repeated file system calls"""
+    current_time = time.time()
+    cache = _static_file_cache
+
+    # Check if cache is still valid (within cache duration)
+    if (cache['html_content'] is not None and
+        cache['last_check'] > 0 and
+        (current_time - cache['last_check']) < cache['cache_duration']):
+        return cache['html_content'], cache['html_exists']
+
+    # Cache expired or not initialized, refresh it
+    try:
+        html_file = static_dir / "index.html"
+
+        # Use absolute path to avoid working directory issues
+        html_file_abs = html_file.resolve()
+
+        if html_file_abs.exists() and html_file_abs.is_file():
+            # Read the file content once and cache it
+            try:
+                with open(html_file_abs, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                cache['html_content'] = content
+                cache['html_exists'] = True
+                logging.info(f"Cached HTML content from {html_file_abs}")
+            except Exception as e:
+                logging.error(f"Error reading HTML file {html_file_abs}: {e}")
+                cache['html_content'] = None
+                cache['html_exists'] = False
+        else:
+            cache['html_content'] = None
+            cache['html_exists'] = False
+            logging.warning(f"HTML file not found at {html_file_abs}")
+
+    except Exception as e:
+        logging.error(f"Error checking HTML file existence: {e}")
+        cache['html_content'] = None
+        cache['html_exists'] = False
+
+    # Update cache timestamp
+    cache['last_check'] = current_time
+
+    return cache['html_content'], cache['html_exists']
+
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_frontend():
-    """Serve the main HTML page"""
-    html_file = static_dir / "index.html"
-    if html_file.exists():
-        return FileResponse(html_file)
-    else:
-        # Return a basic HTML if static files don't exist yet
+    """Serve the main HTML page with caching to prevent file system issues"""
+    try:
+        html_content, html_exists = get_cached_html_content()
+
+        if html_exists and html_content:
+            # Return cached HTML content directly
+            return HTMLResponse(content=html_content, media_type="text/html")
+        else:
+            # Return fallback HTML if static files don't exist
+            logging.warning("Serving fallback HTML - static files not found")
+            return HTMLResponse("""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>SSH Session Manager</title>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <style>
+                    body { 
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                        max-width: 800px; 
+                        margin: 50px auto; 
+                        padding: 20px;
+                        background: #f5f5f5;
+                        color: #333;
+                    }
+                    .container {
+                        background: white;
+                        padding: 40px;
+                        border-radius: 10px;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                        text-align: center;
+                    }
+                    .error-icon { font-size: 4rem; color: #e74c3c; margin-bottom: 20px; }
+                    h1 { color: #2c3e50; margin-bottom: 10px; }
+                    .error-message { color: #7f8c8d; margin-bottom: 30px; }
+                    .retry-btn {
+                        background: #3498db;
+                        color: white;
+                        border: none;
+                        padding: 12px 24px;
+                        border-radius: 5px;
+                        cursor: pointer;
+                        font-size: 16px;
+                        text-decoration: none;
+                        display: inline-block;
+                    }
+                    .retry-btn:hover { background: #2980b9; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="error-icon">⚠️</div>
+                    <h1>SSH Session Manager</h1>
+                    <p class="error-message">Static files not found. Please ensure the UI is built properly.</p>
+                    <a href="/" class="retry-btn">🔄 Retry</a>
+                    <br><br>
+                    <small>If this issue persists after 24+ hours of running, please restart the server.</small>
+                </div>
+            </body>
+            </html>
+            """)
+
+    except Exception as e:
+        logging.error(f"Error in serve_frontend: {e}")
         return HTMLResponse("""
         <!DOCTYPE html>
         <html>
         <head>
-            <title>SSH Session Manager</title>
+            <title>SSH Session Manager - Error</title>
         </head>
         <body>
             <h1>SSH Session Manager</h1>
-            <p>Static files not found. Please ensure the UI is built properly.</p>
+            <p>Server error occurred. Please restart the application.</p>
         </body>
         </html>
-        """)
+        """, status_code=500)
 
 
 @app.get("/api/hosts")
@@ -234,15 +347,81 @@ async def get_config():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/refresh-cache")
+async def refresh_static_cache():
+    """Manually refresh the static file cache"""
+    try:
+        # Clear the cache to force a refresh
+        _static_file_cache['html_content'] = None
+        _static_file_cache['html_exists'] = None
+        _static_file_cache['last_check'] = 0
+
+        # Get fresh content
+        html_content, html_exists = get_cached_html_content()
+
+        return {
+            "success": True,
+            "message": "Static file cache refreshed",
+            "html_exists": html_exists,
+            "cache_timestamp": _static_file_cache['last_check']
+        }
+    except Exception as e:
+        logging.error(f"Error refreshing cache: {e}")
+        raise HTTPException(status_code=500, detail=f"Cache refresh error: {str(e)}")
+
+
+@app.get("/api/cache-status")
+async def get_cache_status():
+    """Get current cache status for debugging"""
+    try:
+        return {
+            "success": True,
+            "cache_info": {
+                "html_exists": _static_file_cache['html_exists'],
+                "html_content_length": len(_static_file_cache['html_content']) if _static_file_cache['html_content'] else 0,
+                "last_check": _static_file_cache['last_check'],
+                "cache_duration": _static_file_cache['cache_duration'],
+                "cache_age_seconds": time.time() - _static_file_cache['last_check'] if _static_file_cache['last_check'] > 0 else -1,
+                "static_dir": str(static_dir.resolve())
+            }
+        }
+    except Exception as e:
+        logging.error(f"Error getting cache status: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 def launch_api_server(config_file="~/.ssh_manager_config.json", port=7860, host="127.0.0.1", silent=False):
     """Launch the FastAPI server"""
     global api_manager
+
+    # Configure logging
+    log_level = logging.ERROR if silent else logging.INFO
+    logging.basicConfig(
+        level=log_level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler() if not silent else logging.NullHandler()
+        ]
+    )
+
+    # Initialize API manager
     api_manager = APISSHManager(config_file)
+
+    # Initialize the static file cache on startup
+    try:
+        html_content, html_exists = get_cached_html_content()
+        if html_exists:
+            logging.info("Static HTML file cached successfully on startup")
+        else:
+            logging.warning("Static HTML file not found on startup - will serve fallback")
+    except Exception as e:
+        logging.error(f"Error initializing static file cache: {e}")
 
     if not silent:
         print(f"🌐 Starting SSH Session Manager API Server...")
         print(f"📁 Using config: {config_file}")
         print(f"🚀 Server will be available at http://{host}:{port}")
+        print(f"🔧 Static files cached: {'✅' if _static_file_cache['html_exists'] else '❌'}")
 
     # Configure uvicorn
     config = uvicorn.Config(
