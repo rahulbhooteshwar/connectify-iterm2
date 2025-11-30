@@ -14,7 +14,7 @@ import logging
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
@@ -33,6 +33,14 @@ class HostModel(BaseModel):
     tags: List[str] = []
 
 
+class HostCreate(HostModel):
+    password: Optional[str] = None
+
+
+class HostUpdate(HostModel):
+    password: Optional[str] = None
+
+
 class ConnectRequest(BaseModel):
     host_name: str
 
@@ -40,6 +48,10 @@ class ConnectRequest(BaseModel):
 class SearchRequest(BaseModel):
     search_term: str = ""
     tag_filter: str = ""
+
+
+class ImportRequest(BaseModel):
+    hosts: List[HostCreate]
 
 
 class APISSHManager:
@@ -122,7 +134,45 @@ class APISSHManager:
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Connection error: {str(e)}")
 
+    def add_host(self, host_data: dict, password: str = None):
+        """Add a new host"""
+        self.ssh_manager.add_host_programmatic(host_data)
+        
+        if password and host_data.get('auth_method') == 'password':
+            service_name = f"ssh-{host_data['hostname']}"
+            self.ssh_manager.store_password(service_name, host_data['username'], password)
+            
+        self.refresh_hosts_data()
+        return self.ssh_manager.get_host(host_data['name'])
 
+    def update_host(self, original_name: str, host_data: dict, password: str = None):
+        """Update an existing host"""
+        self.ssh_manager.update_host(original_name, host_data)
+        
+        if password and host_data.get('auth_method') == 'password':
+            service_name = f"ssh-{host_data['hostname']}"
+            self.ssh_manager.store_password(service_name, host_data['username'], password)
+            
+        self.refresh_hosts_data()
+        return self.ssh_manager.get_host(host_data['name'])
+
+    def delete_host(self, host_name: str):
+        """Delete a host"""
+        self.ssh_manager.delete_host(host_name)
+        self.refresh_hosts_data()
+        return True
+
+    def get_host_password(self, host_name: str):
+        """Get password for a host"""
+        host = self.ssh_manager.get_host(host_name)
+        if not host:
+            raise HTTPException(status_code=404, detail=f"Host '{host_name}' not found")
+            
+        if host.get('auth_method') != 'password':
+            return None
+            
+        service_name = f"ssh-{host['hostname']}"
+        return self.ssh_manager.get_password(service_name, host['username'])
 # Initialize the API manager
 api_manager = APISSHManager()
 
@@ -320,7 +370,161 @@ async def connect_host(request: ConnectRequest, background_tasks: BackgroundTask
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.post("/api/hosts")
+async def create_host(host: HostCreate):
+    """Create a new host"""
+    try:
+        host_dict = host.dict(exclude={'password'})
+        password = host.password
+        
+        result = api_manager.add_host(host_dict, password)
+        return {
+            "success": True,
+            "message": f"Host '{host.name}' created successfully",
+            "host": result
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/hosts/{host_name}")
+async def update_host(host_name: str, host: HostUpdate):
+    """Update an existing host"""
+    try:
+        host_dict = host.dict(exclude={'password'})
+        password = host.password
+        
+        result = api_manager.update_host(host_name, host_dict, password)
+        return {
+            "success": True,
+            "message": f"Host '{host.name}' updated successfully",
+            "host": result
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/hosts/{host_name}")
+async def delete_host(host_name: str):
+    """Delete a host"""
+    try:
+        api_manager.delete_host(host_name)
+        return {
+            "success": True,
+            "message": f"Host '{host_name}' deleted successfully"
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/hosts/{host_name}/password")
+async def get_host_password(host_name: str):
+    """Get password for a host"""
+    try:
+        password = api_manager.get_host_password(host_name)
+        return {
+            "success": True,
+            "password": password
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/export/hosts")
+async def export_hosts():
+    """Export current host configurations"""
+    try:
+        hosts = api_manager.all_hosts
+        # Remove passwords from export for security
+        export_data = []
+        for host in hosts:
+            host_data = {k: v for k, v in host.items() if k != 'password'}
+            export_data.append(host_data)
+        
+        return JSONResponse(
+            content={"hosts": export_data},
+            headers={
+                "Content-Disposition": "attachment; filename=ssh_hosts_export.json"
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/export/template")
+async def export_template():
+    """Export sample template"""
+    template = {
+        "hosts": [
+            {
+                "name": "Example Server",
+                "hostname": "example.com",
+                "username": "user",
+                "port": 22,
+                "auth_method": "password",
+                "ssh_key_path": None,
+                "iterm_profile": "Default",
+                "tags": ["production", "web"]
+            },
+            {
+                "name": "Dev Server",
+                "hostname": "dev.example.com",
+                "username": "developer",
+                "port": 2222,
+                "auth_method": "key",
+                "ssh_key_path": "~/.ssh/id_rsa",
+                "iterm_profile": "Development",
+                "tags": ["development", "testing"]
+            }
+        ]
+    }
+    
+    return JSONResponse(
+        content=template,
+        headers={
+            "Content-Disposition": "attachment; filename=ssh_hosts_template.json"
+        }
+    )
+
+
+@app.post("/api/import/hosts")
+async def import_hosts(import_data: ImportRequest):
+    """Import host configurations"""
+    try:
+        imported_count = 0
+        errors = []
+        
+        for host_data in import_data.hosts:
+            try:
+                # Extract password if present
+                password = host_data.password if hasattr(host_data, 'password') else None
+                
+                # Add host
+                api_manager.add_host(host_data.dict(exclude={'password'}), password)
+                imported_count += 1
+            except Exception as e:
+                errors.append(f"Failed to import '{host_data.name}': {str(e)}")
+        
+        return {
+            "success": True,
+            "message": f"Imported {imported_count} host(s)",
+            "imported_count": imported_count,
+            "errors": errors if errors else None
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/health")
 async def health_check():

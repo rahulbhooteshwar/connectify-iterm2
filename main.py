@@ -82,6 +82,59 @@ class SSHManager:
         print(f"Created sample configuration at {self.config_file}")
         print("Please edit this file to add your SSH hosts.")
 
+    def save_config(self):
+        """Save current configuration to file"""
+        try:
+            with open(self.config_file, 'w') as f:
+                json.dump(self.config, f, indent=2, ensure_ascii=False)
+            return True
+        except Exception as e:
+            print(f"Error saving config: {e}")
+            return False
+
+    def get_host(self, host_name):
+        """Get host details by name"""
+        hosts = self.config.get('hosts', [])
+        for host in hosts:
+            if host['name'] == host_name:
+                return host
+        return None
+
+    def add_host_programmatic(self, host_data):
+        """Add a new host programmatically"""
+        # Check if host with same name exists
+        if self.get_host(host_data['name']):
+            raise ValueError(f"Host with name '{host_data['name']}' already exists")
+        
+        self.config.setdefault('hosts', []).append(host_data)
+        self.save_config()
+        return True
+
+    def update_host(self, original_name, host_data):
+        """Update an existing host"""
+        hosts = self.config.get('hosts', [])
+        for i, host in enumerate(hosts):
+            if host['name'] == original_name:
+                # If name is changing, check for collision
+                if original_name != host_data['name'] and self.get_host(host_data['name']):
+                    raise ValueError(f"Host with name '{host_data['name']}' already exists")
+                
+                hosts[i] = host_data
+                self.save_config()
+                return True
+        raise ValueError(f"Host '{original_name}' not found")
+
+    def delete_host(self, host_name):
+        """Delete a host by name"""
+        hosts = self.config.get('hosts', [])
+        initial_len = len(hosts)
+        self.config['hosts'] = [h for h in hosts if h['name'] != host_name]
+        
+        if len(self.config['hosts']) < initial_len:
+            self.save_config()
+            return True
+        raise ValueError(f"Host '{host_name}' not found")
+
     def store_password(self, service_name, username, password):
         """Store password in macOS Keychain using consolidated storage"""
         try:

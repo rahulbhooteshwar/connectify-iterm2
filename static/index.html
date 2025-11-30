@@ -1,1388 +1,1979 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SSH Session Manager</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <!-- favicon -->
-    <link rel="icon" href="/static/ssh.png">
-    <style>
-        /* CSS Variables for theming */
-        :root {
-          --primary-color: #667eea;
-          --primary-dark: #5a6fd8;
-          --secondary-color: #764ba2;
-          --accent-color: #f093fb;
-          --success-color: #10b981;
-          --warning-color: #f59e0b;
-          --error-color: #ef4444;
-          --info-color: #3b82f6;
-
-          /* Tag Colors */
-          --tag-production: #dc3545;
-          --tag-staging: #fd7e14;
-          --tag-development: #198754;
-          --tag-testing: #6f42c1;
-          --tag-database: #0dcaf0;
-          --tag-web: #0d6efd;
-          --tag-api: #6610f2;
-          --tag-default: #6c757d;
-
-          /* UI Colors */
-          --bg-primary: #ffffff;
-          --bg-secondary: #f8fafc;
-          --bg-tertiary: #f1f5f9;
-          --text-primary: #1e293b;
-          --text-secondary: #64748b;
-          --text-muted: #94a3b8;
-          --border-color: #e2e8f0;
-          --border-light: #f1f5f9;
-          --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-          --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-          --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-          --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-
-          --spacing-xs: 0.25rem;
-          --spacing-sm: 0.5rem;
-          --spacing-md: 1rem;
-          --spacing-lg: 1.5rem;
-          --spacing-xl: 2rem;
-          --spacing-2xl: 3rem;
-
-          --radius-sm: 0.25rem;
-          --radius-md: 0.5rem;
-          --radius-lg: 0.75rem;
-          --radius-xl: 1rem;
-        }
-
-        /* Dark mode variables */
-        @media (prefers-color-scheme: dark) {
-          :root {
-            --bg-primary: #0f172a;
-            --bg-secondary: #1e293b;
-            --bg-tertiary: #334155;
-            --text-primary: #f1f5f9;
-            --text-secondary: #cbd5e1;
-            --text-muted: #64748b;
-            --border-color: #334155;
-            --border-light: #475569;
-          }
-        }
-
-        /* Reset and Base Styles */
-        * {
-          margin: 0;
-          padding: 0;
-          box-sizing: border-box;
-        }
-
-        body {
-          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-          background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
-          color: var(--text-primary);
-          line-height: 1.6;
-          min-height: 100vh;
-          display: flex;
-          flex-direction: column;
-        }
-
-        /* Header */
-        .header {
-          background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
-          color: white;
-          padding: var(--spacing-lg) var(--spacing-xl);
-          box-shadow: var(--shadow-lg);
-          position: sticky;
-          top: 0;
-          z-index: 100;
-        }
-
-        .header-content {
-          max-width: 100%;
-          margin: 0 auto;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-
-        .header-left {
-          display: flex;
-          align-items: center;
-          gap: var(--spacing-lg);
-        }
-
-        .header-title {
-          font-size: 1.75rem;
-          font-weight: 700;
-          display: flex;
-          align-items: center;
-          gap: var(--spacing-sm);
-          margin: 0;
-        }
-
-        .host-count {
-          background: rgba(255, 255, 255, 0.2);
-          padding: var(--spacing-xs) var(--spacing-sm);
-          border-radius: var(--radius-xl);
-          font-size: 0.875rem;
-          font-weight: 500;
-          backdrop-filter: blur(10px);
-        }
-
-        .auth-legend {
-          display: flex;
-          gap: var(--spacing-lg);
-          font-size: 0.875rem;
-        }
-
-        .legend-item {
-          display: flex;
-          align-items: center;
-          gap: var(--spacing-xs);
-          opacity: 0.9;
-        }
-
-        /* Controls */
-        .controls {
-          background: var(--bg-primary);
-          padding: var(--spacing-lg) var(--spacing-xl);
-          box-shadow: var(--shadow-sm);
-          border-bottom: 1px solid var(--border-color);
-          position: sticky;
-          top: 88px;
-          z-index: 90;
-          display: grid;
-          grid-template-columns: 2fr 1fr auto;
-          gap: var(--spacing-lg);
-          align-items: center;
-        }
-
-        .search-container {
-          position: relative;
-          display: flex;
-          align-items: center;
-        }
-
-        .search-icon {
-          position: absolute;
-          left: var(--spacing-sm);
-          color: var(--text-muted);
-          z-index: 1;
-        }
-
-        .search-input {
-          width: 100%;
-          padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) 2.5rem;
-          border: 2px solid var(--border-color);
-          border-radius: var(--radius-lg);
-          font-size: 0.95rem;
-          background: var(--bg-primary);
-          color: var(--text-primary);
-          transition: all 0.2s ease;
-        }
-
-        .search-input:focus {
-          outline: none;
-          border-color: var(--primary-color);
-          box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
-        .clear-search-btn {
-          position: absolute;
-          right: var(--spacing-sm);
-          background: none;
-          border: none;
-          color: var(--text-muted);
-          cursor: pointer;
-          padding: var(--spacing-xs);
-          border-radius: var(--radius-sm);
-          transition: all 0.2s ease;
-        }
-
-        .clear-search-btn:hover {
-          color: var(--error-color);
-          background: rgba(239, 68, 68, 0.1);
-        }
-
-        .filter-container {
-          position: relative;
-          display: flex;
-          align-items: center;
-        }
-
-        .filter-icon {
-          position: absolute;
-          left: var(--spacing-sm);
-          color: var(--text-muted);
-          z-index: 1;
-        }
-
-        .tag-filter {
-          width: 100%;
-          padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) 2.5rem;
-          border: 2px solid var(--border-color);
-          border-radius: var(--radius-lg);
-          font-size: 0.95rem;
-          background: var(--bg-primary);
-          color: var(--text-primary);
-          cursor: pointer;
-          transition: all 0.2s ease;
-        }
-
-        .tag-filter:focus {
-          outline: none;
-          border-color: var(--primary-color);
-          box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-        }
-
-        .view-controls {
-          display: flex;
-          gap: var(--spacing-xs);
-        }
-
-        .control-btn {
-          background: var(--bg-secondary);
-          border: 2px solid var(--border-color);
-          color: var(--text-secondary);
-          padding: var(--spacing-sm);
-          border-radius: var(--radius-md);
-          cursor: pointer;
-          transition: all 0.2s ease;
-          font-size: 0.875rem;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          width: 2.5rem;
-          height: 2.5rem;
-        }
-
-        .control-btn:hover {
-          background: var(--primary-color);
-          border-color: var(--primary-color);
-          color: white;
-          transform: translateY(-1px);
-        }
-
-        .control-btn.active {
-          background: var(--primary-color);
-          border-color: var(--primary-color);
-          color: white;
-        }
-
-        /* Main Content */
-        .main-content {
-          flex: 1;
-          padding: var(--spacing-xl);
-          max-width: 100%;
-          margin: 0 auto;
-          width: 100%;
-        }
-
-        /* Loading State */
-        .loading-state {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: var(--spacing-2xl);
-          text-align: center;
-        }
-
-        .loading-spinner {
-          font-size: 3rem;
-          color: var(--primary-color);
-          margin-bottom: var(--spacing-lg);
-        }
-
-        /* Empty State */
-        .empty-state {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: var(--spacing-2xl);
-          text-align: center;
-          background: var(--bg-primary);
-          border-radius: var(--radius-xl);
-          border: 3px dashed var(--border-color);
-          margin: var(--spacing-lg) 0;
-        }
-
-        .empty-icon {
-          font-size: 4rem;
-          color: var(--text-muted);
-          margin-bottom: var(--spacing-lg);
-          opacity: 0.7;
-        }
-
-        .empty-state h3 {
-          color: var(--text-primary);
-          font-weight: 600;
-          margin-bottom: var(--spacing-sm);
-        }
-
-        .empty-message {
-          color: var(--text-secondary);
-          margin-bottom: var(--spacing-lg);
-        }
-
-        .clear-filters-btn {
-          background: var(--primary-color);
-          color: white;
-          border: none;
-          padding: var(--spacing-sm) var(--spacing-lg);
-          border-radius: var(--radius-lg);
-          font-size: 0.95rem;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          display: flex;
-          align-items: center;
-          gap: var(--spacing-xs);
-        }
-
-        .clear-filters-btn:hover {
-          background: var(--primary-dark);
-          transform: translateY(-1px);
-        }
-
-        /* Hosts Container */
-        .hosts-container {
-          margin-top: var(--spacing-lg);
-        }
-
-        /* Host Groups */
-        .host-group {
-          margin-bottom: var(--spacing-2xl);
-        }
-
-        .group-header {
-          padding: var(--spacing-lg) var(--spacing-xl);
-          margin-bottom: var(--spacing-lg);
-          border-radius: var(--radius-xl);
-          font-size: 1.375rem;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 1px;
-          display: flex;
-          align-items: center;
-          gap: var(--spacing-sm);
-          position: relative;
-          overflow: hidden;
-        }
-
-        .group-header::before {
-          content: '';
-          position: absolute;
-          left: 0;
-          top: 0;
-          bottom: 0;
-          width: 6px;
-          background: currentColor;
-        }
-
-        /* Tag-specific colors */
-        .group-header.tag-production {
-          background: linear-gradient(135deg, rgba(220, 53, 69, 0.15) 0%, rgba(220, 53, 69, 0.08) 100%);
-          color: var(--tag-production);
-          border-left: 6px solid var(--tag-production);
-        }
-
-        .group-header.tag-staging {
-          background: linear-gradient(135deg, rgba(253, 126, 20, 0.15) 0%, rgba(253, 126, 20, 0.08) 100%);
-          color: var(--tag-staging);
-          border-left: 6px solid var(--tag-staging);
-        }
-
-        .group-header.tag-development,
-        .group-header.tag-dev {
-          background: linear-gradient(135deg, rgba(25, 135, 84, 0.15) 0%, rgba(25, 135, 84, 0.08) 100%);
-          color: var(--tag-development);
-          border-left: 6px solid var(--tag-development);
-        }
-
-        .group-header.tag-testing,
-        .group-header.tag-test {
-          background: linear-gradient(135deg, rgba(111, 66, 193, 0.15) 0%, rgba(111, 66, 193, 0.08) 100%);
-          color: var(--tag-testing);
-          border-left: 6px solid var(--tag-testing);
-        }
-
-        .group-header.tag-database,
-        .group-header.tag-db {
-          background: linear-gradient(135deg, rgba(13, 202, 240, 0.15) 0%, rgba(13, 202, 240, 0.08) 100%);
-          color: var(--tag-database);
-          border-left: 6px solid var(--tag-database);
-        }
-
-        .group-header.tag-web {
-          background: linear-gradient(135deg, rgba(13, 110, 253, 0.15) 0%, rgba(13, 110, 253, 0.08) 100%);
-          color: var(--tag-web);
-          border-left: 6px solid var(--tag-web);
-        }
-
-        .group-header.tag-api {
-          background: linear-gradient(135deg, rgba(102, 16, 242, 0.15) 0%, rgba(102, 16, 242, 0.08) 100%);
-          color: var(--tag-api);
-          border-left: 6px solid var(--tag-api);
-        }
-
-        .group-header.tag-untagged {
-          background: linear-gradient(135deg, rgba(108, 117, 125, 0.15) 0%, rgba(108, 117, 125, 0.08) 100%);
-          color: var(--tag-default);
-          border-left: 6px solid var(--tag-default);
-        }
-
-        .host-count-badge {
-          background: #6D6ACC;
-          color: white;
-          font-weight: bolder;
-          padding: var(--spacing-xs) var(--spacing-sm);
-          border-radius: var(--radius-xl);
-          font-size: 20px;
-          font-weight: 700;
-          margin-left: auto;
-          border: 1px solid rgba(0, 0, 0, 0.2);
-        }
-
-        /* Hosts Grid */
-        .hosts-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-          gap: var(--spacing-lg);
-          padding: 0;
-          width: 100%;
-        }
-
-        /* Force 3-column layout on larger screens */
-        @media (min-width: 1200px) {
-          .hosts-grid {
-            grid-template-columns: repeat(3, 1fr);
-          }
-        }
-
-        @media (min-width: 1600px) {
-          .hosts-grid {
-            grid-template-columns: repeat(4, 1fr);
-          }
-        }
-
-        @media (min-width: 2000px) {
-          .hosts-grid {
-            grid-template-columns: repeat(5, 1fr);
-          }
-        }
-
-        .hosts-list {
-          display: flex;
-          flex-direction: column;
-          gap: var(--spacing-sm);
-        }
-
-        /* Host Tile */
-        .host-tile {
-          background: var(--bg-primary);
-          border: 3px solid transparent;
-          border-radius: var(--radius-xl);
-          padding: var(--spacing-lg);
-          transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-          cursor: pointer;
-          position: relative;
-          overflow: hidden;
-          box-shadow: var(--shadow-md);
-        }
-
-        .host-tile::before {
-          content: '';
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: linear-gradient(135deg, transparent 0%, rgba(0, 0, 0, 0.02) 100%);
-          pointer-events: none;
-          border-radius: inherit;
-        }
-
-        .host-tile:hover {
-          transform: translateY(-4px) scale(1.01);
-          box-shadow: var(--shadow-xl);
-          border-color: var(--primary-color);
-        }
-
-        .host-tile.tag-production {
-          background: linear-gradient(135deg, rgba(220, 53, 69, 0.08) 0%, rgba(220, 53, 69, 0.15) 100%);
-          border-color: rgba(220, 53, 69, 0.3);
-        }
-
-        .host-tile.tag-production:hover {
-          border-color: var(--tag-production);
-          box-shadow: 0 12px 30px rgba(220, 53, 69, 0.3);
-        }
-
-        .host-tile.tag-staging {
-          background: linear-gradient(135deg, rgba(253, 126, 20, 0.08) 0%, rgba(253, 126, 20, 0.15) 100%);
-          border-color: rgba(253, 126, 20, 0.3);
-        }
-
-        .host-tile.tag-staging:hover {
-          border-color: var(--tag-staging);
-          box-shadow: 0 12px 30px rgba(253, 126, 20, 0.3);
-        }
-
-        .host-tile.tag-development,
-        .host-tile.tag-dev {
-          background: linear-gradient(135deg, rgba(25, 135, 84, 0.08) 0%, rgba(25, 135, 84, 0.15) 100%);
-          border-color: rgba(25, 135, 84, 0.3);
-        }
-
-        .host-tile.tag-development:hover,
-        .host-tile.tag-dev:hover {
-          border-color: var(--tag-development);
-          box-shadow: 0 12px 30px rgba(25, 135, 84, 0.3);
-        }
-
-        .host-tile.tag-testing,
-        .host-tile.tag-test {
-          background: linear-gradient(135deg, rgba(111, 66, 193, 0.08) 0%, rgba(111, 66, 193, 0.15) 100%);
-          border-color: rgba(111, 66, 193, 0.3);
-        }
-
-        .host-tile.tag-testing:hover,
-        .host-tile.tag-test:hover {
-          border-color: var(--tag-testing);
-          box-shadow: 0 12px 30px rgba(111, 66, 193, 0.3);
-        }
-
-        .host-tile.tag-database,
-        .host-tile.tag-db {
-          background: linear-gradient(135deg, rgba(13, 202, 240, 0.08) 0%, rgba(13, 202, 240, 0.15) 100%);
-          border-color: rgba(13, 202, 240, 0.3);
-        }
-
-        .host-tile.tag-database:hover,
-        .host-tile.tag-db:hover {
-          border-color: var(--tag-database);
-          box-shadow: 0 12px 30px rgba(13, 202, 240, 0.3);
-        }
-
-        .host-tile.tag-web {
-          background: linear-gradient(135deg, rgba(13, 110, 253, 0.08) 0%, rgba(13, 110, 253, 0.15) 100%);
-          border-color: rgba(13, 110, 253, 0.3);
-        }
-
-        .host-tile.tag-web:hover {
-          border-color: var(--tag-web);
-          box-shadow: 0 12px 30px rgba(13, 110, 253, 0.3);
-        }
-
-        .host-tile.tag-api {
-          background: linear-gradient(135deg, rgba(102, 16, 242, 0.08) 0%, rgba(102, 16, 242, 0.15) 100%);
-          border-color: rgba(102, 16, 242, 0.3);
-        }
-
-        .host-tile.tag-api:hover {
-          border-color: var(--tag-api);
-          box-shadow: 0 12px 30px rgba(102, 16, 242, 0.3);
-        }
-
-        .host-tile.tag-untagged {
-          background: linear-gradient(135deg, rgba(108, 117, 125, 0.08) 0%, rgba(108, 117, 125, 0.15) 100%);
-          border-color: rgba(108, 117, 125, 0.3);
-        }
-
-        .host-tile.tag-untagged:hover {
-          border-color: var(--tag-default);
-          box-shadow: 0 12px 30px rgba(108, 117, 125, 0.3);
-        }
-
-        /* Host Tile Content */
-        .host-name {
-          font-size: 1.125rem;
-          font-weight: 700;
-          color: var(--text-primary);
-          margin-bottom: var(--spacing-sm);
-          text-align: center;
-          border-bottom: 2px solid var(--border-light);
-          padding-bottom: var(--spacing-xs);
-          letter-spacing: 0.3px;
-        }
-
-        .host-connection {
-          color: var(--text-secondary);
-          text-align: center;
-          margin-bottom: var(--spacing-sm);
-          font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
-          font-size: 0.75rem;
-          background: rgba(0, 0, 0, 0.03);
-          padding: var(--spacing-xs) var(--spacing-sm);
-          border-radius: var(--radius-md);
-          border: 1px solid var(--border-light);
-          font-weight: 500;
-        }
-
-        .host-details {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-
-        .auth-icon {
-          font-size: 1.25rem;
-          opacity: 0.8;
-        }
-
-        .host-tags {
-          font-size: 0.625rem;
-          padding: var(--spacing-xs) var(--spacing-sm);
-          border-radius: var(--radius-xl);
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-          background: rgba(0, 0, 0, 0.8);
-          color: white;
-          border: 1px solid rgba(0, 0, 0, 0.2);
-          box-shadow: var(--shadow-sm);
-        }
-
-        /* List View Styles */
-        .host-tile.list-view {
-          border-radius: var(--radius-lg);
-          padding: var(--spacing-md) var(--spacing-lg);
-          display: flex;
-          align-items: center;
-          gap: var(--spacing-lg);
-          min-height: 4rem;
-        }
-
-        .host-tile.list-view:hover {
-          transform: translateX(4px);
-          scale: 1;
-        }
-
-        .host-tile.list-view .host-name {
-          margin: 0;
-          padding: 0;
-          border: none;
-          text-align: left;
-          flex: 1;
-        }
-
-        .host-tile.list-view .host-connection {
-          margin: 0;
-          flex: 2;
-          text-align: left;
-        }
-
-        .host-tile.list-view .host-details {
-          flex-shrink: 0;
-        }
-
-        /* Connection Toast */
-        .connection-toast {
-          position: fixed;
-          top: var(--spacing-lg);
-          right: var(--spacing-lg);
-          background: var(--bg-primary);
-          border: 1px solid var(--border-color);
-          border-radius: var(--radius-lg);
-          box-shadow: var(--shadow-xl);
-          padding: var(--spacing-lg);
-          max-width: 400px;
-          width: 350px;
-          transform: translateX(calc(100% + var(--spacing-lg)));
-          transition: transform 0.3s ease;
-          z-index: 1000;
-          overflow: hidden;
-        }
-
-        .connection-toast.show {
-          transform: translateX(0);
-        }
-
-        .toast-content {
-          display: flex;
-          align-items: flex-start;
-          gap: var(--spacing-sm);
-        }
-
-        .toast-icon {
-          font-size: 1.25rem;
-          margin-top: var(--spacing-xs);
-        }
-
-        .toast-title {
-          font-weight: 600;
-          color: var(--text-primary);
-          margin-bottom: var(--spacing-xs);
-        }
-
-        .toast-message {
-          color: var(--text-secondary);
-          font-size: 0.875rem;
-        }
-
-        .toast-success .toast-icon {
-          color: var(--success-color);
-        }
-
-        .toast-error .toast-icon {
-          color: var(--error-color);
-        }
-
-        /* Connection Overlay */
-        .connection-overlay {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0, 0, 0, 0.5);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 1000;
-          opacity: 0;
-          visibility: hidden;
-          transition: all 0.3s ease;
-        }
-
-        .connection-overlay.show {
-          opacity: 1;
-          visibility: visible;
-        }
-
-        .connection-modal {
-          background: var(--bg-primary);
-          border-radius: var(--radius-xl);
-          padding: var(--spacing-2xl);
-          text-align: center;
-          box-shadow: var(--shadow-xl);
-          max-width: 400px;
-          transform: scale(0.9);
-          transition: transform 0.3s ease;
-        }
-
-        .connection-overlay.show .connection-modal {
-          transform: scale(1);
-        }
-
-        .connection-spinner {
-          font-size: 3rem;
-          color: var(--primary-color);
-          margin-bottom: var(--spacing-lg);
-        }
-
-        .connection-modal h3 {
-          color: var(--text-primary);
-          margin-bottom: var(--spacing-sm);
-        }
-
-        .connection-host {
-          color: var(--text-secondary);
-          font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
-          margin-bottom: var(--spacing-lg);
-        }
-
-        .connection-progress {
-          margin-top: var(--spacing-lg);
-        }
-
-        .progress-bar {
-          background: var(--border-color);
-          border-radius: var(--radius-xl);
-          height: 0.5rem;
-          overflow: hidden;
-          margin-bottom: var(--spacing-sm);
-        }
-
-        .progress-fill {
-          background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
-          height: 100%;
-          width: 0%;
-          border-radius: inherit;
-          animation: progressFill 2s ease-in-out infinite;
-        }
-
-        @keyframes progressFill {
-          0% { width: 0%; }
-          50% { width: 70%; }
-          100% { width: 100%; }
-        }
-
-        .progress-text {
-          color: var(--text-secondary);
-          font-size: 0.875rem;
-        }
-
-        /* Footer */
-        .footer {
-          background: var(--bg-secondary);
-          border-top: 1px solid var(--border-color);
-          padding: var(--spacing-lg) var(--spacing-xl);
-          text-align: center;
-          margin-top: auto;
-        }
-
-        .footer-content p {
-          color: var(--text-secondary);
-          font-size: 0.875rem;
-          margin-bottom: var(--spacing-xs);
-        }
-
-        .footer-credit {
-          color: var(--text-muted);
-          font-size: 0.75rem;
-        }
-
-        /* Responsive Design */
-        @media (max-width: 768px) {
-          .header {
-            padding: var(--spacing-md);
-          }
-
-          .header-content {
-            flex-direction: column;
-            gap: var(--spacing-md);
-            text-align: center;
-          }
-
-          .controls {
-            padding: var(--spacing-md);
-            grid-template-columns: 1fr;
-            gap: var(--spacing-md);
-          }
-
-          .main-content {
-            padding: var(--spacing-md);
-          }
-
-          .hosts-grid {
-            grid-template-columns: 1fr !important;
-            padding: 0;
-          }
-
-          .footer {
-            padding: var(--spacing-md);
-          }
-
-          .connection-toast {
-            left: var(--spacing-sm);
-            right: var(--spacing-sm);
-            width: auto;
-            max-width: none;
-            transform: translateY(-100vh);
-          }
-
-          .connection-toast.show {
-            transform: translateY(0);
-          }
-        }
-
-        @media (max-width: 480px) {
-          .header-title {
-            font-size: 1.25rem;
-          }
-
-          .group-header {
-            padding: var(--spacing-md);
-            font-size: 1.125rem;
-          }
-
-          .host-tile {
-            padding: var(--spacing-md);
-          }
-
-          .connection-modal {
-            margin: var(--spacing-md);
-            padding: var(--spacing-lg);
-          }
-        }
-
-        /* Animations */
-        @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        .host-tile,
-        .host-group {
-          animation: fadeIn 0.5s ease-out;
-        }
-
-        /* Loading states */
-        .loading {
-          opacity: 0.6;
-          pointer-events: none;
-        }
-
-        .loading * {
-          cursor: wait !important;
-        }
-
-        /* Focus styles for accessibility */
-        .search-input:focus,
-        .tag-filter:focus,
-        .control-btn:focus,
-        .host-tile:focus {
-          outline: 2px solid var(--primary-color);
-          outline-offset: 2px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SSH Session Manager</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <!-- favicon -->
+  <link rel="icon" href="/static/ssh.png">
+  <style>
+    /* CSS Variables for theming */
+    :root {
+      --primary-color: #667eea;
+      --primary-dark: #5a6fd8;
+      --secondary-color: #764ba2;
+      --accent-color: #f093fb;
+      --success-color: #10b981;
+      --warning-color: #f59e0b;
+      --error-color: #ef4444;
+      --info-color: #3b82f6;
+
+      /* Tag Colors */
+      --tag-production: #dc3545;
+      --tag-staging: #fd7e14;
+      --tag-development: #198754;
+      --tag-testing: #6f42c1;
+      --tag-database: #0dcaf0;
+      --tag-web: #0d6efd;
+      --tag-api: #6610f2;
+      --tag-default: #6c757d;
+
+      /* UI Colors */
+      --bg-primary: #ffffff;
+      --bg-secondary: #f8fafc;
+      --bg-tertiary: #f1f5f9;
+      --text-primary: #1e293b;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --border-color: #e2e8f0;
+      --border-light: #f1f5f9;
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+      --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+      --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+
+      --spacing-xs: 0.25rem;
+      --spacing-sm: 0.5rem;
+      --spacing-md: 1rem;
+      --spacing-lg: 1.5rem;
+      --spacing-xl: 2rem;
+      --spacing-2xl: 3rem;
+
+      --radius-sm: 0.25rem;
+      --radius-md: 0.5rem;
+      --radius-lg: 0.75rem;
+      --radius-xl: 1rem;
+    }
+
+    /* Dark mode variables */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg-primary: #0f172a;
+        --bg-secondary: #1e293b;
+        --bg-tertiary: #334155;
+        --text-primary: #f1f5f9;
+        --text-secondary: #cbd5e1;
+        --text-muted: #64748b;
+        --border-color: #334155;
+        --border-light: #475569;
+      }
+    }
+
+    /* Reset and Base Styles */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-primary) 100%);
+      color: var(--text-primary);
+      line-height: 1.6;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    .header {
+      background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+      color: white;
+      padding: var(--spacing-sm) var(--spacing-xl);
+      box-shadow: var(--shadow-lg);
+      flex-shrink: 0;
+      z-index: 100;
+    }
+
+    .header-content {
+      max-width: 100%;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-lg);
+    }
+
+    .header-title {
+      font-size: 1.75rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+      margin: 0;
+    }
+
+    .host-count {
+      background: rgba(255, 255, 255, 0.2);
+      padding: var(--spacing-xs) var(--spacing-sm);
+      border-radius: var(--radius-xl);
+      font-size: 0.875rem;
+      font-weight: 500;
+      backdrop-filter: blur(10px);
+    }
+
+    .auth-legend {
+      display: flex;
+      gap: var(--spacing-lg);
+      font-size: 0.875rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-xs);
+      opacity: 0.9;
+    }
+
+    /* Controls */
+    .controls {
+      background: var(--bg-primary);
+      padding: var(--spacing-sm) var(--spacing-xl);
+      box-shadow: var(--shadow-sm);
+      border-bottom: 1px solid var(--border-color);
+      position: sticky;
+      top: 0;
+      z-index: 90;
+      display: grid;
+      grid-template-columns: 2fr 1fr auto;
+      gap: var(--spacing-lg);
+      align-items: center;
+      margin: 0;
+    }
+
+    .search-container {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .search-icon {
+      position: absolute;
+      left: var(--spacing-sm);
+      color: var(--text-muted);
+      z-index: 1;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) 2.5rem;
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      font-size: 0.95rem;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      transition: all 0.2s ease;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .clear-search-btn {
+      position: absolute;
+      right: var(--spacing-sm);
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: var(--spacing-xs);
+      border-radius: var(--radius-sm);
+      transition: all 0.2s ease;
+    }
+
+    .clear-search-btn:hover {
+      color: var(--error-color);
+      background: rgba(239, 68, 68, 0.1);
+    }
+
+    .filter-container {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .filter-icon {
+      position: absolute;
+      left: var(--spacing-sm);
+      color: var(--text-muted);
+      z-index: 1;
+    }
+
+    .tag-filter {
+      width: 100%;
+      padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) 2.5rem;
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      font-size: 0.95rem;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .tag-filter:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .view-controls {
+      display: flex;
+      gap: var(--spacing-sm);
+    }
+
+    .control-btn {
+      background: var(--bg-secondary);
+      border: 2px solid var(--border-color);
+      color: var(--text-secondary);
+      padding: var(--spacing-sm);
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-size: 0.875rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 2.5rem;
+      height: 2.5rem;
+    }
+
+    .control-btn:hover {
+      background: var(--primary-color);
+      border-color: var(--primary-color);
+      color: white;
+      transform: translateY(-1px);
+    }
+
+    .control-btn.active {
+      background: var(--primary-color);
+      border-color: var(--primary-color);
+      color: white;
+    }
+
+    /* Main Content */
+    .main-content {
+      flex: 1;
+      padding: var(--spacing-sm);
+      max-width: 100%;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* Loading State */
+    .loading-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: var(--spacing-2xl);
+      text-align: center;
+    }
+
+    .loading-spinner {
+      font-size: 3rem;
+      color: var(--primary-color);
+      margin-bottom: var(--spacing-lg);
+    }
+
+    /* Empty State */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: var(--spacing-2xl);
+      text-align: center;
+      background: var(--bg-primary);
+      border-radius: var(--radius-xl);
+      border: 3px dashed var(--border-color);
+      margin: var(--spacing-lg) 0;
+    }
+
+    .empty-icon {
+      font-size: 4rem;
+      color: var(--text-muted);
+      margin-bottom: var(--spacing-lg);
+      opacity: 0.7;
+    }
+
+    .empty-state h3 {
+      color: var(--text-primary);
+      font-weight: 600;
+      margin-bottom: var(--spacing-sm);
+    }
+
+    .empty-message {
+      color: var(--text-secondary);
+      margin-bottom: var(--spacing-lg);
+    }
+
+    .clear-filters-btn {
+      background: var(--primary-color);
+      color: white;
+      border: none;
+      padding: var(--spacing-sm) var(--spacing-lg);
+      border-radius: var(--radius-lg);
+      font-size: 0.95rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-xs);
+    }
+
+    .clear-filters-btn:hover {
+      background: var(--primary-dark);
+      transform: translateY(-1px);
+    }
+
+    /* Host Groups */
+    .host-group {
+      margin-bottom: var(--spacing-2xl);
+    }
+
+    .group-header {
+      padding: var(--spacing-lg) var(--spacing-xl);
+      margin-bottom: var(--spacing-lg);
+      border-radius: var(--radius-xl);
+      font-size: 1.375rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .group-header::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 6px;
+      background: currentColor;
+    }
+
+    /* Tag-specific colors */
+    .group-header.tag-production {
+      background: linear-gradient(135deg, rgba(220, 53, 69, 0.15) 0%, rgba(220, 53, 69, 0.08) 100%);
+      color: var(--tag-production);
+      border-left: 6px solid var(--tag-production);
+    }
+
+    .group-header.tag-staging {
+      background: linear-gradient(135deg, rgba(253, 126, 20, 0.15) 0%, rgba(253, 126, 20, 0.08) 100%);
+      color: var(--tag-staging);
+      border-left: 6px solid var(--tag-staging);
+    }
+
+    .group-header.tag-development,
+    .group-header.tag-dev {
+      background: linear-gradient(135deg, rgba(25, 135, 84, 0.15) 0%, rgba(25, 135, 84, 0.08) 100%);
+      color: var(--tag-development);
+      border-left: 6px solid var(--tag-development);
+    }
+
+    .group-header.tag-testing,
+    .group-header.tag-test {
+      background: linear-gradient(135deg, rgba(111, 66, 193, 0.15) 0%, rgba(111, 66, 193, 0.08) 100%);
+      color: var(--tag-testing);
+      border-left: 6px solid var(--tag-testing);
+    }
+
+    .group-header.tag-database,
+    .group-header.tag-db {
+      background: linear-gradient(135deg, rgba(13, 202, 240, 0.15) 0%, rgba(13, 202, 240, 0.08) 100%);
+      color: var(--tag-database);
+      border-left: 6px solid var(--tag-database);
+    }
+
+    .group-header.tag-web {
+      background: linear-gradient(135deg, rgba(13, 110, 253, 0.15) 0%, rgba(13, 110, 253, 0.08) 100%);
+      color: var(--tag-web);
+      border-left: 6px solid var(--tag-web);
+    }
+
+    .group-header.tag-api {
+      background: linear-gradient(135deg, rgba(102, 16, 242, 0.15) 0%, rgba(102, 16, 242, 0.08) 100%);
+      color: var(--tag-api);
+      border-left: 6px solid var(--tag-api);
+    }
+
+    .group-header.tag-untagged {
+      background: linear-gradient(135deg, rgba(108, 117, 125, 0.15) 0%, rgba(108, 117, 125, 0.08) 100%);
+      color: var(--tag-default);
+      border-left: 6px solid var(--tag-default);
+    }
+
+    .host-count-badge {
+      background: #6D6ACC;
+      color: white;
+      font-weight: bolder;
+      padding: var(--spacing-xs) var(--spacing-sm);
+      border-radius: var(--radius-xl);
+      font-size: 20px;
+      font-weight: 700;
+      margin-left: auto;
+      border: 1px solid rgba(0, 0, 0, 0.2);
+    }
+
+    /* Hosts Grid */
+    .hosts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+      gap: var(--spacing-lg);
+      padding: 0;
+      width: 100%;
+    }
+
+    /* Force 3-column layout on larger screens */
+    @media (min-width: 1200px) {
+      .hosts-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    @media (min-width: 1600px) {
+      .hosts-grid {
+        grid-template-columns: repeat(4, 1fr);
+      }
+    }
+
+    @media (min-width: 2000px) {
+      .hosts-grid {
+        grid-template-columns: repeat(5, 1fr);
+      }
+    }
+
+    .hosts-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-sm);
+    }
+
+    /* Host Tile */
+    .host-tile {
+      background: var(--bg-primary);
+      border: 3px solid transparent;
+      border-radius: var(--radius-xl);
+      padding: var(--spacing-lg);
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--shadow-md);
+    }
+
+    .host-tile::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(135deg, transparent 0%, rgba(0, 0, 0, 0.02) 100%);
+      pointer-events: none;
+      border-radius: inherit;
+    }
+
+    .host-tile:hover {
+      transform: translateY(-4px) scale(1.01);
+      box-shadow: var(--shadow-xl);
+      border-color: var(--primary-color);
+    }
+
+    .host-tile.tag-production {
+      background: linear-gradient(135deg, rgba(220, 53, 69, 0.08) 0%, rgba(220, 53, 69, 0.15) 100%);
+      border-color: rgba(220, 53, 69, 0.3);
+    }
+
+    .host-tile.tag-production:hover {
+      border-color: var(--tag-production);
+      box-shadow: 0 12px 30px rgba(220, 53, 69, 0.3);
+    }
+
+    .host-tile.tag-staging {
+      background: linear-gradient(135deg, rgba(253, 126, 20, 0.08) 0%, rgba(253, 126, 20, 0.15) 100%);
+      border-color: rgba(253, 126, 20, 0.3);
+    }
+
+    .host-tile.tag-staging:hover {
+      border-color: var(--tag-staging);
+      box-shadow: 0 12px 30px rgba(253, 126, 20, 0.3);
+    }
+
+    .host-tile.tag-development,
+    .host-tile.tag-dev {
+      background: linear-gradient(135deg, rgba(25, 135, 84, 0.08) 0%, rgba(25, 135, 84, 0.15) 100%);
+      border-color: rgba(25, 135, 84, 0.3);
+    }
+
+    .host-tile.tag-development:hover,
+    .host-tile.tag-dev:hover {
+      border-color: var(--tag-development);
+      box-shadow: 0 12px 30px rgba(25, 135, 84, 0.3);
+    }
+
+    .host-tile.tag-testing,
+    .host-tile.tag-test {
+      background: linear-gradient(135deg, rgba(111, 66, 193, 0.08) 0%, rgba(111, 66, 193, 0.15) 100%);
+      border-color: rgba(111, 66, 193, 0.3);
+    }
+
+    .host-tile.tag-testing:hover,
+    .host-tile.tag-test:hover {
+      border-color: var(--tag-testing);
+      box-shadow: 0 12px 30px rgba(111, 66, 193, 0.3);
+    }
+
+    .host-tile.tag-database,
+    .host-tile.tag-db {
+      background: linear-gradient(135deg, rgba(13, 202, 240, 0.08) 0%, rgba(13, 202, 240, 0.15) 100%);
+      border-color: rgba(13, 202, 240, 0.3);
+    }
+
+    .host-tile.tag-database:hover,
+    .host-tile.tag-db:hover {
+      border-color: var(--tag-database);
+      box-shadow: 0 12px 30px rgba(13, 202, 240, 0.3);
+    }
+
+    .host-tile.tag-web {
+      background: linear-gradient(135deg, rgba(13, 110, 253, 0.08) 0%, rgba(13, 110, 253, 0.15) 100%);
+      border-color: rgba(13, 110, 253, 0.3);
+    }
+
+    .host-tile.tag-web:hover {
+      border-color: var(--tag-web);
+      box-shadow: 0 12px 30px rgba(13, 110, 253, 0.3);
+    }
+
+    .host-tile.tag-api {
+      background: linear-gradient(135deg, rgba(102, 16, 242, 0.08) 0%, rgba(102, 16, 242, 0.15) 100%);
+      border-color: rgba(102, 16, 242, 0.3);
+    }
+
+    .host-tile.tag-api:hover {
+      border-color: var(--tag-api);
+      box-shadow: 0 12px 30px rgba(102, 16, 242, 0.3);
+    }
+
+    .host-tile.tag-untagged {
+      background: linear-gradient(135deg, rgba(108, 117, 125, 0.08) 0%, rgba(108, 117, 125, 0.15) 100%);
+      border-color: rgba(108, 117, 125, 0.3);
+    }
+
+    .host-tile.tag-untagged:hover {
+      border-color: var(--tag-default);
+      box-shadow: 0 12px 30px rgba(108, 117, 125, 0.3);
+    }
+
+    /* Host Tile Content */
+    .host-name {
+      font-size: 1.125rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: var(--spacing-sm);
+      text-align: center;
+      border-bottom: 2px solid var(--border-light);
+      padding-bottom: var(--spacing-xs);
+      letter-spacing: 0.3px;
+    }
+
+    .host-connection {
+      color: var(--text-secondary);
+      text-align: center;
+      margin-bottom: var(--spacing-sm);
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+      font-size: 0.75rem;
+      background: rgba(0, 0, 0, 0.03);
+      padding: var(--spacing-xs) var(--spacing-sm);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-light);
+      font-weight: 500;
+    }
+
+    .host-details {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .auth-icon {
+      font-size: 1.25rem;
+      opacity: 0.8;
+    }
+
+    .host-tags {
+      font-size: 0.625rem;
+      padding: var(--spacing-xs) var(--spacing-sm);
+      border-radius: var(--radius-xl);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      border: 1px solid rgba(0, 0, 0, 0.2);
+      box-shadow: var(--shadow-sm);
+    }
+
+    /* List View Styles */
+    .host-tile.list-view {
+      border-radius: var(--radius-lg);
+      padding: var(--spacing-md) var(--spacing-lg);
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-lg);
+      min-height: 4rem;
+    }
+
+    .host-tile.list-view:hover {
+      transform: translateX(4px);
+      scale: 1;
+    }
+
+    .host-tile.list-view .host-name {
+      margin: 0;
+      padding: 0;
+      border: none;
+      text-align: left;
+      flex: 1;
+    }
+
+    .host-tile.list-view .host-connection {
+      margin: 0;
+      flex: 2;
+      text-align: left;
+    }
+
+    .host-tile.list-view .host-details {
+      flex-shrink: 0;
+    }
+
+    /* Connection Toast */
+    .connection-toast {
+      position: fixed;
+      top: var(--spacing-lg);
+      right: var(--spacing-lg);
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-xl);
+      padding: var(--spacing-lg);
+      max-width: 400px;
+      width: 350px;
+      transform: translateX(calc(100% + var(--spacing-lg)));
+      transition: transform 0.3s ease;
+      z-index: 1000;
+      overflow: hidden;
+    }
+
+    .connection-toast.show {
+      transform: translateX(0);
+    }
+
+    .toast-content {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--spacing-sm);
+    }
+
+    .toast-icon {
+      font-size: 1.25rem;
+      margin-top: var(--spacing-xs);
+    }
+
+    .toast-title {
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: var(--spacing-xs);
+    }
+
+    .toast-message {
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+    }
+
+    .toast-success .toast-icon {
+      color: var(--success-color);
+    }
+
+    .toast-error .toast-icon {
+      color: var(--error-color);
+    }
+
+    /* Connection Overlay */
+    .connection-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.3s ease;
+    }
+
+    .connection-overlay.show {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .connection-modal {
+      background: var(--bg-primary);
+      border-radius: var(--radius-xl);
+      padding: var(--spacing-2xl);
+      text-align: center;
+      box-shadow: var(--shadow-xl);
+      max-width: 400px;
+      transform: scale(0.9);
+      transition: transform 0.3s ease;
+    }
+
+    .connection-overlay.show .connection-modal {
+      transform: scale(1);
+    }
+
+    .connection-spinner {
+      font-size: 3rem;
+      color: var(--primary-color);
+      margin-bottom: 1.5rem;
+    }
+
+    /* Tag Input Styles */
+    .tag-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      padding: 0.5rem;
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius-md);
+      background: var(--bg-secondary);
+      min-height: 42px;
+      align-items: center;
+    }
+
+    .tag-container:focus-within {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+    }
+
+    .tag-pill {
+      background: var(--primary-color);
+      color: white;
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      font-size: 0.875rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .tag-pill i {
+      cursor: pointer;
+      font-size: 0.75rem;
+      opacity: 0.8;
+    }
+
+    .tag-pill i:hover {
+      opacity: 1;
+    }
+
+    .tag-input {
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-size: 0.875rem;
+      flex: 1;
+      min-width: 60px;
+      outline: none;
+    }
+
+    .tag-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      margin-top: 4px;
+      max-height: 40vh;
+      overflow-y: auto;
+      z-index: 1000;
+      display: none;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .tag-option {
+      padding: 0.5rem 1rem;
+      cursor: pointer;
+      color: var(--text-primary);
+    }
+
+    .tag-option:hover {
+      background: var(--bg-secondary);
+    }
+
+    .tag-option.selected {
+      background: var(--primary-color);
+      color: white;
+    }
+
+    /* Export/Import Modals */
+    .export-option-btn {
+      background: var(--bg-secondary);
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: var(--spacing-xl);
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--spacing-md);
+      min-height: 150px;
+      justify-content: center;
+    }
+
+    .export-option-btn:hover {
+      background: var(--bg-tertiary);
+      border-color: var(--primary-color);
+      transform: translateY(-2px);
+    }
+
+    .export-option-btn i {
+      font-size: 3rem;
+      color: var(--primary-color);
+    }
+
+    .export-option-btn h4 {
+      color: var(--text-primary);
+      margin: 0;
+      font-size: 1.125rem;
+    }
+
+    .export-option-btn p {
+      color: var(--text-secondary);
+      margin: 0;
+      font-size: 0.875rem;
+      text-align: center;
+    }
+
+    .drag-drop-zone {
+      border: 2px dashed var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: var(--spacing-2xl);
+      text-align: center;
+      background: var(--bg-secondary);
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+
+    .drag-drop-zone.drag-over {
+      border-color: var(--primary-color);
+      background: var(--bg-tertiary);
+    }
+
+    .drag-drop-zone i {
+      font-size: 3rem;
+      color: var(--text-muted);
+      margin-bottom: var(--spacing-md);
+    }
+
+    .drag-drop-zone.drag-over i {
+      color: var(--primary-color);
+    }
+
+    .import-preview {
+      max-height: 300px;
+      overflow-y: auto;
+      background: var(--bg-secondary);
+      border-radius: var(--radius-md);
+      padding: var(--spacing-md);
+      margin-top: var(--spacing-md);
+    }
+
+    .import-preview-item {
+      padding: var(--spacing-sm);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .import-preview-item:last-child {
+      border-bottom: none;
+    }
+
+    .connection-modal h3 {
+      color: var(--text-primary);
+      margin-bottom: var(--spacing-sm);
+    }
+
+    .connection-host {
+      color: var(--text-secondary);
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+      margin-bottom: var(--spacing-lg);
+    }
+
+    .connection-progress {
+      margin-top: var(--spacing-lg);
+    }
+
+    .progress-bar {
+      background: var(--border-color);
+      border-radius: var(--radius-xl);
+      height: 0.5rem;
+      overflow: hidden;
+      margin-bottom: var(--spacing-sm);
+    }
+
+    .progress-fill {
+      background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
+      height: 100%;
+      width: 0%;
+      border-radius: inherit;
+      animation: progressFill 2s ease-in-out infinite;
+    }
+
+    @keyframes progressFill {
+      0% {
+        width: 0%;
+      }
+
+      50% {
+        width: 70%;
+      }
+
+      100% {
+        width: 100%;
+      }
+    }
+
+    .progress-text {
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+    }
+
+    /* Footer */
+    /* Main Content Area */
+    .main-content {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    .footer {
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border-color);
+      padding: var(--spacing-sm) var(--spacing-xl);
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .footer-content p {
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+      margin-bottom: var(--spacing-xs);
+    }
+
+    .footer-credit {
+      color: var(--text-muted);
+      font-size: 0.75rem;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+      .header {
+        padding: var(--spacing-md);
+      }
+
+      .header-content {
+        flex-direction: column;
+        gap: var(--spacing-md);
+        text-align: center;
+      }
+
+      .controls {
+        padding: var(--spacing-md);
+        grid-template-columns: 1fr;
+        gap: var(--spacing-md);
+      }
+
+      .main-content {
+        padding: var(--spacing-sm);
+      }
+
+      .hosts-grid {
+        grid-template-columns: 1fr !important;
+        padding: 0;
+      }
+
+      .footer {
+        padding: var(--spacing-md);
+      }
+
+      .connection-toast {
+        left: var(--spacing-sm);
+        right: var(--spacing-sm);
+        width: auto;
+        max-width: none;
+        transform: translateY(-100vh);
+      }
+
+      .connection-toast.show {
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 480px) {
+      .header-title {
+        font-size: 1.25rem;
+      }
+
+      .group-header {
+        padding: var(--spacing-md);
+        font-size: 1.125rem;
+      }
+
+      .hosts-container {
+        flex: 1;
+        overflow-y: auto;
+      }
+
+      .connection-modal {
+        margin: var(--spacing-md);
+        padding: var(--spacing-lg);
+      }
+    }
+
+    /* Animations */
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .host-tile,
+    .host-group {
+      animation: fadeIn 0.5s ease-out;
+    }
+
+    /* Loading states */
+    .loading {
+      opacity: 0.6;
+      pointer-events: none;
+    }
+
+    .loading * {
+      cursor: wait !important;
+    }
+
+    /* Focus styles for accessibility */
+    .search-input:focus,
+    .tag-filter:focus,
+    .control-btn:focus,
+    .host-tile:focus {
+      outline: 2px solid var(--primary-color);
+      outline-offset: 2px;
+    }
+  </style>
 </head>
-<body>
-    <!-- Header -->
-    <header class="header">
-        <div class="header-content">
-            <div class="header-left">
-                <h1 class="header-title">
-                    <i class="fas fa-terminal"></i>
-                    SSH Session Manager
-                </h1>
-                <span class="host-count" id="hostCount">0 hosts</span>
-            </div>
-            <div class="header-right">
-                <div class="auth-legend">
-                    <span class="legend-item">
-                        <i class="fas fa-key"></i> SSH Key
-                    </span>
-                    <span class="legend-item">
-                        <i class="fas fa-lock"></i> Password
-                    </span>
-                </div>
-            </div>
-        </div>
-    </header>
 
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-content">
+      <div class="header-left">
+        <h1 class="header-title">
+          <i class="fas fa-terminal"></i>
+          SSH Session Manager
+        </h1>
+        <span class="host-count" id="hostCount">0 hosts</span>
+      </div>
+      <div class="header-right">
+        <div class="auth-legend">
+          <span class="legend-item">
+            <i class="fas fa-key"></i> SSH Key
+          </span>
+          <span class="legend-item">
+            <i class="fas fa-lock"></i> Password
+          </span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Area -->
+  <div class="main-content">
     <!-- Search and Filter Controls -->
     <div class="controls">
-        <div class="search-container">
-            <i class="fas fa-search search-icon"></i>
-            <input
-                type="text"
-                id="searchBox"
-                class="search-input"
-                placeholder="🔍 Search hosts by name or tags..."
-                autocomplete="off"
-            >
-            <button id="clearSearch" class="clear-search-btn" title="Clear search">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
+      <div class="search-container">
+        <i class="fas fa-search search-icon"></i>
+        <input type="text" id="searchBox" class="search-input" placeholder="🔍 Search hosts by name or tags..." autocomplete="off">
+        <button id="clearSearch" class="clear-search-btn" title="Clear search">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
 
-        <div class="filter-container">
-            <i class="fas fa-tags filter-icon"></i>
-            <select id="tagFilter" class="tag-filter">
-                <option value="">All Tags</option>
-            </select>
-        </div>
+      <div class="filter-container">
+        <i class="fas fa-tags filter-icon"></i>
+        <select id="tagFilter" class="tag-filter">
+          <option value="">All Tags</option>
+        </select>
+      </div>
 
-        <div class="view-controls">
-            <button id="refreshBtn" class="control-btn" title="Refresh hosts">
-                <i class="fas fa-sync-alt"></i>
-            </button>
-            <button id="gridViewBtn" class="control-btn active" title="Grid view">
-                <i class="fas fa-th"></i>
-            </button>
-            <button id="listViewBtn" class="control-btn" title="List view">
-                <i class="fas fa-list"></i>
-            </button>
-        </div>
+      <div class="view-controls">
+        <button id="refreshBtn" class="control-btn" title="Refresh hosts">
+          <i class="fas fa-sync-alt"></i>
+        </button>
+        <button id="gridViewBtn" class="control-btn active" title="Grid view">
+          <i class="fas fa-th"></i>
+        </button>
+        <button id="listViewBtn" class="control-btn" title="List view">
+          <i class="fas fa-list"></i>
+        </button>
+        <button id="manageHostsBtn" class="control-btn" title="Manage Hosts">
+          <i class="fas fa-cog"></i>
+        </button>
+      </div>
     </div>
 
     <!-- Main Content Area -->
     <main class="main-content">
-        <!-- Loading State -->
-        <div id="loadingState" class="loading-state">
-            <div class="loading-spinner">
-                <i class="fas fa-spinner fa-spin"></i>
-            </div>
-            <p>Loading SSH hosts...</p>
+      <!-- Loading State -->
+      <div id="loadingState" class="loading-state">
+        <div class="loading-spinner">
+          <i class="fas fa-spinner fa-spin"></i>
         </div>
+        <p>Loading SSH hosts...</p>
+      </div>
 
-        <!-- Empty State -->
-        <div id="emptyState" class="empty-state" style="display: none;">
-            <div class="empty-icon">
-                <i class="fas fa-server"></i>
-            </div>
-            <h3>No SSH Hosts Found</h3>
-            <p class="empty-message">No hosts match your search criteria.</p>
-            <button id="clearFiltersBtn" class="clear-filters-btn">
-                <i class="fas fa-times-circle"></i>
-                Clear Filters
-            </button>
+      <!-- Empty State -->
+      <div id="emptyState" class="empty-state" style="display: none;">
+        <div class="empty-icon">
+          <i class="fas fa-server"></i>
         </div>
+        <h3>No SSH Hosts Found</h3>
+        <p class="empty-message">No hosts match your search criteria.</p>
+        <button id="clearFiltersBtn" class="clear-filters-btn">
+          <i class="fas fa-times-circle"></i>
+          Clear Filters
+        </button>
+      </div>
 
-        <!-- Hosts Container -->
-        <div id="hostsContainer" class="hosts-container" style="display: none;">
-            <!-- Host groups will be dynamically inserted here -->
-        </div>
+      <!-- Hosts Container -->
+      <div id="hostsContainer" class="hosts-container" style="display: none;">
+        <!-- Host groups will be dynamically inserted here -->
+      </div>
     </main>
+
+    <!-- Manage Hosts View -->
+    <div id="manageView" class="main-content" style="display: none;">
+      <div class="header-actions" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+        <h2><i class="fas fa-tasks"></i>&nbsp; Manage Hosts</h2>
+        <div style="display: flex; gap: 1rem;">
+          <button id="backToDashBtn" class="control-btn" style="width: auto; padding: 0.5rem 1rem;">
+            <i class="fas fa-arrow-left"></i>&nbsp; Back to Dashboard
+          </button>
+          <button id="importBtn" class="control-btn" style="width: auto; padding: 0.5rem 1rem; background: var(--info-color); color: white; border-color: var(--info-color);">
+            <i class="fas fa-file-import"></i>&nbsp; Import Hosts
+          </button>
+          <button id="exportBtn" class="control-btn" style="width: auto; padding: 0.5rem 1rem; background: var(--primary-color); color: white; border-color: var(--primary-color);">
+            <i class="fas fa-file-export"></i>&nbsp;Export Hosts
+          </button>
+          <button id="addHostBtn" class="control-btn" style="width: auto; padding: 0.5rem 1rem; background: var(--success-color); color: white; border-color: var(--success-color);">
+            <i class="fas fa-plus"></i>&nbsp; Add New Host
+          </button>
+        </div>
+      </div>
+
+      <div class="manage-container" style="background: var(--bg-primary); border-radius: var(--radius-xl); padding: var(--spacing-lg); box-shadow: var(--shadow-md);">
+        <table class="hosts-table" style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr style="border-bottom: 2px solid var(--border-color); text-align: left;">
+              <th style="padding: 1rem;">Name</th>
+              <th style="padding: 1rem;">Hostname</th>
+              <th style="padding: 1rem;">User</th>
+              <th style="padding: 1rem;">Port</th>
+              <th style="padding: 1rem;">Auth</th>
+              <th style="padding: 1rem;">Tags</th>
+              <th style="padding: 1rem; text-align: right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="manageHostsList">
+            <!-- Hosts will be populated here -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Add/Edit Host Modal -->
+    <div id="hostModal" class="connection-overlay">
+      <div class="connection-modal" style="max-width: 600px; text-align: left;">
+        <h3 id="modalTitle" style="margin-bottom: 1.5rem;">Add New Host</h3>
+        <form id="hostForm">
+          <input type="hidden" id="originalName">
+
+          <div class="form-group" style="margin-bottom: 1.5rem; position: relative;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Tags</label>
+            <div class="tag-container" id="tagContainer">
+              <!-- Pills will be inserted here -->
+              <input type="text" id="tagInput" class="tag-input" placeholder="Type and press Space/Enter to add...">
+            </div>
+            <div id="tagDropdown" class="tag-dropdown">
+              <!-- Options will be populated here -->
+            </div>
+            <input type="hidden" id="hostTags">
+          </div>
+
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Display Name</label>
+            <input type="text" id="hostName" class="search-input" style="width: 100%;" placeholder="Production DB" required>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div class="form-group">
+              <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Hostname / IP</label>
+              <input type="text" id="hostAddress" required class="search-input" style="width: 100%;">
+            </div>
+            <div class="form-group">
+              <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Port</label>
+              <input type="number" id="hostPort" value="22" required class="search-input" style="width: 100%;">
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Username</label>
+            <input type="text" id="hostUser" required class="search-input" style="width: 100%;">
+          </div>
+
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Authentication Method</label>
+            <select id="authMethod" class="search-input" style="width: 100%;">
+              <option value="password">Password</option>
+              <option value="key">SSH Key</option>
+            </select>
+          </div>
+
+          <div id="passwordField" class="form-group" style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Password (Optional - stored in Keychain)</label>
+            <div style="position: relative;">
+              <input type="password" id="hostPassword" class="search-input" style="width: 100%; padding-right: 40px;" placeholder="Leave empty to keep existing or prompt on connect">
+              <button type="button" id="togglePasswordBtn" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-secondary); cursor: pointer;">
+                <i class="fas fa-eye"></i>
+              </button>
+            </div>
+          </div>
+
+          <div id="keyField" class="form-group" style="margin-bottom: 1rem; display: none;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">SSH Key Path</label>
+            <input type="text" id="sshKeyPath" class="search-input" style="width: 100%;" placeholder="~/.ssh/id_rsa">
+          </div>
+
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">iTerm Profile</label>
+            <input type="text" id="itermProfile" list="profileList" value="Default" class="search-input" style="width: 100%;">
+            <datalist id="profileList"></datalist>
+          </div>
+
+
+
+          <div style="display: flex; justify-content: flex-end; gap: 1rem;">
+            <button type="button" id="cancelHostBtn" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem;">Cancel</button>
+            <button type="submit" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem; background: var(--primary-color); color: white; border-color: var(--primary-color);">Save Host</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="connection-overlay">
+      <div class="connection-modal" style="max-width: 400px;">
+        <div class="connection-spinner" style="color: var(--error-color);">
+          <i class="fas fa-exclamation-triangle"></i>
+        </div>
+        <h3>Delete Host?</h3>
+        <p style="margin-bottom: 1.5rem; color: var(--text-secondary);">Are you sure you want to delete <strong id="deleteHostName"></strong>? This action cannot be undone.</p>
+        <div style="display: flex; justify-content: center; gap: 1rem;">
+          <button id="cancelDeleteBtn" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem;">Cancel</button>
+          <button id="confirmDeleteBtn" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem; background: var(--error-color); color: white; border-color: var(--error-color);">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Export Modal -->
+    <div id="exportModal" class="connection-overlay">
+      <div class="connection-modal" style="max-width: 600px;">
+        <h3 style="margin-bottom: var(--spacing-lg);">Export Hosts</h3>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-lg); margin-bottom: var(--spacing-lg);">
+          <button id="exportCurrentBtn" class="export-option-btn">
+            <i class="fas fa-database"></i>
+            <h4>Current Hosts</h4>
+            <p>Export all your configured SSH hosts</p>
+          </button>
+          <button id="exportTemplateBtn" class="export-option-btn">
+            <i class="fas fa-file-code"></i>
+            <h4>Sample Template</h4>
+            <p>Download an example configuration file</p>
+          </button>
+        </div>
+        <div style="display: flex; justify-content: center;">
+          <button id="cancelExportBtn" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem;">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Import Modal -->
+    <div id="importModal" class="connection-overlay">
+      <div class="connection-modal" style="max-width: 600px;">
+        <h3 style="margin-bottom: var(--spacing-lg);">Import Hosts</h3>
+        <div id="dropZone" class="drag-drop-zone">
+          <i class="fas fa-cloud-upload-alt"></i>
+          <h4 style="color: var(--text-primary); margin: var(--spacing-sm) 0;">Drag & Drop JSON File</h4>
+          <p style="color: var(--text-secondary); margin-bottom: var(--spacing-md);">or click to browse</p>
+          <input type="file" id="fileInput" accept=".json" style="display: none;">
+        </div>
+        <div id="importPreview" style="display: none;">
+          <h4 style="color: var(--text-primary); margin-top: var(--spacing-lg);">Preview</h4>
+          <div id="importPreviewList" class="import-preview"></div>
+        </div>
+        <div style="display: flex; justify-content: center; gap: var(--spacing-md); margin-top: var(--spacing-lg);">
+          <button id="cancelImportBtn" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem;">Cancel</button>
+          <button id="confirmImportBtn" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem; background: var(--primary-color); color: white; border-color: var(--primary-color); display: none;">Import</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Connection Status Toast -->
     <div id="connectionToast" class="connection-toast">
-        <div class="toast-content">
-            <i class="toast-icon"></i>
-            <div class="toast-text">
-                <div class="toast-title"></div>
-                <div class="toast-message"></div>
-            </div>
+      <div class="toast-content">
+        <i class="toast-icon"></i>
+        <div class="toast-text">
+          <div class="toast-title"></div>
+          <div class="toast-message"></div>
         </div>
+      </div>
     </div>
 
     <!-- Loading Overlay for Connections -->
     <div id="connectionOverlay" class="connection-overlay">
-        <div class="connection-modal">
-            <div class="connection-spinner">
-                <i class="fas fa-satellite-dish fa-spin"></i>
-            </div>
-            <h3>Launching SSH Session</h3>
-            <p class="connection-host"></p>
-            <div class="connection-progress">
-                <div class="progress-bar">
-                    <div class="progress-fill"></div>
-                </div>
-                <p class="progress-text">Connecting to iTerm2...</p>
-            </div>
+      <div class="connection-modal">
+        <div class="connection-spinner">
+          <i class="fas fa-satellite-dish fa-spin"></i>
         </div>
+        <h3>Launching SSH Session</h3>
+        <p class="connection-host"></p>
+        <div class="connection-progress">
+          <div class="progress-bar">
+            <div class="progress-fill"></div>
+          </div>
+          <p class="progress-text">Connecting to iTerm2...</p>
+        </div>
+      </div>
     </div>
+  </div>
 
-    <!-- Footer -->
-    <footer class="footer">
-        <div class="footer-content">
-            <p>
-                <strong>💡 Quick Guide:</strong> Click any tile to connect instantly! Use search to filter hosts.
-            </p>
-            <p class="footer-credit">
-                Built with ❤️ by <strong>RB (Rahul Bhooteshwar)</strong>
-            </p>
-        </div>
-    </footer>
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-content">
+      <p class="footer-credit">
+        Built with ❤️ by <strong>RB (Rahul Bhooteshwar)</strong>
+      </p>
+    </div>
+  </footer>
 
-    <script>
-        /**
-         * SSH Session Manager - Modern Web Interface
-         * JavaScript application for managing SSH connections
-         */
+  <script>
+    /**
+     * SSH Session Manager - Modern Web Interface
+     * JavaScript application for managing SSH connections
+     */
 
-        class SSHSessionManager {
-            constructor() {
-                // State management
-                this.hosts = [];
-                this.filteredHosts = [];
-                this.allTags = [];
-                this.currentView = 'grid'; // 'grid' or 'list'
-                this.isLoading = false;
+    class SSHSessionManager {
+      constructor() {
+        // State management
+        this.hosts = [];
+        this.filteredHosts = [];
+        this.allTags = [];
+        this.currentView = 'grid'; // 'grid' or 'list'
+        this.isLoading = false;
 
-                // DOM elements
-                this.elements = {
-                    searchBox: document.getElementById('searchBox'),
-                    tagFilter: document.getElementById('tagFilter'),
-                    clearSearch: document.getElementById('clearSearch'),
-                    refreshBtn: document.getElementById('refreshBtn'),
-                    gridViewBtn: document.getElementById('gridViewBtn'),
-                    listViewBtn: document.getElementById('listViewBtn'),
-                    hostCount: document.getElementById('hostCount'),
-                    loadingState: document.getElementById('loadingState'),
-                    emptyState: document.getElementById('emptyState'),
-                    hostsContainer: document.getElementById('hostsContainer'),
-                    clearFiltersBtn: document.getElementById('clearFiltersBtn'),
-                    connectionToast: document.getElementById('connectionToast'),
-                    connectionOverlay: document.getElementById('connectionOverlay')
-                };
+        // DOM elements
+        this.elements = {
+          searchBox: document.getElementById('searchBox'),
+          tagFilter: document.getElementById('tagFilter'),
+          clearSearch: document.getElementById('clearSearch'),
+          refreshBtn: document.getElementById('refreshBtn'),
+          gridViewBtn: document.getElementById('gridViewBtn'),
+          listViewBtn: document.getElementById('listViewBtn'),
+          hostCount: document.getElementById('hostCount'),
+          loadingState: document.getElementById('loadingState'),
+          emptyState: document.getElementById('emptyState'),
+          hostsContainer: document.getElementById('hostsContainer'),
+          clearFiltersBtn: document.getElementById('clearFiltersBtn'),
+          connectionToast: document.getElementById('connectionToast'),
+          connectionOverlay: document.getElementById('connectionOverlay'),
 
-                // Bind event listeners
-                this.bindEvents();
+          // Manage View Elements
+          manageHostsBtn: document.getElementById('manageHostsBtn'),
+          manageView: document.getElementById('manageView'),
+          backToDashBtn: document.getElementById('backToDashBtn'),
+          addHostBtn: document.getElementById('addHostBtn'),
+          manageHostsList: document.getElementById('manageHostsList'),
 
-                // Initialize the application
-                this.init();
+          // Modals
+          hostModal: document.getElementById('hostModal'),
+          deleteModal: document.getElementById('deleteModal'),
+          hostForm: document.getElementById('hostForm'),
+          cancelHostBtn: document.getElementById('cancelHostBtn'),
+          cancelDeleteBtn: document.getElementById('cancelDeleteBtn'),
+          confirmDeleteBtn: document.getElementById('confirmDeleteBtn'),
+
+          // Form Fields
+          modalTitle: document.getElementById('modalTitle'),
+          originalName: document.getElementById('originalName'),
+          authMethod: document.getElementById('authMethod'),
+          passwordField: document.getElementById('passwordField'),
+          modalTitle: document.getElementById('modalTitle'),
+          originalName: document.getElementById('originalName'),
+          authMethod: document.getElementById('authMethod'),
+          passwordField: document.getElementById('passwordField'),
+          hostPassword: document.getElementById('hostPassword'),
+          togglePasswordBtn: document.getElementById('togglePasswordBtn'),
+          keyField: document.getElementById('keyField'),
+
+          // Tag Input Elements
+          tagContainer: document.getElementById('tagContainer'),
+          tagInput: document.getElementById('tagInput'),
+          tagDropdown: document.getElementById('tagDropdown'),
+          hostTags: document.getElementById('hostTags'),
+
+          // Import/Export Elements
+          importBtn: document.getElementById('importBtn'),
+          exportBtn: document.getElementById('exportBtn'),
+          exportModal: document.getElementById('exportModal'),
+          importModal: document.getElementById('importModal'),
+          cancelExportBtn: document.getElementById('cancelExportBtn'),
+          cancelImportBtn: document.getElementById('cancelImportBtn'),
+          exportCurrentBtn: document.getElementById('exportCurrentBtn'),
+          exportTemplateBtn: document.getElementById('exportTemplateBtn'),
+          dropZone: document.getElementById('dropZone'),
+          fileInput: document.getElementById('fileInput'),
+          confirmImportBtn: document.getElementById('confirmImportBtn'),
+          importPreview: document.getElementById('importPreview'),
+          importPreviewList: document.getElementById('importPreviewList')
+        };
+
+        // Bind event listeners
+        this.bindEvents();
+
+        // Initialize the application
+        this.init();
+      }
+
+      async init() {
+        console.log('Initializing SSH Session Manager...');
+        await this.loadHosts();
+        await this.loadTags();
+        this.renderHosts();
+      }
+
+      bindEvents() {
+        // Search functionality
+        this.elements.searchBox.addEventListener('input',
+          this.debounce(() => this.handleSearch(), 300)
+        );
+
+        // Clear search
+        this.elements.clearSearch.addEventListener('click', () => {
+          this.elements.searchBox.value = '';
+          this.handleSearch();
+        });
+
+        // Tag filter
+        this.elements.tagFilter.addEventListener('change', () => {
+          this.handleTagFilter();
+        });
+
+        // View controls
+        this.elements.refreshBtn.addEventListener('click', () => {
+          this.refresh();
+        });
+
+        this.elements.gridViewBtn.addEventListener('click', () => {
+          this.setView('grid');
+        });
+
+        this.elements.listViewBtn.addEventListener('click', () => {
+          this.setView('list');
+        });
+
+        // Clear filters
+        this.elements.clearFiltersBtn.addEventListener('click', () => {
+          this.clearFilters();
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+          // Ctrl/Cmd + K to focus search
+          if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+            e.preventDefault();
+            this.elements.searchBox.focus();
+          }
+
+          // Escape to clear search
+          if (e.key === 'Escape') {
+            this.clearFilters();
+          }
+
+          // F5 to refresh
+          if (e.key === 'F5') {
+            e.preventDefault();
+            this.refresh();
+          }
+        });
+
+        // Manage View Events
+        if (this.elements.manageHostsBtn) {
+          this.elements.manageHostsBtn.addEventListener('click', () => this.toggleManageView(true));
+        }
+        if (this.elements.backToDashBtn) {
+          this.elements.backToDashBtn.addEventListener('click', () => this.toggleManageView(false));
+        }
+
+        if (this.elements.addHostBtn) {
+          this.elements.addHostBtn.addEventListener('click', () => this.openHostModal());
+        }
+        if (this.elements.cancelHostBtn) {
+          this.elements.cancelHostBtn.addEventListener('click', () => this.closeModal(this.elements.hostModal));
+        }
+
+        if (this.elements.hostForm) {
+          this.elements.hostForm.addEventListener('submit', (e) => this.handleHostSubmit(e));
+        }
+
+        if (this.elements.authMethod) {
+          this.elements.authMethod.addEventListener('change', () => this.toggleAuthFields());
+        }
+
+        if (this.elements.cancelDeleteBtn) {
+          this.elements.cancelDeleteBtn.addEventListener('click', () => this.closeModal(this.elements.deleteModal));
+        }
+        if (this.elements.confirmDeleteBtn) {
+          this.elements.confirmDeleteBtn.addEventListener('click', () => this.confirmDelete());
+        }
+
+        if (this.elements.togglePasswordBtn) {
+          this.elements.togglePasswordBtn.addEventListener('click', () => this.togglePasswordVisibility());
+        }
+
+        // Tag Input Events
+        this.setupTagInput();
+
+        // Import/Export Events
+        if (this.elements.importBtn) {
+          this.elements.importBtn.addEventListener('click', () => this.openImportModal());
+        }
+        if (this.elements.exportBtn) {
+          this.elements.exportBtn.addEventListener('click', () => this.openExportModal());
+        }
+        if (this.elements.cancelExportBtn) {
+          this.elements.cancelExportBtn.addEventListener('click', () => this.closeModal(this.elements.exportModal));
+        }
+        if (this.elements.cancelImportBtn) {
+          this.elements.cancelImportBtn.addEventListener('click', () => this.closeModal(this.elements.importModal));
+        }
+        if (this.elements.exportCurrentBtn) {
+          this.elements.exportCurrentBtn.addEventListener('click', () => this.exportCurrentHosts());
+        }
+        if (this.elements.exportTemplateBtn) {
+          this.elements.exportTemplateBtn.addEventListener('click', () => this.exportTemplate());
+        }
+        if (this.elements.confirmImportBtn) {
+          this.elements.confirmImportBtn.addEventListener('click', () => this.confirmImport());
+        }
+
+        // Drag and drop events
+        this.setupDragAndDrop();
+      }
+
+      setupTagInput() {
+        const input = this.elements.tagInput;
+        const dropdown = this.elements.tagDropdown;
+
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            const tag = input.value.trim();
+            if (tag) {
+              this.addTag(tag);
+              input.value = '';
+              dropdown.style.display = 'none';
             }
-
-            async init() {
-                console.log('Initializing SSH Session Manager...');
-                await this.loadHosts();
-                await this.loadTags();
-                this.renderHosts();
+          } else if (e.key === 'Backspace' && !input.value) {
+            // Remove last tag if input is empty
+            const tags = this.getCurrentTags();
+            if (tags.length > 0) {
+              this.removeTag(tags[tags.length - 1]);
             }
+          }
+        });
 
-            bindEvents() {
-                // Search functionality
-                this.elements.searchBox.addEventListener('input',
-                    this.debounce(() => this.handleSearch(), 300)
-                );
+        input.addEventListener('input', () => {
+          const value = input.value.trim().toLowerCase();
+          if (value) {
+            const filteredTags = this.allTags.filter(tag =>
+              tag.toLowerCase().includes(value) &&
+              !this.getCurrentTags().includes(tag)
+            );
+            this.showTagDropdown(filteredTags);
+          } else {
+            dropdown.style.display = 'none';
+          }
+        });
 
-                // Clear search
-                this.elements.clearSearch.addEventListener('click', () => {
-                    this.elements.searchBox.value = '';
-                    this.handleSearch();
-                });
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+          if (!this.elements.tagContainer.contains(e.target) && !dropdown.contains(e.target)) {
+            dropdown.style.display = 'none';
+          }
+        });
 
-                // Tag filter
-                this.elements.tagFilter.addEventListener('change', () => {
-                    this.handleTagFilter();
-                });
-
-                // View controls
-                this.elements.refreshBtn.addEventListener('click', () => {
-                    this.refresh();
-                });
-
-                this.elements.gridViewBtn.addEventListener('click', () => {
-                    this.setView('grid');
-                });
-
-                this.elements.listViewBtn.addEventListener('click', () => {
-                    this.setView('list');
-                });
-
-                // Clear filters
-                this.elements.clearFiltersBtn.addEventListener('click', () => {
-                    this.clearFilters();
-                });
-
-                // Keyboard shortcuts
-                document.addEventListener('keydown', (e) => {
-                    // Ctrl/Cmd + K to focus search
-                    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-                        e.preventDefault();
-                        this.elements.searchBox.focus();
-                    }
-
-                    // Escape to clear search
-                    if (e.key === 'Escape') {
-                        this.clearFilters();
-                    }
-
-                    // F5 to refresh
-                    if (e.key === 'F5') {
-                        e.preventDefault();
-                        this.refresh();
-                    }
-                });
+        // Show all available tags on focus if input is empty
+        input.addEventListener('focus', () => {
+          if (!input.value.trim()) {
+            const availableTags = this.allTags.filter(tag => !this.getCurrentTags().includes(tag));
+            if (availableTags.length > 0) {
+              this.showTagDropdown(availableTags);
             }
+          }
+        });
+      }
 
-            debounce(func, wait) {
-                let timeout;
-                return function executedFunction(...args) {
-                    const later = () => {
-                        clearTimeout(timeout);
-                        func(...args);
-                    };
-                    clearTimeout(timeout);
-                    timeout = setTimeout(later, wait);
-                };
+      getCurrentTags() {
+        // Helper to get current tags from the hidden input or state
+        // We'll use the DOM state of pills as the source of truth for simplicity in this context
+        // or better, maintain a local state for the modal
+        return this.currentModalTags || [];
+      }
+
+      addTag(tag) {
+        if (!this.currentModalTags) this.currentModalTags = [];
+        if (this.currentModalTags.includes(tag)) return;
+
+        this.currentModalTags.push(tag);
+        this.renderTagPills();
+        this.updateHiddenTagInput();
+      }
+
+      removeTag(tag) {
+        if (!this.currentModalTags) return;
+        this.currentModalTags = this.currentModalTags.filter(t => t !== tag);
+        this.renderTagPills();
+        this.updateHiddenTagInput();
+      }
+
+      renderTagPills() {
+        // Remove existing pills (keep the input)
+        const pills = this.elements.tagContainer.querySelectorAll('.tag-pill');
+        pills.forEach(p => p.remove());
+
+        // Insert new pills before the input
+        this.currentModalTags.forEach(tag => {
+          const pill = document.createElement('div');
+          pill.className = 'tag-pill';
+          pill.innerHTML = `
+                ${tag}
+                <i class="fas fa-times" onclick="app.removeTag('${tag}')"></i>
+            `;
+          this.elements.tagContainer.insertBefore(pill, this.elements.tagInput);
+        });
+      }
+
+      updateHiddenTagInput() {
+        this.elements.hostTags.value = this.currentModalTags.join(',');
+      }
+
+      showTagDropdown(tags) {
+        const dropdown = this.elements.tagDropdown;
+        dropdown.innerHTML = '';
+
+        if (tags.length === 0) {
+          dropdown.style.display = 'none';
+          return;
+        }
+
+        tags.forEach(tag => {
+          const option = document.createElement('div');
+          option.className = 'tag-option';
+          option.textContent = tag;
+          option.onclick = () => {
+            this.addTag(tag);
+            this.elements.tagInput.value = '';
+            this.elements.tagInput.focus();
+            dropdown.style.display = 'none';
+          };
+          dropdown.appendChild(option);
+        });
+
+        dropdown.style.display = 'block';
+      }
+
+
+
+      debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+          const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+          };
+          clearTimeout(timeout);
+          timeout = setTimeout(later, wait);
+        };
+      }
+
+      async loadHosts() {
+        try {
+          this.setLoading(true);
+
+          const response = await (await fetch('/api/hosts')).json();
+          const { data } = response;
+          const { tag_groups, untagged_hosts } = data;
+
+          this.hosts = [...Object.values(tag_groups).flat(), ...untagged_hosts];
+          this.filteredHosts = [...this.hosts];
+          this.updateHostCount();
+          console.log(`Loaded ${this.hosts.length} hosts`);
+
+        } catch (error) {
+          console.error('Error loading hosts:', error);
+          this.showToast('Error loading hosts', 'error');
+        } finally {
+          this.setLoading(false);
+        }
+      }
+
+      async loadTags() {
+        try {
+          // Extract unique tags from hosts
+          const tagsSet = new Set();
+          this.hosts.forEach(host => {
+            if (host.tags) {
+              host.tags.forEach(tag => tagsSet.add(tag));
             }
+          });
 
-            async loadHosts() {
-                try {
-                    this.setLoading(true);
+          this.allTags = Array.from(tagsSet).sort();
+          this.populateTagFilter();
+          console.log(`Loaded ${this.allTags.length} tags`);
+        } catch (error) {
+          console.error('Error loading tags:', error);
+        }
+      }
 
-                    const response = await (await fetch('/api/hosts')).json();
-                    const { data } = response;
-                    const { tag_groups, untagged_hosts } = data;
+      populateTagFilter() {
+        const tagFilter = this.elements.tagFilter;
+        // Clear existing options except "All Tags"
+        tagFilter.innerHTML = '<option value="">All Tags</option>';
 
-                    this.hosts = [...Object.values(tag_groups).flat(), ...untagged_hosts];
-                    this.filteredHosts = [...this.hosts];
-                    this.updateHostCount();
-                    console.log(`Loaded ${this.hosts.length} hosts`);
+        this.allTags.forEach(tag => {
+          const option = document.createElement('option');
+          option.value = tag;
+          option.textContent = tag;
+          tagFilter.appendChild(option);
+        });
+      }
 
-                } catch (error) {
-                    console.error('Error loading hosts:', error);
-                    this.showToast('Error loading hosts', 'error');
-                } finally {
-                    this.setLoading(false);
-                }
+      handleSearch() {
+        const searchTerm = this.elements.searchBox.value.trim().toLowerCase();
+
+        if (searchTerm) {
+          this.filteredHosts = this.hosts.filter(host => {
+            const searchIn = [
+              host.name,
+              host.hostname,
+              host.username,
+              ...(host.tags || [])
+            ].join(' ').toLowerCase();
+
+            return searchIn.includes(searchTerm);
+          });
+
+          // Clear tag filter when searching
+          this.elements.tagFilter.value = '';
+        } else {
+          this.filteredHosts = [...this.hosts];
+        }
+
+        this.updateHostCount();
+        this.renderHosts();
+      }
+
+      handleTagFilter() {
+        const selectedTag = this.elements.tagFilter.value;
+
+        if (selectedTag) {
+          this.filteredHosts = this.hosts.filter(host => {
+            return host.tags && host.tags.includes(selectedTag);
+          });
+
+          // Clear search when filtering by tag
+          this.elements.searchBox.value = '';
+        } else {
+          this.filteredHosts = [...this.hosts];
+        }
+
+        this.updateHostCount();
+        this.renderHosts();
+      }
+
+      clearFilters() {
+        this.elements.searchBox.value = '';
+        this.elements.tagFilter.value = '';
+        this.filteredHosts = [...this.hosts];
+        this.updateHostCount();
+        this.renderHosts();
+      }
+
+      setView(view) {
+        this.currentView = view;
+
+        // Update button states
+        this.elements.gridViewBtn.classList.toggle('active', view === 'grid');
+        this.elements.listViewBtn.classList.toggle('active', view === 'list');
+
+        this.renderHosts();
+      }
+
+      setLoading(loading) {
+        this.isLoading = loading;
+
+        if (loading) {
+          this.elements.loadingState.style.display = 'flex';
+          this.elements.emptyState.style.display = 'none';
+          this.elements.hostsContainer.style.display = 'none';
+        } else {
+          this.elements.loadingState.style.display = 'none';
+        }
+
+        // Update refresh button
+        if (this.elements.refreshBtn) {
+          const icon = this.elements.refreshBtn.querySelector('i');
+          if (loading) {
+            icon.classList.add('fa-spin');
+          } else {
+            icon.classList.remove('fa-spin');
+          }
+        }
+      }
+
+      updateHostCount() {
+        const total = this.hosts.length;
+        const filtered = this.filteredHosts.length;
+
+        if (filtered === total) {
+          this.elements.hostCount.textContent = `${total} host${total !== 1 ? 's' : ''}`;
+        } else {
+          this.elements.hostCount.textContent = `${filtered} of ${total} hosts`;
+        }
+      }
+
+      renderHosts() {
+        if (this.isLoading) return;
+
+        if (this.filteredHosts.length === 0) {
+          this.elements.emptyState.style.display = 'flex';
+          this.elements.hostsContainer.style.display = 'none';
+          return;
+        }
+
+        this.elements.emptyState.style.display = 'none';
+        this.elements.hostsContainer.style.display = 'block';
+
+        // Group hosts by tags
+        const grouped = this.groupHostsByTags(this.filteredHosts);
+
+        // Generate HTML
+        const html = this.generateHostsHTML(grouped);
+        this.elements.hostsContainer.innerHTML = html;
+
+        // Bind click events to host tiles
+        this.bindHostClickEvents();
+      }
+
+      groupHostsByTags(hosts) {
+        const tagGroups = {};
+        const untaggedHosts = [];
+
+        hosts.forEach(host => {
+          const hostTags = host.tags || [];
+          if (hostTags.length === 0) {
+            untaggedHosts.push(host);
+          } else {
+            const primaryTag = hostTags[0];
+            if (!tagGroups[primaryTag]) {
+              tagGroups[primaryTag] = [];
             }
+            tagGroups[primaryTag].push(host);
+          }
+        });
 
-            async loadTags() {
-                try {
-                    // Extract unique tags from hosts
-                    const tagsSet = new Set();
-                    this.hosts.forEach(host => {
-                        if (host.tags) {
-                            host.tags.forEach(tag => tagsSet.add(tag));
-                        }
-                    });
+        return { tagGroups, untaggedHosts };
+      }
 
-                    this.allTags = Array.from(tagsSet).sort();
-                    this.populateTagFilter();
-                    console.log(`Loaded ${this.allTags.length} tags`);
-                } catch (error) {
-                    console.error('Error loading tags:', error);
-                }
-            }
+      generateHostsHTML(grouped) {
+        let html = '';
 
-            populateTagFilter() {
-                const tagFilter = this.elements.tagFilter;
-                // Clear existing options except "All Tags"
-                tagFilter.innerHTML = '<option value="">All Tags</option>';
+        // Add tagged groups
+        const sortedTags = Object.keys(grouped.tagGroups).sort();
+        for (const tag of sortedTags) {
+          const hosts = grouped.tagGroups[tag];
+          // For group headers, pass the single tag as array to maintain consistency
+          const tagClass = this.getTagClass([tag]);
 
-                this.allTags.forEach(tag => {
-                    const option = document.createElement('option');
-                    option.value = tag;
-                    option.textContent = tag;
-                    tagFilter.appendChild(option);
-                });
-            }
-
-            handleSearch() {
-                const searchTerm = this.elements.searchBox.value.trim().toLowerCase();
-
-                if (searchTerm) {
-                    this.filteredHosts = this.hosts.filter(host => {
-                        const searchIn = [
-                            host.name,
-                            host.hostname,
-                            host.username,
-                            ...(host.tags || [])
-                        ].join(' ').toLowerCase();
-
-                        return searchIn.includes(searchTerm);
-                    });
-
-                    // Clear tag filter when searching
-                    this.elements.tagFilter.value = '';
-                } else {
-                    this.filteredHosts = [...this.hosts];
-                }
-
-                this.updateHostCount();
-                this.renderHosts();
-            }
-
-            handleTagFilter() {
-                const selectedTag = this.elements.tagFilter.value;
-
-                if (selectedTag) {
-                    this.filteredHosts = this.hosts.filter(host => {
-                        return host.tags && host.tags.includes(selectedTag);
-                    });
-
-                    // Clear search when filtering by tag
-                    this.elements.searchBox.value = '';
-                } else {
-                    this.filteredHosts = [...this.hosts];
-                }
-
-                this.updateHostCount();
-                this.renderHosts();
-            }
-
-            clearFilters() {
-                this.elements.searchBox.value = '';
-                this.elements.tagFilter.value = '';
-                this.filteredHosts = [...this.hosts];
-                this.updateHostCount();
-                this.renderHosts();
-            }
-
-            setView(view) {
-                this.currentView = view;
-
-                // Update button states
-                this.elements.gridViewBtn.classList.toggle('active', view === 'grid');
-                this.elements.listViewBtn.classList.toggle('active', view === 'list');
-
-                this.renderHosts();
-            }
-
-            setLoading(loading) {
-                this.isLoading = loading;
-
-                if (loading) {
-                    this.elements.loadingState.style.display = 'flex';
-                    this.elements.emptyState.style.display = 'none';
-                    this.elements.hostsContainer.style.display = 'none';
-                } else {
-                    this.elements.loadingState.style.display = 'none';
-                }
-
-                // Update refresh button
-                if (this.elements.refreshBtn) {
-                    const icon = this.elements.refreshBtn.querySelector('i');
-                    if (loading) {
-                        icon.classList.add('fa-spin');
-                    } else {
-                        icon.classList.remove('fa-spin');
-                    }
-                }
-            }
-
-            updateHostCount() {
-                const total = this.hosts.length;
-                const filtered = this.filteredHosts.length;
-
-                if (filtered === total) {
-                    this.elements.hostCount.textContent = `${total} host${total !== 1 ? 's' : ''}`;
-                } else {
-                    this.elements.hostCount.textContent = `${filtered} of ${total} hosts`;
-                }
-            }
-
-            renderHosts() {
-                if (this.isLoading) return;
-
-                if (this.filteredHosts.length === 0) {
-                    this.elements.emptyState.style.display = 'flex';
-                    this.elements.hostsContainer.style.display = 'none';
-                    return;
-                }
-
-                this.elements.emptyState.style.display = 'none';
-                this.elements.hostsContainer.style.display = 'block';
-
-                // Group hosts by tags
-                const grouped = this.groupHostsByTags(this.filteredHosts);
-
-                // Generate HTML
-                const html = this.generateHostsHTML(grouped);
-                this.elements.hostsContainer.innerHTML = html;
-
-                // Bind click events to host tiles
-                this.bindHostClickEvents();
-            }
-
-            groupHostsByTags(hosts) {
-                const tagGroups = {};
-                const untaggedHosts = [];
-
-                hosts.forEach(host => {
-                    const hostTags = host.tags || [];
-                    if (hostTags.length === 0) {
-                        untaggedHosts.push(host);
-                    } else {
-                        const primaryTag = hostTags[0];
-                        if (!tagGroups[primaryTag]) {
-                            tagGroups[primaryTag] = [];
-                        }
-                        tagGroups[primaryTag].push(host);
-                    }
-                });
-
-                return { tagGroups, untaggedHosts };
-            }
-
-            generateHostsHTML(grouped) {
-                let html = '';
-
-                // Add tagged groups
-                const sortedTags = Object.keys(grouped.tagGroups).sort();
-                for (const tag of sortedTags) {
-                    const hosts = grouped.tagGroups[tag];
-                    // For group headers, pass the single tag as array to maintain consistency
-                    const tagClass = this.getTagClass([tag]);
-
-                    html += `
+          html += `
                         <div class="host-group">
                             <div class="group-header ${tagClass}">
                                 <i class="fas fa-folder"></i>
@@ -1394,11 +1985,11 @@
                             </div>
                         </div>
                     `;
-                }
+        }
 
-                // Add untagged hosts
-                if (grouped.untaggedHosts.length > 0) {
-                    html += `
+        // Add untagged hosts
+        if (grouped.untaggedHosts.length > 0) {
+          html += `
                         <div class="host-group">
                             <div class="group-header tag-untagged">
                                 <i class="fas fa-file"></i>
@@ -1410,21 +2001,21 @@
                             </div>
                         </div>
                     `;
-                }
+        }
 
-                return html;
-            }
+        return html;
+      }
 
-            generateHostTileHTML(host, primaryTag) {
-                const authIcon = host.auth_method === 'key' ? 'fas fa-key' : 'fas fa-lock';
-                // Pass all host tags to getTagClass and getTagColor instead of just primary tag
-                const hostTags = host.tags || [];
-                const tagClass = this.getTagClass(hostTags);
-                const tagsText = hostTags.length > 0 ? hostTags.join(', ') : 'NO TAGS';
-                const viewClass = this.currentView === 'list' ? 'list-view' : '';
-                const tagColor = this.getTagColor(hostTags);
+      generateHostTileHTML(host, primaryTag) {
+        const authIcon = host.auth_method === 'key' ? 'fas fa-key' : 'fas fa-lock';
+        // Pass all host tags to getTagClass and getTagColor instead of just primary tag
+        const hostTags = host.tags || [];
+        const tagClass = this.getTagClass(hostTags);
+        const tagsText = hostTags.length > 0 ? hostTags.join(', ') : 'NO TAGS';
+        const viewClass = this.currentView === 'list' ? 'list-view' : '';
+        const tagColor = this.getTagColor(hostTags);
 
-                return `
+        return `
                     <div class="host-tile ${tagClass} ${viewClass}" data-host-name="${host.name}" tabindex="0">
                         <div class="host-name">${host.name}</div>
                         <div class="host-connection">${host.username}@${host.hostname}:${host.port}</div>
@@ -1436,230 +2027,656 @@
                         </div>
                     </div>
                 `;
-            }
+      }
 
-            getTagClass(tags) {
-                // If tags is a string (single tag), convert to array
-                const tagArray = Array.isArray(tags) ? tags : [tags];
-                // Filter out NON-PROD tags and convert to lowercase
-                const filteredTagsLower = tagArray
-                    .filter(tag => tag.toUpperCase() !== 'NON-PROD')
-                    .map(tag => tag.toLowerCase());
+      getTagClass(tags) {
+        // If tags is a string (single tag), convert to array
+        const tagArray = Array.isArray(tags) ? tags : [tags];
+        // Filter out NON-PROD tags and convert to lowercase
+        const filteredTagsLower = tagArray
+          .filter(tag => tag.toUpperCase() !== 'NON-PROD')
+          .map(tag => tag.toLowerCase());
 
-                // Check for production tags (highest priority)
-                if (filteredTagsLower.some(tag =>
-                    tag === 'prod' ||
-                    tag === 'production'
-                )) {
-                    return 'tag-production';
-                }
-
-                // Check for staging tags
-                if (filteredTagsLower.some(tag =>
-                    tag === 'stage' ||
-                    tag === 'staging' ||
-                    tag === 'uat'
-                )) {
-                    return 'tag-staging';
-                }
-
-                // Check for development tags
-                if (filteredTagsLower.some(tag =>
-                    tag === 'dev' ||
-                    tag === 'development'
-                )) {
-                    return 'tag-development';
-                }
-
-                // Check for untagged
-                if (tagArray.length === 0 || tagArray[0] === 'untagged') {
-                    return 'tag-untagged';
-                }
-
-                // Everything else gets default styling
-                return 'tag-default';
-            }
-
-            getTagColor(tags) {
-                // If tags is a string (single tag), convert to array
-                const tagArray = Array.isArray(tags) ? tags : [tags];
-                // Filter out NON-PROD tags and convert to lowercase
-                const filteredTagsLower = tagArray
-                    .filter(tag => tag.toUpperCase() !== 'NON-PROD')
-                    .map(tag => tag.toLowerCase());
-
-                // Check for production tags (highest priority)
-                if (filteredTagsLower.some(tag =>
-                    tag === 'prod' ||
-                    tag === 'production'
-                )) {
-                    return '#dc3545'; // red
-                }
-
-                // Check for staging tags
-                if (filteredTagsLower.some(tag =>
-                    tag === 'stage' ||
-                    tag === 'staging' ||
-                    tag === 'uat'
-                )) {
-                    return '#fd7e14'; // orange
-                }
-
-                // Check for development tags
-                if (filteredTagsLower.some(tag =>
-                    tag === 'dev' ||
-                    tag === 'development'
-                )) {
-                    return '#198754'; // green
-                }
-
-                // Check for untagged
-                if (tagArray.length === 0 || tagArray[0] === 'untagged') {
-                    return '#6c757d'; // gray
-                }
-
-                // Everything else gets default gray
-                return '#6c757d'; // default gray
-            }
-
-            bindHostClickEvents() {
-                const hostTiles = document.querySelectorAll('.host-tile');
-                hostTiles.forEach(tile => {
-                    tile.addEventListener('click', () => {
-                        const hostName = tile.dataset.hostName;
-                        this.connectToHost(hostName);
-                    });
-
-                    // Add keyboard support
-                    tile.addEventListener('keydown', (e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            const hostName = tile.dataset.hostName;
-                            this.connectToHost(hostName);
-                        }
-                    });
-                });
-            }
-
-            async connectToHost(hostName) {
-                try {
-                    console.log(`Connecting to host: ${hostName}`);
-
-                    // Find host details
-                    const host = this.hosts.find(h => h.name === hostName);
-                    if (!host) {
-                        throw new Error(`Host "${hostName}" not found`);
-                    }
-
-                    // Show connection overlay
-                    this.showConnectionOverlay(host);
-
-                    const response = await fetch('/api/connect', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ host_name: hostName })
-                    });
-
-                    const data = await response.json();
-
-                    if (data.success) {
-                        this.showToast(`SSH session launched for ${hostName}`, 'success');
-                        console.log('Connection successful:', data);
-                    } else {
-                        throw new Error(data.detail || 'Connection failed');
-                    }
-
-                } catch (error) {
-                    console.error('Connection error:', error);
-                    this.showToast(`Connection failed: ${error.message}`, 'error');
-                } finally {
-                    // Hide connection overlay after a delay
-                    setTimeout(() => {
-                        this.hideConnectionOverlay();
-                    }, 2000);
-                }
-            }
-
-            showConnectionOverlay(host) {
-                const overlay = this.elements.connectionOverlay;
-                const hostElement = overlay.querySelector('.connection-host');
-
-                if (hostElement) {
-                    hostElement.textContent = `${host.username}@${host.hostname}:${host.port}`;
-                }
-
-                overlay.classList.add('show');
-            }
-
-            hideConnectionOverlay() {
-                this.elements.connectionOverlay.classList.remove('show');
-            }
-
-            showToast(message, type = 'info') {
-                const toast = this.elements.connectionToast;
-                const icon = toast.querySelector('.toast-icon');
-                const title = toast.querySelector('.toast-title');
-                const messageEl = toast.querySelector('.toast-message');
-
-                // Clear previous classes
-                toast.className = 'connection-toast';
-
-                // Set content based on type
-                switch (type) {
-                    case 'success':
-                        toast.classList.add('toast-success');
-                        icon.className = 'toast-icon fas fa-check-circle';
-                        title.textContent = 'Connection Successful';
-                        break;
-                    case 'error':
-                        toast.classList.add('toast-error');
-                        icon.className = 'toast-icon fas fa-exclamation-circle';
-                        title.textContent = 'Connection Failed';
-                        break;
-                    default:
-                        toast.classList.add('toast-info');
-                        icon.className = 'toast-icon fas fa-info-circle';
-                        title.textContent = 'Information';
-                }
-
-                messageEl.textContent = message;
-
-                // Show toast
-                toast.classList.add('show');
-
-                // Auto-hide after 5 seconds
-                setTimeout(() => {
-                    toast.classList.remove('show');
-                }, 5000);
-            }
-
-            async refresh() {
-                console.log('Refreshing hosts...');
-                await this.loadHosts();
-                await this.loadTags();
-                this.renderHosts();
-                this.showToast('Hosts refreshed successfully', 'success');
-            }
+        // Check for production tags (highest priority)
+        if (filteredTagsLower.some(tag =>
+          tag === 'prod' ||
+          tag === 'production'
+        )) {
+          return 'tag-production';
         }
 
-        // Initialize the application when DOM is loaded
-        document.addEventListener('DOMContentLoaded', () => {
-            console.log('DOM loaded, initializing SSH Session Manager...');
-            window.sshManager = new SSHSessionManager();
+        // Check for staging tags
+        if (filteredTagsLower.some(tag =>
+          tag === 'stage' ||
+          tag === 'staging' ||
+          tag === 'uat'
+        )) {
+          return 'tag-staging';
+        }
+
+        // Check for development tags
+        if (filteredTagsLower.some(tag =>
+          tag === 'dev' ||
+          tag === 'development'
+        )) {
+          return 'tag-development';
+        }
+
+        // Check for untagged
+        if (tagArray.length === 0 || tagArray[0] === 'untagged') {
+          return 'tag-untagged';
+        }
+
+        // Everything else gets default styling
+        return 'tag-default';
+      }
+
+      getTagColor(tags) {
+        // If tags is a string (single tag), convert to array
+        const tagArray = Array.isArray(tags) ? tags : [tags];
+        // Filter out NON-PROD tags and convert to lowercase
+        const filteredTagsLower = tagArray
+          .filter(tag => tag.toUpperCase() !== 'NON-PROD')
+          .map(tag => tag.toLowerCase());
+
+        // Check for production tags (highest priority)
+        if (filteredTagsLower.some(tag =>
+          tag === 'prod' ||
+          tag === 'production'
+        )) {
+          return '#dc3545'; // red
+        }
+
+        // Check for staging tags
+        if (filteredTagsLower.some(tag =>
+          tag === 'stage' ||
+          tag === 'staging' ||
+          tag === 'uat'
+        )) {
+          return '#fd7e14'; // orange
+        }
+
+        // Check for development tags
+        if (filteredTagsLower.some(tag =>
+          tag === 'dev' ||
+          tag === 'development'
+        )) {
+          return '#198754'; // green
+        }
+
+        // Check for untagged
+        if (tagArray.length === 0 || tagArray[0] === 'untagged') {
+          return '#6c757d'; // gray
+        }
+
+        // Everything else gets default gray
+        return '#6c757d'; // default gray
+      }
+
+      bindHostClickEvents() {
+        const hostTiles = document.querySelectorAll('.host-tile');
+        hostTiles.forEach(tile => {
+          tile.addEventListener('click', () => {
+            const hostName = tile.dataset.hostName;
+            this.connectToHost(hostName);
+          });
+
+          // Add keyboard support
+          tile.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              const hostName = tile.dataset.hostName;
+              this.connectToHost(hostName);
+            }
+          });
+        });
+      }
+
+      async connectToHost(hostName) {
+        try {
+          console.log(`Connecting to host: ${hostName}`);
+
+          // Find host details
+          const host = this.hosts.find(h => h.name === hostName);
+          if (!host) {
+            throw new Error(`Host "${hostName}" not found`);
+          }
+
+          // Show connection overlay
+          this.showConnectionOverlay(host);
+
+          const response = await fetch('/api/connect', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ host_name: hostName })
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            this.showToast(`SSH session launched for ${hostName}`, 'success');
+            console.log('Connection successful:', data);
+          } else {
+            throw new Error(data.detail || 'Connection failed');
+          }
+
+        } catch (error) {
+          console.error('Connection error:', error);
+          this.showToast(`Connection failed: ${error.message}`, 'error');
+        } finally {
+          // Hide connection overlay after a delay
+          setTimeout(() => {
+            this.hideConnectionOverlay();
+          }, 2000);
+        }
+      }
+
+      showConnectionOverlay(host) {
+        const overlay = this.elements.connectionOverlay;
+        const hostElement = overlay.querySelector('.connection-host');
+
+        if (hostElement) {
+          hostElement.textContent = `${host.username}@${host.hostname}:${host.port}`;
+        }
+
+        overlay.classList.add('show');
+      }
+
+      hideConnectionOverlay() {
+        this.elements.connectionOverlay.classList.remove('show');
+      }
+
+      showToast(message, type = 'info') {
+        const toast = this.elements.connectionToast;
+        const icon = toast.querySelector('.toast-icon');
+        const title = toast.querySelector('.toast-title');
+        const msg = toast.querySelector('.toast-message');
+
+        // Reset classes
+        toast.className = 'connection-toast';
+        toast.classList.add(`toast-${type}`);
+
+        // Set content
+        if (type === 'success') {
+          icon.className = 'toast-icon fas fa-check-circle';
+          title.textContent = 'Success';
+        } else if (type === 'error') {
+          icon.className = 'toast-icon fas fa-exclamation-circle';
+          title.textContent = 'Error';
+        } else {
+          icon.className = 'toast-icon fas fa-info-circle';
+          title.textContent = 'Info';
+        }
+
+        msg.textContent = message;
+
+        // Show toast
+        requestAnimationFrame(() => {
+          toast.classList.add('show');
         });
 
-        // Global error handler
-        window.addEventListener('error', (event) => {
-            console.error('Global error:', event.error);
+        // Hide after 3 seconds
+        setTimeout(() => {
+          toast.classList.remove('show');
+        }, 3000);
+      }
+
+      // Manage Hosts Methods
+      toggleManageView(show) {
+        if (show) {
+          this.elements.manageView.style.display = 'block';
+          document.querySelector('.controls').style.display = 'none';
+          document.querySelector('.hosts-container').style.display = 'none';
+          document.getElementById('emptyState').style.display = 'none';
+          this.loadManageHosts();
+        } else {
+          this.elements.manageView.style.display = 'none';
+          document.querySelector('.controls').style.display = 'grid';
+          this.renderHosts(); // Re-render dashboard
+        }
+      }
+
+      async loadManageHosts() {
+        try {
+          // Refresh data first
+          await this.loadHosts();
+
+          const tbody = this.elements.manageHostsList;
+          tbody.innerHTML = '';
+
+          this.hosts.forEach(host => {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid var(--border-light)';
+
+            const tagsHtml = (host.tags || []).map(tag =>
+              `<span style="background: var(--bg-secondary); padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; margin-right: 4px;">${tag}</span>`
+            ).join('');
+
+            tr.innerHTML = `
+                            <td style="padding: 1rem; font-weight: 500;">${host.name}</td>
+                            <td style="padding: 1rem; color: var(--text-secondary);">${host.hostname}</td>
+                            <td style="padding: 1rem; color: var(--text-secondary);">${host.username}</td>
+                            <td style="padding: 1rem; color: var(--text-secondary);">${host.port}</td>
+                            <td style="padding: 1rem;">
+                                <i class="${host.auth_method === 'key' ? 'fas fa-key' : 'fas fa-lock'}" title="${host.auth_method}"></i>
+                            </td>
+                            <td style="padding: 1rem;">${tagsHtml}</td>
+                            <td style="padding: 1rem; text-align: right;">
+                                <button onclick="app.openHostModal('${host.name}')" class="control-btn" style="display: inline-flex; width: 32px; height: 32px; padding: 0;margin-bottom: 0.5rem;" title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button onclick="app.deleteHost('${host.name}')" class="control-btn" style="display: inline-flex; width: 32px; height: 32px; padding: 0; margin-left: 0.5rem; color: var(--error-color); border-color: var(--error-color);" title="Delete">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        `;
+            tbody.appendChild(tr);
+          });
+        } catch (error) {
+          console.error('Error loading manage hosts:', error);
+          this.showToast('Failed to load hosts list', 'error');
+        }
+      }
+
+      openHostModal(hostName = null) {
+        const modal = this.elements.hostModal;
+        const form = this.elements.hostForm;
+
+        // Populate profile datalist
+        const profileList = document.getElementById('profileList');
+        profileList.innerHTML = '';
+        const profiles = new Set(this.hosts.map(h => h.iterm_profile).filter(p => p));
+        profiles.add('Default');
+        Array.from(profiles).sort().forEach(profile => {
+          const option = document.createElement('option');
+          option.value = profile;
+          profileList.appendChild(option);
         });
 
-        // Handle unhandled promise rejections
-        window.addEventListener('unhandledrejection', (event) => {
-            console.error('Unhandled promise rejection:', event.reason);
-            event.preventDefault();
+        // Reset form
+        form.reset();
+        this.elements.originalName.value = '';
+
+        if (hostName) {
+          // Edit mode
+          const host = this.hosts.find(h => h.name === hostName);
+          if (host) {
+            this.elements.modalTitle.textContent = 'Edit Host';
+            this.elements.originalName.value = host.name;
+
+            document.getElementById('hostName').value = host.name;
+            document.getElementById('hostAddress').value = host.hostname;
+            document.getElementById('hostUser').value = host.username;
+            document.getElementById('hostPort').value = host.port;
+            document.getElementById('authMethod').value = host.auth_method;
+            document.getElementById('sshKeyPath').value = host.ssh_key_path || '';
+            document.getElementById('itermProfile').value = host.iterm_profile || 'Default';
+            document.getElementById('sshKeyPath').value = host.ssh_key_path || '';
+            document.getElementById('itermProfile').value = host.iterm_profile || 'Default';
+
+            // Initialize tags
+            this.currentModalTags = [...(host.tags || [])];
+            this.renderTagPills();
+            this.updateHiddenTagInput();
+
+            // Handle password placeholder
+
+            // Handle password placeholder
+            if (host.auth_method === 'password') {
+              document.getElementById('hostPassword').placeholder = 'Leave empty to keep existing password';
+            }
+          }
+        } else {
+          // Add mode
+          this.elements.modalTitle.textContent = 'Add New Host';
+          // Add mode
+          this.elements.modalTitle.textContent = 'Add New Host';
+          document.getElementById('hostPassword').placeholder = 'Password (optional)';
+
+          // Reset tags
+          this.currentModalTags = [];
+          this.renderTagPills();
+          this.updateHiddenTagInput();
+        }
+
+        this.toggleAuthFields();
+        modal.classList.add('show');
+      }
+
+      closeModal(modal) {
+        modal.classList.remove('show');
+      }
+
+      toggleAuthFields() {
+        const method = this.elements.authMethod.value;
+        if (method === 'password') {
+          this.elements.passwordField.style.display = 'block';
+          this.elements.keyField.style.display = 'none';
+        } else {
+          this.elements.passwordField.style.display = 'none';
+          this.elements.keyField.style.display = 'block';
+        }
+      }
+
+      async togglePasswordVisibility() {
+        const input = this.elements.hostPassword;
+        const icon = this.elements.togglePasswordBtn.querySelector('i');
+        const hostName = this.elements.originalName.value;
+
+        // If we're in edit mode and the field is empty (placeholder shown), fetch the password
+        if (hostName && !input.value) {
+          try {
+            const response = await fetch(`/api/hosts/${encodeURIComponent(hostName)}/password`);
+            const data = await response.json();
+
+            if (data.success && data.password) {
+              input.value = data.password;
+            } else {
+              this.showToast('No password stored or failed to retrieve', 'info');
+              return;
+            }
+          } catch (error) {
+            console.error('Error fetching password:', error);
+            this.showToast('Error fetching password', 'error');
+            return;
+          }
+        }
+
+        // Toggle visibility
+        if (input.type === 'password') {
+          input.type = 'text';
+          icon.classList.remove('fa-eye');
+          icon.classList.add('fa-eye-slash');
+        } else {
+          input.type = 'password';
+          icon.classList.add('fa-eye');
+          icon.classList.remove('fa-eye-slash');
+        }
+      }
+
+      async handleHostSubmit(e) {
+        e.preventDefault();
+
+        const formData = {
+          name: document.getElementById('hostName').value,
+          hostname: document.getElementById('hostAddress').value,
+          username: document.getElementById('hostUser').value,
+          port: parseInt(document.getElementById('hostPort').value),
+          auth_method: document.getElementById('authMethod').value,
+          ssh_key_path: document.getElementById('sshKeyPath').value || null,
+          iterm_profile: document.getElementById('itermProfile').value,
+          tags: this.currentModalTags,
+          password: document.getElementById('hostPassword').value || null
+        };
+
+        const originalName = this.elements.originalName.value;
+        const isEdit = !!originalName;
+
+        try {
+          let url = '/api/hosts';
+          let method = 'POST';
+
+          if (isEdit) {
+            url = `/api/hosts/${encodeURIComponent(originalName)}`;
+            method = 'PUT';
+          }
+
+          const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            this.showToast(result.message, 'success');
+            this.closeModal(this.elements.hostModal);
+            this.loadManageHosts(); // Refresh list
+          } else {
+            throw new Error(result.detail || 'Operation failed');
+          }
+        } catch (error) {
+          console.error('Error saving host:', error);
+          this.showToast(error.message, 'error');
+        }
+      }
+
+      deleteHost(hostName) {
+        this.hostToDelete = hostName;
+        document.getElementById('deleteHostName').textContent = hostName;
+        this.elements.deleteModal.classList.add('show');
+      }
+
+      async confirmDelete() {
+        if (!this.hostToDelete) return;
+
+        try {
+          const response = await fetch(`/api/hosts/${encodeURIComponent(this.hostToDelete)}`, {
+            method: 'DELETE'
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            this.showToast(result.message, 'success');
+            this.closeModal(this.elements.deleteModal);
+            this.loadManageHosts();
+          } else {
+            throw new Error(result.detail || 'Delete failed');
+          }
+        } catch (error) {
+          console.error('Error deleting host:', error);
+          this.showToast(error.message, 'error');
+        } finally {
+          this.hostToDelete = null;
+        }
+      }
+
+      async refresh() {
+        console.log('Refreshing hosts...');
+        await this.loadHosts();
+        await this.loadTags();
+        this.renderHosts();
+        this.showToast('Hosts refreshed successfully', 'success');
+      }
+
+      // Import/Export Methods
+      openImportModal() {
+        this.importedData = null;
+        this.elements.importPreview.style.display = 'none';
+        this.elements.confirmImportBtn.style.display = 'none';
+        this.elements.importModal.classList.add('show');
+      }
+
+      openExportModal() {
+        this.elements.exportModal.classList.add('show');
+      }
+
+      async exportCurrentHosts() {
+        try {
+          const response = await fetch('/api/export/hosts');
+          const data = await response.json();
+
+          // Create download link
+          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'ssh_hosts_export.json';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+
+          this.showToast('Hosts exported successfully', 'success');
+          this.closeModal(this.elements.exportModal);
+        } catch (error) {
+          console.error('Export error:', error);
+          this.showToast('Failed to export hosts', 'error');
+        }
+      }
+
+      async exportTemplate() {
+        try {
+          const response = await fetch('/api/export/template');
+          const data = await response.json();
+
+          // Create download link
+          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'ssh_hosts_template.json';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+
+          this.showToast('Template downloaded successfully', 'success');
+          this.closeModal(this.elements.exportModal);
+        } catch (error) {
+          console.error('Template export error:', error);
+          this.showToast('Failed to download template', 'error');
+        }
+      }
+
+      setupDragAndDrop() {
+        const dropZone = this.elements.dropZone;
+        const fileInput = this.elements.fileInput;
+
+        // Click to browse
+        dropZone.addEventListener('click', () => {
+          fileInput.click();
         });
-    </script>
+
+        // File input change
+        fileInput.addEventListener('change', (e) => {
+          const file = e.target.files[0];
+          if (file) {
+            this.handleFile(file);
+          }
+        });
+
+        // Drag over
+        dropZone.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          dropZone.classList.add('drag-over');
+        });
+
+        // Drag leave
+        dropZone.addEventListener('dragleave', (e) => {
+          e.preventDefault();
+          dropZone.classList.remove('drag-over');
+        });
+
+        // Drop
+        dropZone.addEventListener('drop', (e) => {
+          e.preventDefault();
+          dropZone.classList.remove('drag-over');
+
+          const file = e.dataTransfer.files[0];
+          if (file) {
+            this.handleFile(file);
+          }
+        });
+      }
+
+      async handleFile(file) {
+        if (!file.name.endsWith('.json')) {
+          this.showToast('Please select a JSON file', 'error');
+          return;
+        }
+
+        try {
+          const text = await file.text();
+          const data = JSON.parse(text);
+
+          if (!data.hosts || !Array.isArray(data.hosts)) {
+            throw new Error('Invalid file format. Expected { "hosts": [...] }');
+          }
+
+          this.importedData = data;
+          this.showImportPreview(data.hosts);
+        } catch (error) {
+          console.error('File read error:', error);
+          this.showToast(`Failed to read file: ${error.message}`, 'error');
+        }
+      }
+
+      showImportPreview(hosts) {
+        this.elements.importPreviewList.innerHTML = '';
+
+        hosts.forEach(host => {
+          const item = document.createElement('div');
+          item.className = 'import-preview-item';
+          item.style.padding = '0.5rem';
+          item.style.borderBottom = '1px solid var(--border-color)';
+          item.innerHTML = `
+            <div style="flex: 1;">
+              <strong>${host.name}</strong>
+              <br>
+              <small style="color: var(--text-secondary);">${host.username}@${host.hostname}:${host.port}</small>
+            </div>
+            <div style="color: var(--text-secondary); font-size: 0.875rem;">
+              ${host.tags && host.tags.length > 0 ? host.tags.join(', ') : 'No tags'}
+            </div>
+          `;
+          this.elements.importPreviewList.appendChild(item);
+        });
+
+        this.elements.importPreview.style.display = 'block';
+        this.elements.confirmImportBtn.style.display = 'inline-block';
+      }
+
+      async confirmImport() {
+        if (!this.importedData) {
+          this.showToast('No data to import', 'error');
+          return;
+        }
+
+        try {
+          const response = await fetch('/api/import/hosts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(this.importedData)
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            this.showToast(result.message, 'success');
+            this.closeModal(this.elements.importModal);
+            await this.refresh();
+          } else {
+            throw new Error(result.detail || 'Import failed');
+          }
+        } catch (error) {
+          console.error('Import error:', error);
+          this.showToast(`Import failed: ${error.message}`, 'error');
+        }
+      }
+    }
+
+    // Initialize the application when DOM is loaded
+    document.addEventListener('DOMContentLoaded', () => {
+      console.log('DOM loaded, initializing SSH Session Manager...');
+      window.app = new SSHSessionManager();
+    });
+
+    // Global error handler
+    window.addEventListener('error', (event) => {
+      console.error('Global error:', event.error);
+    });
+
+    // Handle unhandled promise rejections
+    window.addEventListener('unhandledrejection', (event) => {
+      console.error('Unhandled promise rejection:', event.reason);
+      event.preventDefault();
+    });
+  </script>
 </body>
+
 </html>
