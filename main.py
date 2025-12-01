@@ -105,7 +105,7 @@ class SSHManager:
         # Check if host with same name exists
         if self.get_host(host_data['name']):
             raise ValueError(f"Host with name '{host_data['name']}' already exists")
-        
+
         self.config.setdefault('hosts', []).append(host_data)
         self.save_config()
         return True
@@ -118,7 +118,7 @@ class SSHManager:
                 # If name is changing, check for collision
                 if original_name != host_data['name'] and self.get_host(host_data['name']):
                     raise ValueError(f"Host with name '{host_data['name']}' already exists")
-                
+
                 hosts[i] = host_data
                 self.save_config()
                 return True
@@ -129,7 +129,7 @@ class SSHManager:
         hosts = self.config.get('hosts', [])
         initial_len = len(hosts)
         self.config['hosts'] = [h for h in hosts if h['name'] != host_name]
-        
+
         if len(self.config['hosts']) < initial_len:
             self.save_config()
             return True
@@ -508,19 +508,24 @@ class SSHManager:
         port = host.get('port', 22)
         auth_method = host.get('auth_method', 'password')
 
+        # SSH keep-alive options to prevent idle disconnections
+        # ServerAliveInterval: sends keep-alive packet every 60 seconds
+        # ServerAliveCountMax: disconnects after 3 failed attempts (180 seconds total)
+        keepalive_opts = "-o ServerAliveInterval=60 -o ServerAliveCountMax=3"
+
         # Try to use sshpass for password authentication if available
         if auth_method == 'password' and password and temp_file:
             # Check if sshpass is available
             try:
                 subprocess.run(['which', 'sshpass'], check=True, capture_output=True)
                 # Use temporary file approach to hide password completely
-                ssh_cmd = f"sshpass -f {temp_file} ssh -o StrictHostKeyChecking=no -p {port} {username}@{hostname}"
+                ssh_cmd = f"sshpass -f {temp_file} ssh -o StrictHostKeyChecking=no {keepalive_opts} -p {port} {username}@{hostname}"
                 return ssh_cmd, True  # Return tuple indicating sshpass is used
             except subprocess.CalledProcessError:
                 print("ℹ sshpass not found, falling back to manual password entry")
 
         # Standard SSH command
-        ssh_cmd = f"ssh -p {port}"
+        ssh_cmd = f"ssh -p {port} {keepalive_opts}"
 
         if auth_method == 'key':
             ssh_key_path = host.get('ssh_key_path')
