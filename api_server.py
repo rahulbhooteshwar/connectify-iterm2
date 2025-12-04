@@ -118,10 +118,27 @@ class APISSHManager:
         if not host:
             raise HTTPException(status_code=404, detail=f"Host '{host_name}' not found")
 
+        # Check if password is required but not stored
+        if host.get('auth_method') == 'password':
+            service_name = f"ssh-{host['hostname']}"
+            username = host['username']
+            password = self.ssh_manager.get_password(service_name, username)
+            
+            if not password:
+                # Return a special error that the frontend can handle
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Password required for '{host['name']}'. Please edit the host and set a password first."
+                )
+
         try:
             # Launch the SSH session in a separate thread
             def launch_session():
-                self.ssh_manager.launch_iterm_session(host)
+                try:
+                    self.ssh_manager.launch_iterm_session(host)
+                except Exception as e:
+                    logging.error(f"Error launching session for {host_name}: {e}")
+                    print(f"❌ Error launching session for {host_name}: {e}")
 
             thread = threading.Thread(target=launch_session, daemon=True)
             thread.start()
@@ -442,6 +459,35 @@ async def get_host_password(host_name: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class SetPasswordRequest(BaseModel):
+    password: str
+
+
+@app.post("/api/hosts/{host_name}/password")
+async def set_host_password(host_name: str, request: SetPasswordRequest):
+    """Set or update password for a host"""
+    try:
+        host = api_manager.ssh_manager.get_host(host_name)
+        if not host:
+            raise HTTPException(status_code=404, detail=f"Host '{host_name}' not found")
+        
+        if host.get('auth_method') != 'password':
+            raise HTTPException(status_code=400, detail=f"Host '{host_name}' does not use password authentication")
+        
+        # Store the password in keychain
+        service_name = f"ssh-{host['hostname']}"
+        api_manager.ssh_manager.store_password(service_name, host['username'], request.password)
+        
+        return {
+            "success": True,
+            "message": f"Password set successfully for '{host_name}'"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/export/hosts")
 async def export_hosts():
     """Export current host configurations"""
@@ -474,6 +520,7 @@ async def export_template():
                 "username": "user",
                 "port": 22,
                 "auth_method": "password",
+                "password": "your_password_here",
                 "ssh_key_path": None,
                 "iterm_profile": "Default",
                 "tags": ["production", "web"]
@@ -484,11 +531,13 @@ async def export_template():
                 "username": "developer",
                 "port": 2222,
                 "auth_method": "key",
+                "password": None,
                 "ssh_key_path": "~/.ssh/id_rsa",
                 "iterm_profile": "Development",
                 "tags": ["development", "testing"]
             }
-        ]
+        ],
+        "_note": "For password authentication hosts, provide the password in the 'password' field. Passwords will be securely stored in keychain. For key-based auth, set password to null and provide ssh_key_path."
     }
     
     return JSONResponse(
@@ -501,27 +550,43 @@ async def export_template():
 
 @app.post("/api/import/hosts")
 async def import_hosts(import_data: ImportRequest):
-    """Import host configurations"""
+    """Import host configurations with password handling"""
     try:
         imported_count = 0
         errors = []
+        warnings = []
         
         for host_data in import_data.hosts:
             try:
                 # Extract password if present
                 password = host_data.password if hasattr(host_data, 'password') else None
+                host_dict = host_data.dict(exclude={'password'})
                 
-                # Add host
-                api_manager.add_host(host_data.dict(exclude={'password'}), password)
-                imported_count += 1
+                # Validate password requirement
+                if host_dict.get('auth_method') == 'password':
+                    if password:
+                        # Password provided, will be stored in keychain
+                        api_manager.add_host(host_dict, password)
+                        imported_count += 1
+                    else:
+                        # No password provided, add warning
+                        api_manager.add_host(host_dict, None)
+                        warnings.append(f"Host '{host_data.name}' imported without password. You'll need to set the password before connecting.")
+                        imported_count += 1
+                else:
+                    # Key-based authentication, no password needed
+                    api_manager.add_host(host_dict, None)
+                    imported_count += 1
+                    
             except Exception as e:
                 errors.append(f"Failed to import '{host_data.name}': {str(e)}")
         
         return {
             "success": True,
-            "message": f"Imported {imported_count} host(s)",
+            "message": f"Imported {imported_count} host(s)" + (f" with {len(warnings)} warning(s)" if warnings else ""),
             "imported_count": imported_count,
-            "errors": errors if errors else None
+            "errors": errors if errors else None,
+            "warnings": warnings if warnings else None
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

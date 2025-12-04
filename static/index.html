@@ -731,6 +731,10 @@
       color: var(--error-color);
     }
 
+    .toast-warning .toast-icon {
+      color: var(--warning-color);
+    }
+
     /* Connection Overlay */
     .connection-overlay {
       position: fixed;
@@ -2155,10 +2159,28 @@
 
           const data = await response.json();
 
-          if (data.success) {
+          if (response.ok && data.success) {
             this.showToast(`SSH session launched for ${hostName}`, 'success');
             console.log('Connection successful:', data);
           } else {
+            // Check if it's a password required error
+            if (response.status === 400 && data.detail && data.detail.includes('Password required')) {
+              this.hideConnectionOverlay();
+
+              // Show error with instructions
+              this.showToast(`⚠️ ${data.detail}`, 'warning');
+
+              // Optionally open the manage view automatically
+              setTimeout(() => {
+                if (confirm('Would you like to edit this host and set the password now?')) {
+                  this.toggleManageView(true);
+                  setTimeout(() => {
+                    this.openHostModal(hostName);
+                  }, 500);
+                }
+              }, 2000);
+              return;
+            }
             throw new Error(data.detail || 'Connection failed');
           }
 
@@ -2205,6 +2227,9 @@
         } else if (type === 'error') {
           icon.className = 'toast-icon fas fa-exclamation-circle';
           title.textContent = 'Error';
+        } else if (type === 'warning') {
+          icon.className = 'toast-icon fas fa-exclamation-triangle';
+          title.textContent = 'Warning';
         } else {
           icon.className = 'toast-icon fas fa-info-circle';
           title.textContent = 'Info';
@@ -2217,10 +2242,11 @@
           toast.classList.add('show');
         });
 
-        // Hide after 3 seconds
+        // Hide after longer for warnings (5 seconds) or normal for others (3 seconds)
+        const duration = type === 'warning' ? 5000 : 3000;
         setTimeout(() => {
           toast.classList.remove('show');
-        }, 3000);
+        }, duration);
       }
 
       // Manage Hosts Methods
@@ -2614,9 +2640,22 @@
           item.className = 'import-preview-item';
           item.style.padding = '0.5rem';
           item.style.borderBottom = '1px solid var(--border-color)';
+
+          // Check password status for password auth hosts
+          let passwordStatus = '';
+          if (host.auth_method === 'password') {
+            if (host.password && host.password !== 'your_password_here') {
+              passwordStatus = '<span style="color: var(--success-color); font-size: 0.75rem; margin-left: 0.5rem;"><i class="fas fa-check-circle"></i> Password provided</span>';
+            } else {
+              passwordStatus = '<span style="color: var(--warning-color); font-size: 0.75rem; margin-left: 0.5rem;"><i class="fas fa-exclamation-triangle"></i> No password</span>';
+            }
+          } else if (host.auth_method === 'key') {
+            passwordStatus = '<span style="color: var(--info-color); font-size: 0.75rem; margin-left: 0.5rem;"><i class="fas fa-key"></i> Key-based</span>';
+          }
+
           item.innerHTML = `
             <div style="flex: 1;">
-              <strong>${host.name}</strong>
+              <strong>${host.name}</strong> ${passwordStatus}
               <br>
               <small style="color: var(--text-secondary);">${host.username}@${host.hostname}:${host.port}</small>
             </div>
@@ -2647,7 +2686,21 @@
           const result = await response.json();
 
           if (result.success) {
-            this.showToast(result.message, 'success');
+            let message = result.message;
+
+            // Show warnings if any
+            if (result.warnings && result.warnings.length > 0) {
+              console.log('Import warnings:', result.warnings);
+              message += '\n\nWarnings:\n' + result.warnings.join('\n');
+            }
+
+            // Show errors if any
+            if (result.errors && result.errors.length > 0) {
+              console.log('Import errors:', result.errors);
+              message += '\n\nErrors:\n' + result.errors.join('\n');
+            }
+
+            this.showToast(message, result.warnings || result.errors ? 'warning' : 'success');
             this.closeModal(this.elements.importModal);
             await this.refresh();
           } else {

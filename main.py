@@ -557,32 +557,61 @@ class SSHManager:
                                   capture_output=True, text=True, check=True)
 
             if result.stdout.strip() == "not_running":
-                # print("📱 iTerm2 not running, launching it first...")
+                print("📱 iTerm2 not running, launching it now...")
 
-                # Launch iTerm2
-                launch_script = '''
-                tell application "iTerm"
-                    activate
-                end tell
-                '''
-
-                subprocess.run(['osascript', '-e', launch_script], check=True)
-
-                # Wait a moment for iTerm2 to fully start
-                time.sleep(2)
-                # print("✅ iTerm2 launched successfully")
+                # Try multiple methods to launch iTerm2
+                launch_success = False
+                
+                # Method 1: AppleScript
+                try:
+                    launch_script = '''
+                    tell application "iTerm"
+                        activate
+                    end tell
+                    '''
+                    subprocess.run(['osascript', '-e', launch_script], check=True, capture_output=True, text=True)
+                    launch_success = True
+                    print("✅ iTerm2 launched via AppleScript")
+                except subprocess.CalledProcessError:
+                    pass
+                
+                # Method 2: open command
+                if not launch_success:
+                    try:
+                        subprocess.run(['open', '-a', 'iTerm'], check=True, capture_output=True, text=True)
+                        launch_success = True
+                        print("✅ iTerm2 launched via 'open' command")
+                    except subprocess.CalledProcessError:
+                        pass
+                
+                if not launch_success:
+                    print("⚠️  Warning: Could not launch iTerm2. Make sure it's installed.")
+                    print("   You can install it from: https://iterm2.com/downloads.html")
+                    return False
+                
+                # Wait longer for iTerm2 to fully start
+                print("   Waiting for iTerm2 to initialize...")
+                time.sleep(3)
+                return True
+            else:
+                # iTerm2 is already running
+                return True
 
         except subprocess.CalledProcessError as e:
-            # If AppleScript fails, try launching iTerm2 directly
-            print("ℹ️  Attempting to launch iTerm2 directly...")
+            error_msg = e.stderr if e.stderr else str(e)
+            print(f"⚠️  Error checking iTerm2 status: {error_msg}")
+            print("   Attempting to launch iTerm2 anyway...")
             try:
-                subprocess.run(['open', '-a', 'iTerm'], check=True)
-                time.sleep(2)
-                print("✅ iTerm2 launched using 'open' command")
+                subprocess.run(['open', '-a', 'iTerm'], check=True, capture_output=True, text=True)
+                time.sleep(3)
+                print("✅ iTerm2 launched")
+                return True
             except subprocess.CalledProcessError:
-                print("⚠️  Warning: Could not verify or launch iTerm2. Proceeding anyway...")
+                print("❌ Could not launch iTerm2")
+                return False
         except Exception as e:
-            print(f"⚠️  Warning: Error checking iTerm2 status: {e}. Proceeding anyway...")
+            print(f"⚠️  Unexpected error: {e}")
+            return False
 
     def launch_iterm_session(self, host):
         """Launch iTerm2 session with the specified host"""
@@ -604,14 +633,26 @@ class SSHManager:
             password = self.get_password(service_name, username)
 
             if not password:
-                print(f"Please enter password for {username}@{host['hostname']}")
-                password = getpass.getpass("Password (will be stored in keychain): ")
-                if password:
-                    self.store_password(service_name, username, password)
-                    # Verify it was stored
-                    test_password = self.get_password(service_name, username)
-                    if not test_password:
-                        print("⚠ Warning: Password storage may have failed")
+                # For CLI usage, prompt for password
+                # For web UI usage, this should never be reached due to pre-check
+                try:
+                    print(f"⚠️  Password required for {username}@{host['hostname']}")
+                    print(f"⚠️  Please set the password via the web UI or use --add command")
+                    # Try to prompt if in interactive mode
+                    if sys.stdin and sys.stdin.isatty():
+                        password = getpass.getpass("Password (will be stored in keychain): ")
+                        if password:
+                            self.store_password(service_name, username, password)
+                            # Verify it was stored
+                            test_password = self.get_password(service_name, username)
+                            if not test_password:
+                                print("⚠ Warning: Password storage may have failed")
+                    else:
+                        # Non-interactive mode (web UI), cannot prompt
+                        raise ValueError(f"Password required for {host_name} but not stored in keychain")
+                except Exception as e:
+                    print(f"❌ Cannot launch session: {e}")
+                    raise
 
         # Generate unique temporary file name for password with timestamp
         temp_pass_file = None
@@ -641,58 +682,130 @@ class SSHManager:
         # Escape quotes and backslashes for AppleScript
         escaped_host_name = host_name.replace('\\', '\\\\').replace('"', '\\"')
 
-        # AppleScript to launch iTerm2 with specific profile and title
-        applescript = f'''
-        tell application "iTerm"
-            activate
-            if (count of windows) = 0 then
-                create window with profile "{iterm_profile}"
-            else
-                tell current window
-                    create tab with profile "{iterm_profile}"
+        def create_applescript(profile_name):
+            """Generate AppleScript with specified profile"""
+            return f'''
+            tell application "iTerm"
+                activate
+                if (count of windows) = 0 then
+                    create window with profile "{profile_name}"
+                else
+                    tell current window
+                        create tab with profile "{profile_name}"
+                    end tell
+                end if
+                tell current session of current window
+                    set name to "{escaped_host_name}"
+                    write text "{ssh_command}"
                 end tell
-            end if
-            tell current session of current window
-                set name to "{escaped_host_name}"
-                write text "{ssh_command}"
             end tell
-        end tell
-        '''
+            '''
 
-        try:
-            subprocess.run(['osascript', '-e', applescript], check=True)
-            print(f"✅ Session launched successfully!")
+        # Try launching with specified profile, fallback to Default if it fails
+        launch_success = False
+        profiles_to_try = [iterm_profile] if iterm_profile != "Default" else ["Default"]
+        if iterm_profile != "Default":
+            profiles_to_try.append("Default")  # Add Default as fallback
 
-            # Schedule background cleanup using separate subprocess
-            if temp_file_created and temp_pass_file:
-                # print(f"🕐 Password file will be cleaned up in 60 seconds (background)...")
+        last_error = None
+        for profile_attempt in profiles_to_try:
+            try:
+                applescript = create_applescript(profile_attempt)
+                result = subprocess.run(['osascript', '-e', applescript], check=True, capture_output=True, text=True)
+                
+                if profile_attempt != iterm_profile:
+                    print(f"⚠️  Profile '{iterm_profile}' not found, using '{profile_attempt}' instead")
+                
+                print(f"✅ Session launched successfully!")
+                launch_success = True
 
-                # Use subprocess to run cleanup independently
-                cleanup_command = [
-                    'python3', '-c',
-                    f'import time, os; time.sleep(60); '
-                    f'os.remove("{temp_pass_file}") if os.path.exists("{temp_pass_file}") else None'
-                ]
+                # Schedule background cleanup using separate subprocess
+                if temp_file_created and temp_pass_file:
+                    cleanup_command = [
+                        'python3', '-c',
+                        f'import time, os; time.sleep(60); '
+                        f'os.remove("{temp_pass_file}") if os.path.exists("{temp_pass_file}") else None'
+                    ]
 
-                # Start cleanup process in background and detach it
-                subprocess.Popen(
-                    cleanup_command,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    start_new_session=True  # Detach from parent process
-                )
+                    # Start cleanup process in background and detach it
+                    subprocess.Popen(
+                        cleanup_command,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        start_new_session=True  # Detach from parent process
+                    )
+                
+                break  # Success, exit the retry loop
 
-        except subprocess.CalledProcessError as e:
-            print(f"✗ Error launching iTerm2: {e}")
-            print(f"SSH command: {ssh_command}")
+            except subprocess.CalledProcessError as e:
+                last_error = e
+                error_msg = e.stderr if e.stderr else str(e)
+                print(f"⚠️  Profile '{profile_attempt}' failed: {error_msg}")
+                # Continue to next profile attempt
 
-            # If launch failed, clean up immediately
-            if temp_file_created and temp_pass_file and temp_pass_file.exists():
-                try:
-                    temp_pass_file.unlink()
-                    print(f"🧹 Cleaned up temporary password file (launch failed)")
-                except Exception as e:
-                    print(f"⚠ Warning: Could not remove temporary file {temp_pass_file}: {e}")
+        # If all profile attempts failed, try without specifying a profile (last resort)
+        if not launch_success:
+            print("ℹ️  Trying to launch without profile specification...")
+            try:
+                # Simple AppleScript without profile
+                simple_script = f'''
+                tell application "iTerm"
+                    activate
+                    if (count of windows) = 0 then
+                        set newWindow to (create window with default profile)
+                        tell current session of newWindow
+                            set name to "{escaped_host_name}"
+                            write text "{ssh_command}"
+                        end tell
+                    else
+                        tell current window
+                            set newTab to (create tab with default profile)
+                            tell current session
+                                set name to "{escaped_host_name}"
+                                write text "{ssh_command}"
+                            end tell
+                        end tell
+                    end if
+                end tell
+                '''
+                
+                result = subprocess.run(['osascript', '-e', simple_script], check=True, capture_output=True, text=True)
+                print(f"✅ Session launched successfully (using default profile)!")
+                launch_success = True
+
+                # Schedule background cleanup
+                if temp_file_created and temp_pass_file:
+                    cleanup_command = [
+                        'python3', '-c',
+                        f'import time, os; time.sleep(60); '
+                        f'os.remove("{temp_pass_file}") if os.path.exists("{temp_pass_file}") else None'
+                    ]
+                    subprocess.Popen(
+                        cleanup_command,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        start_new_session=True
+                    )
+
+            except subprocess.CalledProcessError as e:
+                error_msg = e.stderr if e.stderr else str(e)
+                print(f"✗ Error launching iTerm2 (all methods failed)")
+                print(f"   Last error: {error_msg}")
+                print(f"   SSH command: {ssh_command}")
+                print(f"")
+                print(f"💡 Troubleshooting tips:")
+                print(f"   1. Make sure iTerm2 is installed and can be launched")
+                print(f"   2. Check if iTerm2 has necessary permissions (System Preferences > Security & Privacy)")
+                print(f"   3. Try running iTerm2 manually first")
+                print(f"   4. Check if you have any profile named 'Default' in iTerm2 preferences")
+                
+                # Clean up temp file
+                if temp_file_created and temp_pass_file and temp_pass_file.exists():
+                    try:
+                        temp_pass_file.unlink()
+                        print(f"🧹 Cleaned up temporary password file (launch failed)")
+                    except Exception as cleanup_error:
+                        print(f"⚠ Warning: Could not remove temporary file {temp_pass_file}: {cleanup_error}")
 
     def add_host(self):
         """Interactive host addition"""
