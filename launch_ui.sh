@@ -8,7 +8,7 @@ URL="http://localhost:$PORT"
 
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LAUNCH_PATH="$SCRIPT_DIR/dist/launch"
+LAUNCH_COMMAND="cd $SCRIPT_DIR && uv run python main.py"
 
 # Function to check if port is in use
 check_port() {
@@ -70,7 +70,7 @@ else
     echo "Server not running. Starting server..."
 
     # Launch server in background with silent mode
-    nohup "$LAUNCH_PATH" --silent > /dev/null 2>&1 &
+    nohup bash -c "$LAUNCH_COMMAND --silent" > /dev/null 2>&1 &
 
     # Wait for server to be ready
     if wait_for_server; then

@@ -513,19 +513,27 @@ class SSHManager:
         # ServerAliveCountMax: disconnects after 3 failed attempts (180 seconds total)
         keepalive_opts = "-o ServerAliveInterval=60 -o ServerAliveCountMax=3"
 
+        # Authentication-specific options
+        if auth_method == 'password':
+            # Force password authentication and disable pubkey auth
+            auth_opts = "-o PreferredAuthentications=password -o PubkeyAuthentication=no"
+        else:
+            # Force public key authentication and disable password auth
+            auth_opts = "-o PreferredAuthentications=publickey -o PasswordAuthentication=no"
+
         # Try to use sshpass for password authentication if available
         if auth_method == 'password' and password and temp_file:
             # Check if sshpass is available
             try:
                 subprocess.run(['which', 'sshpass'], check=True, capture_output=True)
                 # Use temporary file approach to hide password completely
-                ssh_cmd = f"sshpass -f {temp_file} ssh -o StrictHostKeyChecking=no {keepalive_opts} -p {port} {username}@{hostname}"
+                ssh_cmd = f"sshpass -f {temp_file} ssh -o StrictHostKeyChecking=no {keepalive_opts} {auth_opts} -p {port} {username}@{hostname}"
                 return ssh_cmd, True  # Return tuple indicating sshpass is used
             except subprocess.CalledProcessError:
                 print("ℹ sshpass not found, falling back to manual password entry")
 
         # Standard SSH command
-        ssh_cmd = f"ssh -p {port} {keepalive_opts}"
+        ssh_cmd = f"ssh -p {port} {keepalive_opts} {auth_opts}"
 
         if auth_method == 'key':
             ssh_key_path = host.get('ssh_key_path')

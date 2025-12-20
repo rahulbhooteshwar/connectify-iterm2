@@ -97,10 +97,8 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    [],
+    [],  # Don't bundle binaries as onefile - causes issues with Python libs
+    exclude_binaries=True,  # Fix for Python shared library issues
     name='launch',
     debug=False,
     bootloader_ignore_signals=False,
@@ -114,4 +112,15 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name='launch',
 )
