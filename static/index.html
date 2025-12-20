@@ -353,23 +353,30 @@
     }
 
     /* Host Groups */
+    /* Host Groups */
     .host-group {
-      margin-bottom: var(--spacing-2xl);
+      margin-bottom: var(--spacing-xl);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-xl);
+      padding: var(--spacing-lg);
+      background: rgba(255, 255, 255, 0.02);
     }
 
     .group-header {
-      padding: var(--spacing-lg) var(--spacing-xl);
-      margin-bottom: var(--spacing-lg);
-      border-radius: var(--radius-xl);
-      font-size: 1.375rem;
+      padding: var(--spacing-sm) var(--spacing-md);
+      margin-bottom: var(--spacing-md);
+      border-radius: var(--radius-lg);
+      font-size: 1rem;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 1px;
+      letter-spacing: 0.5px;
       display: flex;
       align-items: center;
       gap: var(--spacing-sm);
       position: relative;
       overflow: hidden;
+      width: fit-content;
+      /* Only take necessary width */
     }
 
     .group-header::before {
@@ -438,11 +445,11 @@
       background: #6D6ACC;
       color: white;
       font-weight: bolder;
-      padding: var(--spacing-xs) var(--spacing-sm);
+      padding: 2px 8px;
       border-radius: var(--radius-xl);
-      font-size: 20px;
+      font-size: 0.75rem;
       font-weight: 700;
-      margin-left: auto;
+      margin-left: var(--spacing-md);
       border: 1px solid rgba(0, 0, 0, 0.2);
     }
 
@@ -716,14 +723,93 @@
       color: white;
     }
 
+    /* Tile States */
+    .host-tile .tile-content {
+      transition: opacity 0.3s ease;
+    }
+
+    .host-tile.loading .tile-content,
+    .host-tile.success .tile-content {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .tile-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+      z-index: 10;
+      background: var(--bg-primary);
+    }
+
+    .host-tile.loading .tile-overlay.loading-state,
+    .host-tile.success .tile-overlay.success-state {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .loading-spinner-small {
+      width: 24px;
+      height: 24px;
+      border: 2px solid var(--bg-tertiary);
+      border-top: 2px solid var(--primary-color);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: var(--spacing-sm);
+    }
+
+    .state-text {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .success-icon {
+      font-size: 1.5rem;
+      color: var(--success-color);
+      margin-bottom: var(--spacing-sm);
+      animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    @keyframes popIn {
+      0% {
+        transform: scale(0);
+      }
+
+      80% {
+        transform: scale(1.2);
+      }
+
+      100% {
+        transform: scale(1);
+      }
+    }
+
     /* List View Styles */
     .host-tile.list-view {
       border-radius: var(--radius-lg);
-      padding: var(--spacing-md) var(--spacing-lg);
+      padding: 0;
+      /* Padding moved to tile-content */
+      min-height: 4rem;
+      display: block;
+      /* Reset flex since content handles it */
+    }
+
+    .host-tile.list-view .tile-content {
       display: flex;
       align-items: center;
       gap: var(--spacing-lg);
-      min-height: 4rem;
+      padding: var(--spacing-md) var(--spacing-lg);
+      width: 100%;
     }
 
     .host-tile.list-view:hover {
@@ -745,12 +831,30 @@
     .host-tile.list-view .host-meta-row {
       margin-bottom: 0;
       flex-shrink: 0;
+      margin-left: auto;
+      /* Push to right if needed, but flex gap handles spacing */
     }
 
     .host-tile.list-view .launch-btn {
       width: auto;
       margin-top: 0;
       padding: var(--spacing-xs) var(--spacing-lg);
+      flex-shrink: 0;
+    }
+
+    /* Adjust overlays for list view */
+    .host-tile.list-view .tile-overlay {
+      flex-direction: row;
+      gap: var(--spacing-md);
+    }
+
+    .host-tile.list-view .loading-spinner-small {
+      margin-bottom: 0;
+    }
+
+    .host-tile.list-view .success-icon {
+      margin-bottom: 0;
+      font-size: 1.25rem;
     }
 
     .host-tile.list-view .host-details {
@@ -1256,15 +1360,12 @@
         <button id="exportBtn" class="control-btn" title="Export Hosts" style="color: var(--primary-color); border-color: var(--primary-color);">
           <i class="fas fa-file-export"></i>
         </button>
+        <button id="viewToggleBtn" class="control-btn" title="Switch View">
+          <i class="fas fa-list"></i>
+        </button>
         <div style="width: 1px; background: var(--border-color); margin: 0 var(--spacing-xs);"></div>
         <button id="refreshBtn" class="control-btn" title="Refresh hosts">
           <i class="fas fa-sync-alt"></i>
-        </button>
-        <button id="gridViewBtn" class="control-btn active" title="Grid view">
-          <i class="fas fa-th"></i>
-        </button>
-        <button id="listViewBtn" class="control-btn" title="List view">
-          <i class="fas fa-list"></i>
         </button>
       </div>
     </div>
@@ -1487,7 +1588,7 @@
         this.hosts = [];
         this.filteredHosts = [];
         this.allTags = [];
-        this.currentView = 'grid'; // 'grid' or 'list'
+        this.currentView = localStorage.getItem('sshManagerView') || 'grid';
         this.isLoading = false;
 
         // DOM elements
@@ -1496,8 +1597,7 @@
           tagFilter: document.getElementById('tagFilter'),
           clearSearch: document.getElementById('clearSearch'),
           refreshBtn: document.getElementById('refreshBtn'),
-          gridViewBtn: document.getElementById('gridViewBtn'),
-          listViewBtn: document.getElementById('listViewBtn'),
+          viewToggleBtn: document.getElementById('viewToggleBtn'),
           hostCount: document.getElementById('hostCount'),
           loadingState: document.getElementById('loadingState'),
           emptyState: document.getElementById('emptyState'),
@@ -1567,7 +1667,7 @@
         console.log('Initializing SSH Session Manager...');
         await this.loadHosts();
         await this.loadTags();
-        this.renderHosts();
+        this.setView(this.currentView);
       }
 
       bindEvents() {
@@ -1592,12 +1692,8 @@
           this.refresh();
         });
 
-        this.elements.gridViewBtn.addEventListener('click', () => {
-          this.setView('grid');
-        });
-
-        this.elements.listViewBtn.addEventListener('click', () => {
-          this.setView('list');
+        this.elements.viewToggleBtn.addEventListener('click', () => {
+          this.toggleView();
         });
 
         // Clear filters
@@ -1922,12 +2018,28 @@
         this.renderHosts();
       }
 
+      toggleView() {
+        const newView = this.currentView === 'grid' ? 'list' : 'grid';
+        this.setView(newView);
+      }
+
       setView(view) {
         this.currentView = view;
+        localStorage.setItem('sshManagerView', view);
 
-        // Update button states
-        this.elements.gridViewBtn.classList.toggle('active', view === 'grid');
-        this.elements.listViewBtn.classList.toggle('active', view === 'list');
+        // Update toggle button icon and title
+        const btn = this.elements.viewToggleBtn;
+        const icon = btn.querySelector('i');
+
+        if (view === 'grid') {
+          // Current is grid, show list icon to switch
+          icon.className = 'fas fa-list';
+          btn.title = 'Switch to List View';
+        } else {
+          // Current is list, show grid icon to switch
+          icon.className = 'fas fa-th';
+          btn.title = 'Switch to Grid View';
+        }
 
         this.renderHosts();
       }
@@ -2061,37 +2173,49 @@
         const tagColor = this.getTagColor(hostTags);
 
         return `
-                    <div class="host-tile ${tagClass} ${viewClass}" data-host-name="${host.name}">
-                        <div class="host-header">
-                            <div class="host-identity">
-                                <div class="host-name-text">${host.name}</div>
-                                <div class="host-connection-text">${host.username}@${host.hostname}:${host.port}</div>
+                    <div class="host-tile ${tagClass} ${viewClass}" data-host-name="${host.name}" id="tile-${host.name}">
+                        <div class="tile-content">
+                            <div class="host-header">
+                                <div class="host-identity">
+                                    <div class="host-name-text">${host.name}</div>
+                                    <div class="host-connection-text">${host.username}@${host.hostname}:${host.port}</div>
+                                </div>
+                                <div class="auth-icon">
+                                    <i class="${authIcon}" title="${host.auth_method === 'key' ? 'SSH Key Authentication' : 'Password Authentication'}"></i>
+                                </div>
                             </div>
-                            <div class="auth-icon">
-                                <i class="${authIcon}" title="${host.auth_method === 'key' ? 'SSH Key Authentication' : 'Password Authentication'}"></i>
-                            </div>
-                        </div>
-                        
-                        <div class="host-meta-row">
-                            <div class="host-tags" style="background-color: ${tagColor}; color: white;">${tagsText}</div>
                             
-                            <button class="small-action-btn" onclick="event.stopPropagation(); app.copyToClipboard('${host.hostname}', 'Hostname')" title="Copy Hostname">
-                                <i class="far fa-copy"></i>
-                            </button>
-                            <button class="small-action-btn" onclick="event.stopPropagation(); app.copyToClipboard('${host.username}@${host.hostname}', 'Connection string')" title="Copy Connection String (user@host)">
-                                <i class="fas fa-terminal"></i>
-                            </button>
-                            <button class="small-action-btn edit-btn" onclick="event.stopPropagation(); app.openHostModal('${host.name}')" title="Edit Host">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            <button class="small-action-btn delete-btn" onclick="event.stopPropagation(); app.deleteHost('${host.name}')" title="Delete Host">
-                                <i class="fas fa-trash"></i>
+                            <div class="host-meta-row">
+                                <div class="host-tags" style="background-color: ${tagColor}; color: white;">${tagsText}</div>
+                                
+                                <button class="small-action-btn" onclick="event.stopPropagation(); app.copyToClipboard('${host.hostname}', 'Hostname')" title="Copy Hostname">
+                                    <i class="far fa-copy"></i>
+                                </button>
+                                <button class="small-action-btn" onclick="event.stopPropagation(); app.copyToClipboard('${host.username}@${host.hostname}', 'Connection string')" title="Copy Connection String (user@host)">
+                                    <i class="fas fa-terminal"></i>
+                                </button>
+                                <button class="small-action-btn edit-btn" onclick="event.stopPropagation(); app.openHostModal('${host.name}')" title="Edit Host">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="small-action-btn delete-btn" onclick="event.stopPropagation(); app.deleteHost('${host.name}')" title="Delete Host">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+
+                            <button class="launch-btn" onclick="event.stopPropagation(); app.connectToHost('${host.name}')" title="Launch SSH Session">
+                                <i class="fas fa-rocket"></i> Launch
                             </button>
                         </div>
 
-                        <button class="launch-btn" onclick="event.stopPropagation(); app.connectToHost('${host.name}')" title="Launch SSH Session">
-                            <i class="fas fa-rocket"></i> Launch
-                        </button>
+                        <div class="tile-overlay loading-state">
+                            <div class="loading-spinner-small"></div>
+                            <div class="state-text">Launching...</div>
+                        </div>
+
+                        <div class="tile-overlay success-state">
+                            <i class="fas fa-check-circle success-icon"></i>
+                            <div class="state-text">Launched!</div>
+                        </div>
                     </div>
                 `;
       }
@@ -2192,19 +2316,17 @@
       }
 
       async connectToHost(hostName) {
+        const tile = document.getElementById(`tile-${hostName}`);
+        if (!tile) return;
+
         try {
           console.log(`Connecting to host: ${hostName}`);
 
-          // Find host details
-          const host = this.hosts.find(h => h.name === hostName);
-          if (!host) {
-            throw new Error(`Host "${hostName}" not found`);
-          }
+          // Set loading state
+          tile.classList.add('loading');
 
-          // Show connection overlay
-          this.showConnectionOverlay(host);
-
-          const response = await fetch('/api/connect', {
+          const minWait = new Promise(resolve => setTimeout(resolve, 1000));
+          const request = fetch('/api/connect', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
@@ -2212,16 +2334,27 @@
             body: JSON.stringify({ host_name: hostName })
           });
 
+          // Wait for both the request and the minimum wait time
+          const [_, response] = await Promise.all([minWait, request]);
+
           const data = await response.json();
 
           if (response.ok && data.success) {
-            this.showToast(`SSH session launched for ${hostName}`, 'success');
+            // Show success state
+            tile.classList.remove('loading');
+            tile.classList.add('success');
             console.log('Connection successful:', data);
+
+            // Reset after delay
+            setTimeout(() => {
+              tile.classList.remove('success');
+            }, 2000);
           } else {
+            // Remove loading state immediately on error
+            tile.classList.remove('loading');
+
             // Check if it's a password required error
             if (response.status === 400 && data.detail && data.detail.includes('Password required')) {
-              this.hideConnectionOverlay();
-
               // Show error with instructions
               this.showToast(`⚠️ ${data.detail}`, 'warning');
 
@@ -2238,29 +2371,12 @@
 
         } catch (error) {
           console.error('Connection error:', error);
+          tile.classList.remove('loading');
           this.showToast(`Connection failed: ${error.message}`, 'error');
-        } finally {
-          // Hide connection overlay after a delay
-          setTimeout(() => {
-            this.hideConnectionOverlay();
-          }, 2000);
         }
       }
 
-      showConnectionOverlay(host) {
-        const overlay = this.elements.connectionOverlay;
-        const hostElement = overlay.querySelector('.connection-host');
-
-        if (hostElement) {
-          hostElement.textContent = `${host.username}@${host.hostname}:${host.port}`;
-        }
-
-        overlay.classList.add('show');
-      }
-
-      hideConnectionOverlay() {
-        this.elements.connectionOverlay.classList.remove('show');
-      }
+      // showConnectionOverlay and hideConnectionOverlay removed as they are replaced by in-tile feedback
 
       showToast(message, type = 'info') {
         const toast = this.elements.connectionToast;
