@@ -92,12 +92,40 @@
       flex-direction: column;
     }
 
+    /* Custom Scrollbar Styles */
+    ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #1a1a1a;
+      border-radius: 10px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+      border-radius: 10px;
+      border: 2px solid #1a1a1a;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, #7c8ef0 0%, #8c5bb2 100%);
+    }
+
+    /* Firefox scrollbar */
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: #667eea #1a1a1a;
+    }
+
     /* Header */
     .header {
-      background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+      background: #000000;
       color: white;
-      padding: var(--spacing-sm) var(--spacing-xl);
-      box-shadow: var(--shadow-lg);
+      padding: var(--spacing-md) var(--spacing-xl);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      border-bottom: 1px solid #222;
       flex-shrink: 0;
       z-index: 100;
     }
@@ -108,12 +136,23 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: var(--spacing-lg);
+    }
+
+    .header-right {
+      flex: 1;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: var(--spacing-lg);
     }
 
     .header-left {
       display: flex;
       align-items: center;
       gap: var(--spacing-lg);
+      flex-shrink: 0;
+      min-width: 400px;
     }
 
     .header-title {
@@ -123,15 +162,18 @@
       align-items: center;
       gap: var(--spacing-sm);
       margin: 0;
+      white-space: nowrap;
     }
 
     .host-count {
-      background: rgba(255, 255, 255, 0.2);
+      background: #1a1a1a;
       padding: var(--spacing-xs) var(--spacing-sm);
       border-radius: var(--radius-xl);
       font-size: 0.875rem;
       font-weight: 500;
-      backdrop-filter: blur(10px);
+      border: 1px solid #333;
+      color: #10b981;
+      white-space: nowrap;
     }
 
     .auth-legend {
@@ -149,48 +191,58 @@
 
     /* Controls */
     .controls {
-      background: var(--bg-primary);
-      padding: var(--spacing-sm) var(--spacing-xl);
-      box-shadow: var(--shadow-sm);
-      border-bottom: 1px solid var(--border-color);
-      position: sticky;
-      top: 0;
-      z-index: 90;
-      display: grid;
-      grid-template-columns: 2fr 1fr auto;
+      display: flex;
       gap: var(--spacing-lg);
       align-items: center;
-      margin: 0;
+    }
+
+    .controls-center {
+      display: flex;
+      gap: var(--spacing-lg);
+      align-items: center;
+      margin-right: auto;
+    }
+
+    .controls-right {
+      display: flex;
+      gap: var(--spacing-sm);
+      align-items: center;
     }
 
     .search-container {
       position: relative;
       display: flex;
       align-items: center;
+      width: 350px;
     }
 
     .search-icon {
       position: absolute;
       left: var(--spacing-sm);
-      color: var(--text-muted);
+      color: #666;
       z-index: 1;
     }
 
     .search-input {
       width: 100%;
-      padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) 2.5rem;
-      border: 2px solid var(--border-color);
+      padding: var(--spacing-xs) var(--spacing-sm) var(--spacing-xs) 2.5rem;
+      border: 1px solid #333;
       border-radius: var(--radius-lg);
-      font-size: 0.95rem;
-      background: var(--bg-primary);
-      color: var(--text-primary);
+      font-size: 0.875rem;
+      background: #1a1a1a;
+      color: white;
       transition: all 0.2s ease;
+    }
+
+    .search-input::placeholder {
+      color: #666;
     }
 
     .search-input:focus {
       outline: none;
       border-color: var(--primary-color);
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+      background: #222;
     }
 
     .clear-search-btn {
@@ -198,7 +250,7 @@
       right: var(--spacing-sm);
       background: none;
       border: none;
-      color: var(--text-muted);
+      color: #666;
       cursor: pointer;
       padding: var(--spacing-xs);
       border-radius: var(--radius-sm);
@@ -214,43 +266,52 @@
       position: relative;
       display: flex;
       align-items: center;
+      width: 220px;
+      flex-shrink: 0;
     }
 
     .filter-icon {
       position: absolute;
       left: var(--spacing-sm);
-      color: var(--text-muted);
+      color: #666;
       z-index: 1;
     }
 
     .tag-filter {
       width: 100%;
-      padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) 2.5rem;
-      border: 2px solid var(--border-color);
+      padding: var(--spacing-xs) var(--spacing-sm) var(--spacing-xs) 2.5rem;
+      border: 1px solid #333;
       border-radius: var(--radius-lg);
-      font-size: 0.95rem;
-      background: var(--bg-primary);
-      color: var(--text-primary);
+      font-size: 0.875rem;
+      background: #1a1a1a;
+      color: white;
       cursor: pointer;
       transition: all 0.2s ease;
+    }
+
+    .tag-filter option {
+      background: #1a1a1a;
+      color: white;
     }
 
     .tag-filter:focus {
       outline: none;
       border-color: var(--primary-color);
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+      background: #222;
     }
 
     .view-controls {
       display: flex;
       gap: var(--spacing-sm);
+      flex-shrink: 0;
     }
 
     .control-btn {
-      background: var(--bg-secondary);
-      border: 2px solid var(--border-color);
-      color: var(--text-secondary);
-      padding: var(--spacing-sm);
+      background: #1a1a1a;
+      border: 1px solid #333;
+      color: #ccc;
+      padding: var(--spacing-xs);
       border-radius: var(--radius-md);
       cursor: pointer;
       transition: all 0.2s ease;
@@ -258,21 +319,21 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 2.5rem;
-      height: 2.5rem;
+      width: 2.25rem;
+      height: 2.25rem;
     }
 
     .control-btn:hover {
-      background: var(--primary-color);
-      border-color: var(--primary-color);
+      background: #222;
+      border-color: #555;
       color: white;
       transform: translateY(-1px);
     }
 
     .control-btn.active {
-      background: var(--primary-color);
+      background: #222;
       border-color: var(--primary-color);
-      color: white;
+      color: var(--primary-color);
     }
 
     /* Main Content */
@@ -489,7 +550,7 @@
 
     /* Host Tile */
     .host-tile {
-      background: var(--bg-primary);
+      background: #000000;
       border: 3px solid transparent;
       border-radius: var(--radius-xl);
       padding: var(--spacing-sm);
@@ -507,7 +568,7 @@
       left: 0;
       right: 0;
       bottom: 0;
-      background: linear-gradient(135deg, transparent 0%, rgba(0, 0, 0, 0.02) 100%);
+      background: transparent;
       pointer-events: none;
       border-radius: inherit;
     }
@@ -519,87 +580,87 @@
     }
 
     .host-tile.tag-production {
-      background: linear-gradient(135deg, rgba(220, 53, 69, 0.08) 0%, rgba(220, 53, 69, 0.15) 100%);
-      border-color: rgba(220, 53, 69, 0.3);
+      border-color: var(--tag-production);
     }
 
     .host-tile.tag-production:hover {
+      background: linear-gradient(135deg, rgba(220, 53, 69, 0.08) 0%, rgba(220, 53, 69, 0.15) 100%);
       border-color: var(--tag-production);
       box-shadow: 0 12px 30px rgba(220, 53, 69, 0.3);
     }
 
     .host-tile.tag-staging {
-      background: linear-gradient(135deg, rgba(253, 126, 20, 0.08) 0%, rgba(253, 126, 20, 0.15) 100%);
-      border-color: rgba(253, 126, 20, 0.3);
+      border-color: var(--tag-staging);
     }
 
     .host-tile.tag-staging:hover {
+      background: linear-gradient(135deg, rgba(253, 126, 20, 0.08) 0%, rgba(253, 126, 20, 0.15) 100%);
       border-color: var(--tag-staging);
       box-shadow: 0 12px 30px rgba(253, 126, 20, 0.3);
     }
 
     .host-tile.tag-development,
     .host-tile.tag-dev {
-      background: linear-gradient(135deg, rgba(25, 135, 84, 0.08) 0%, rgba(25, 135, 84, 0.15) 100%);
-      border-color: rgba(25, 135, 84, 0.3);
+      border-color: var(--tag-development);
     }
 
     .host-tile.tag-development:hover,
     .host-tile.tag-dev:hover {
+      background: linear-gradient(135deg, rgba(25, 135, 84, 0.08) 0%, rgba(25, 135, 84, 0.15) 100%);
       border-color: var(--tag-development);
       box-shadow: 0 12px 30px rgba(25, 135, 84, 0.3);
     }
 
     .host-tile.tag-testing,
     .host-tile.tag-test {
-      background: linear-gradient(135deg, rgba(111, 66, 193, 0.08) 0%, rgba(111, 66, 193, 0.15) 100%);
-      border-color: rgba(111, 66, 193, 0.3);
+      border-color: var(--tag-testing);
     }
 
     .host-tile.tag-testing:hover,
     .host-tile.tag-test:hover {
+      background: linear-gradient(135deg, rgba(111, 66, 193, 0.08) 0%, rgba(111, 66, 193, 0.15) 100%);
       border-color: var(--tag-testing);
       box-shadow: 0 12px 30px rgba(111, 66, 193, 0.3);
     }
 
     .host-tile.tag-database,
     .host-tile.tag-db {
-      background: linear-gradient(135deg, rgba(13, 202, 240, 0.08) 0%, rgba(13, 202, 240, 0.15) 100%);
-      border-color: rgba(13, 202, 240, 0.3);
+      border-color: var(--tag-database);
     }
 
     .host-tile.tag-database:hover,
     .host-tile.tag-db:hover {
+      background: linear-gradient(135deg, rgba(13, 202, 240, 0.08) 0%, rgba(13, 202, 240, 0.15) 100%);
       border-color: var(--tag-database);
       box-shadow: 0 12px 30px rgba(13, 202, 240, 0.3);
     }
 
     .host-tile.tag-web {
-      background: linear-gradient(135deg, rgba(13, 110, 253, 0.08) 0%, rgba(13, 110, 253, 0.15) 100%);
-      border-color: rgba(13, 110, 253, 0.3);
+      border-color: var(--tag-web);
     }
 
     .host-tile.tag-web:hover {
+      background: linear-gradient(135deg, rgba(13, 110, 253, 0.08) 0%, rgba(13, 110, 253, 0.15) 100%);
       border-color: var(--tag-web);
       box-shadow: 0 12px 30px rgba(13, 110, 253, 0.3);
     }
 
     .host-tile.tag-api {
-      background: linear-gradient(135deg, rgba(102, 16, 242, 0.08) 0%, rgba(102, 16, 242, 0.15) 100%);
-      border-color: rgba(102, 16, 242, 0.3);
+      border-color: var(--tag-api);
     }
 
     .host-tile.tag-api:hover {
+      background: linear-gradient(135deg, rgba(102, 16, 242, 0.08) 0%, rgba(102, 16, 242, 0.15) 100%);
       border-color: var(--tag-api);
       box-shadow: 0 12px 30px rgba(102, 16, 242, 0.3);
     }
 
     .host-tile.tag-untagged {
-      background: linear-gradient(135deg, rgba(108, 117, 125, 0.08) 0%, rgba(108, 117, 125, 0.15) 100%);
-      border-color: rgba(108, 117, 125, 0.3);
+      border-color: var(--tag-default);
     }
 
     .host-tile.tag-untagged:hover {
+      background: linear-gradient(135deg, rgba(108, 117, 125, 0.08) 0%, rgba(108, 117, 125, 0.15) 100%);
       border-color: var(--tag-default);
       box-shadow: 0 12px 30px rgba(108, 117, 125, 0.3);
     }
@@ -611,13 +672,14 @@
       height: 100%;
       width: 100%;
       gap: var(--spacing-xs);
+      flex-direction: row;
     }
 
     .tile-main-info {
       flex: 1;
       display: flex;
       flex-direction: column;
-      justify-content: center;
+      justify-content: flex-start;
       align-items: center;
       gap: var(--spacing-xs);
       padding: var(--spacing-xs);
@@ -632,10 +694,12 @@
       border-left: 1px solid var(--border-color);
     }
 
+    /* Launch button is inside tile-main-info by default */
+
     .host-name-row {
       display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
+      justify-content: center;
+      align-items: center;
       width: 100%;
       gap: var(--spacing-xs);
     }
@@ -645,20 +709,21 @@
       font-weight: 700;
       color: var(--text-primary);
       line-height: 1.2;
-      text-align: left;
+      text-align: center;
       word-break: break-word;
-      /* Enable wrapping */
       white-space: normal;
       margin-bottom: 5px;
     }
 
     .host-tags-pill {
       width: 100%;
-      text-align: center;
+      text-align: left;
       min-height: 2rem;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
+      gap: var(--spacing-xs);
     }
 
     .host-tags {
@@ -673,10 +738,11 @@
       text-overflow: ellipsis;
       max-width: 100%;
       margin-bottom: 5px;
+      text-align: left;
     }
 
     .host-connection-text {
-      display: none;
+      display: block;
       font-size: 0.8rem;
       color: var(--text-secondary);
       font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
@@ -684,24 +750,30 @@
       line-height: 1.2;
       text-align: center;
       padding: 2px 8px;
-      border: 1px solid var(--primary-color);
-      border-radius: 12px;
-      background: var(--bg-secondary);
       width: 100%;
       margin-bottom: 5px;
     }
 
-    .host-tile:hover .host-tags {
-      display: none;
+    .host-tile.list-view .host-connection-text {
+      width: auto;
+      margin-bottom: 0;
+      text-align: left;
+      display: none !important;
     }
 
-    .host-tile:hover .host-connection-text {
-      display: block;
-    }
 
     .auth-icon {
-      font-size: 0.9rem;
-      opacity: 0.6;
+      font-size: 0.875rem;
+      font-weight: 700;
+      opacity: 0.8;
+      background: rgba(0, 0, 0, 0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    .host-tile:not(.list-view):hover .auth-icon {
+      display: none;
     }
 
     /* List View Overrides */
@@ -709,40 +781,53 @@
       flex-direction: row;
       align-items: center;
       padding: var(--spacing-sm) var(--spacing-md);
+      gap: var(--spacing-md);
     }
 
     .host-tile.list-view .tile-main-info {
       flex-direction: row;
       justify-content: flex-start;
+      align-items: center;
       padding: 0;
       border: none;
       gap: var(--spacing-md);
+      flex: 1;
     }
 
     .host-tile.list-view .tile-actions-col {
       flex-direction: row;
       border-left: none;
       padding-left: 0;
-    }
-
-    .host-tile.list-view .host-name-row {
-      width: auto;
-      justify-content: flex-start;
       gap: var(--spacing-xs);
     }
 
-    .host-tile.list-view .host-name-text {
-      text-align: left;
+    .host-tile.list-view .host-name-row {
+      justify-content: flex-start;
+      gap: var(--spacing-xs);
+      flex-shrink: 0;
+      width: 280px;
+      min-width: 280px;
     }
+
 
     .host-tile.list-view .host-tags-pill {
       width: auto;
       min-height: auto;
+      flex: 1;
+      text-align: left;
     }
 
+    /* List view: style and position launch button */
     .host-tile.list-view .launch-btn {
       width: auto;
       margin-top: 0;
+      padding: var(--spacing-xs) var(--spacing-lg);
+      order: 10;
+      margin-left: 0;
+    }
+
+    .host-tile.list-view .tile-actions-col {
+      order: 5;
     }
 
     .host-tags {
@@ -756,12 +841,48 @@
       color: white;
       border: 1px solid rgba(0, 0, 0, 0.2);
       box-shadow: var(--shadow-sm);
-      margin-right: auto;
-      /* Push buttons to right */
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      max-width: 60%;
+      max-width: 100%;
+      text-align: center;
+      display: none;
+    }
+
+    /* Tile view: show on hover */
+    .host-tile:not(.list-view):hover .host-tags {
+      display: block;
+    }
+
+    /* List view specific */
+    .host-tile.list-view .host-name-row {
+      justify-content: flex-start !important;
+    }
+
+    .host-tile.list-view .host-name-text {
+      text-align: left !important;
+      display: block !important;
+    }
+
+    .host-tile.list-view .host-tags {
+      white-space: normal;
+      overflow: visible;
+      text-overflow: clip;
+      max-width: none;
+      text-align: left;
+      display: inline-block;
+    }
+
+    .host-tile.list-view:hover .host-tags {
+      display: none;
+    }
+
+    .host-tile.list-view .host-connection-text {
+      display: none !important;
+    }
+
+    .host-tile.list-view:hover .host-connection-text {
+      display: inline-block !important;
     }
 
     .small-action-btn {
@@ -803,6 +924,7 @@
       justify-content: center;
       gap: var(--spacing-sm);
       transition: all 0.2s ease;
+      margin-top: auto;
     }
 
     .launch-btn:hover {
@@ -813,6 +935,19 @@
     /* Tile States */
     .host-tile .tile-content {
       transition: opacity 0.3s ease;
+      display: flex;
+      flex-direction: row;
+    }
+
+    .tile-main-info {
+      order: 1;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .tile-actions-col {
+      order: 2;
     }
 
     .host-tile.loading .tile-content,
@@ -885,73 +1020,30 @@
     .host-tile.list-view {
       border-radius: var(--radius-lg);
       padding: 0;
-      /* Padding moved to tile-content */
       min-height: 4rem;
       display: block;
-      /* Reset flex since content handles it */
     }
 
     .host-tile.list-view .tile-content {
       display: flex;
+      flex-direction: row;
       align-items: center;
-      gap: var(--spacing-lg);
+      gap: var(--spacing-md);
       padding: var(--spacing-md) var(--spacing-lg);
       width: 100%;
+    }
+
+    .host-tile.list-view .tile-main-info {
+      order: 1;
+    }
+
+    .host-tile.list-view .tile-actions-col {
+      order: 2;
     }
 
     .host-tile.list-view:hover {
       transform: translateX(4px);
       scale: 1;
-    }
-
-    .host-tile.list-view .host-header {
-      margin-bottom: 0;
-      min-height: auto;
-      flex: 1;
-      align-items: center;
-      order: 1;
-      /* Ensure header comes first in list view */
-    }
-
-    .host-tile.list-view .host-identity {
-      text-align: left;
-      display: flex;
-      align-items: center;
-      gap: var(--spacing-sm);
-    }
-
-    .host-tile.list-view .host-actions {
-      display: flex;
-      gap: var(--spacing-xs);
-      margin-left: var(--spacing-md);
-    }
-
-    .host-tile.list-view .host-meta-row {
-      margin-bottom: 0;
-      flex-shrink: 0;
-      margin-left: auto;
-      /* Push to right if needed, but flex gap handles spacing */
-      order: 2;
-      /* Ensure meta row comes second in list view */
-    }
-
-    .host-tile.list-view .host-connection-text {
-      display: none !important;
-      /* Always hide connection text in list view */
-    }
-
-    .host-tile.list-view .host-tags {
-      display: block !important;
-      /* Always show tags in list view */
-    }
-
-    .host-tile.list-view .launch-btn {
-      width: auto;
-      margin-top: 0;
-      padding: var(--spacing-xs) var(--spacing-lg);
-      flex-shrink: 0;
-      order: 3;
-      /* Ensure launch button comes last in list view */
     }
 
     /* Adjust overlays for list view */
@@ -967,10 +1059,6 @@
     .host-tile.list-view .success-icon {
       margin-bottom: 0;
       font-size: 1.25rem;
-    }
-
-    .host-tile.list-view .host-details {
-      flex-shrink: 0;
     }
 
     /* Connection Toast */
@@ -1327,10 +1415,37 @@
         text-align: center;
       }
 
+      .header-right {
+        width: 100%;
+      }
+
       .controls {
-        padding: var(--spacing-md);
-        grid-template-columns: 1fr;
-        gap: var(--spacing-md);
+        flex-direction: column;
+        width: 100%;
+      }
+
+      .controls-center {
+        flex-direction: column;
+        width: 100%;
+        margin-right: 0;
+      }
+
+      .controls-right {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .search-container {
+        width: 100%;
+      }
+
+      .host-tile.list-view .host-name-row {
+        width: auto;
+        min-width: auto;
+      }
+
+      .filter-container {
+        width: 100%;
       }
 
       .main-content {
@@ -1431,13 +1546,43 @@
         <span class="host-count" id="hostCount">0 hosts</span>
       </div>
       <div class="header-right">
-        <div class="auth-legend">
-          <span class="legend-item">
-            <i class="fas fa-key"></i> SSH Key
-          </span>
-          <span class="legend-item">
-            <i class="fas fa-lock"></i> Password
-          </span>
+        <!-- Search and Filter Controls -->
+        <div class="controls">
+          <div class="controls-center">
+            <div class="search-container">
+              <i class="fas fa-search search-icon"></i>
+              <input type="text" id="searchBox" class="search-input" placeholder="Search hosts by name or tags..." autocomplete="off">
+              <button id="clearSearch" class="clear-search-btn" title="Clear search">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+
+            <div class="filter-container">
+              <i class="fas fa-tags filter-icon"></i>
+              <select id="tagFilter" class="tag-filter">
+                <option value="">All Tags</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="controls-right">
+            <button id="addHostBtn" class="control-btn" title="Add New Host" style="color: var(--success-color); border-color: var(--success-color);">
+              <i class="fas fa-plus"></i>
+            </button>
+            <button id="importBtn" class="control-btn" title="Import Hosts" style="color: var(--info-color); border-color: var(--info-color);">
+              <i class="fas fa-file-import"></i>
+            </button>
+            <button id="exportBtn" class="control-btn" title="Export Hosts" style="color: var(--primary-color); border-color: var(--primary-color);">
+              <i class="fas fa-file-export"></i>
+            </button>
+            <button id="viewToggleBtn" class="control-btn" title="Switch View">
+              <i class="fas fa-list"></i>
+            </button>
+            <div style="width: 1px; background: #333; height: 24px; margin: 0 var(--spacing-xs);"></div>
+            <button id="refreshBtn" class="control-btn" title="Refresh hosts">
+              <i class="fas fa-sync-alt"></i>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1445,43 +1590,6 @@
 
   <!-- Main Content Area -->
   <div class="main-content">
-    <!-- Search and Filter Controls -->
-    <div class="controls">
-      <div class="search-container">
-        <i class="fas fa-search search-icon"></i>
-        <input type="text" id="searchBox" class="search-input" placeholder="🔍 Search hosts by name or tags..." autocomplete="off">
-        <button id="clearSearch" class="clear-search-btn" title="Clear search">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-
-      <div class="filter-container">
-        <i class="fas fa-tags filter-icon"></i>
-        <select id="tagFilter" class="tag-filter">
-          <option value="">All Tags</option>
-        </select>
-      </div>
-
-      <div class="view-controls">
-        <button id="addHostBtn" class="control-btn" title="Add New Host" style="color: var(--success-color); border-color: var(--success-color);">
-          <i class="fas fa-plus"></i>
-        </button>
-        <button id="importBtn" class="control-btn" title="Import Hosts" style="color: var(--info-color); border-color: var(--info-color);">
-          <i class="fas fa-file-import"></i>
-        </button>
-        <button id="exportBtn" class="control-btn" title="Export Hosts" style="color: var(--primary-color); border-color: var(--primary-color);">
-          <i class="fas fa-file-export"></i>
-        </button>
-        <button id="viewToggleBtn" class="control-btn" title="Switch View">
-          <i class="fas fa-list"></i>
-        </button>
-        <div style="width: 1px; background: var(--border-color); margin: 0 var(--spacing-xs);"></div>
-        <button id="refreshBtn" class="control-btn" title="Refresh hosts">
-          <i class="fas fa-sync-alt"></i>
-        </button>
-      </div>
-    </div>
-
     <!-- Main Content Area -->
     <main class="main-content">
       <!-- Loading State -->
@@ -2276,7 +2384,8 @@
       }
 
       generateHostTileHTML(host, primaryTag) {
-        const authIcon = host.auth_method === 'key' ? 'fas fa-key' : 'fas fa-lock';
+        const authText = host.auth_method === 'key' ? 'K' : 'P';
+        const authTitle = host.auth_method === 'key' ? 'SSH Key' : 'Password';
         // Pass all host tags to getTagClass and getTagColor instead of just primary tag
         const hostTags = host.tags || [];
         const tagClass = this.getTagClass(hostTags);
@@ -2290,9 +2399,9 @@
                             <div class="tile-main-info">
                                 <div class="host-name-row">
                                     <div class="host-name-text">${host.name}</div>
-                                    <i class="${authIcon} auth-icon" title="${host.auth_method === 'key' ? 'SSH Key Authentication' : 'Password Authentication'}"></i>
+                                    <span class="auth-icon" title="${authTitle}">${authText}</span>
                                 </div>
-                                
+
                                 <div class="host-tags-pill">
                                     <div class="host-tags" style="background-color: ${tagColor}; color: white;">${tagsText}</div>
                                     <div class="host-connection-text">${host.username}@${host.hostname}:${host.port}</div>
@@ -2968,4 +3077,5 @@
   </script>
 </body>
 
+</html>
 </html>
