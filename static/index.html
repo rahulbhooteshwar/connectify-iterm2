@@ -492,7 +492,7 @@
       background: var(--bg-primary);
       border: 3px solid transparent;
       border-radius: var(--radius-xl);
-      padding: var(--spacing-lg);
+      padding: var(--spacing-sm);
       transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
       cursor: default;
       position: relative;
@@ -605,19 +605,39 @@
     }
 
     /* Host Tile Content */
-    .host-header {
+    /* Host Tile Content */
+    .tile-content {
+      display: flex;
+      height: 100%;
+      width: 100%;
+      gap: var(--spacing-xs);
+    }
+
+    .tile-main-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: var(--spacing-xs);
+      padding: var(--spacing-xs);
+    }
+
+    .tile-actions-col {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-xs);
+      justify-content: center;
+      padding-left: var(--spacing-xs);
+      border-left: 1px solid var(--border-color);
+    }
+
+    .host-name-row {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      margin-bottom: var(--spacing-md);
-      min-height: 3rem;
-      /* Ensure consistent height */
-    }
-
-    .host-identity {
-      flex: 1;
-      text-align: left;
-      padding-right: var(--spacing-sm);
+      width: 100%;
+      gap: var(--spacing-xs);
     }
 
     .host-name-text {
@@ -625,6 +645,34 @@
       font-weight: 700;
       color: var(--text-primary);
       line-height: 1.2;
+      text-align: left;
+      word-break: break-word;
+      /* Enable wrapping */
+      white-space: normal;
+      margin-bottom: 5px;
+    }
+
+    .host-tags-pill {
+      width: 100%;
+      text-align: center;
+      min-height: 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .host-tags {
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+      margin-bottom: 5px;
     }
 
     .host-connection-text {
@@ -634,9 +682,16 @@
       font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
       word-break: break-all;
       line-height: 1.2;
+      text-align: center;
+      padding: 2px 8px;
+      border: 1px solid var(--primary-color);
+      border-radius: 12px;
+      background: var(--bg-secondary);
+      width: 100%;
+      margin-bottom: 5px;
     }
 
-    .host-tile:hover .host-name-text {
+    .host-tile:hover .host-tags {
       display: none;
     }
 
@@ -645,17 +700,49 @@
     }
 
     .auth-icon {
-      font-size: 1rem;
+      font-size: 0.9rem;
       opacity: 0.6;
-      flex-shrink: 0;
-      margin-top: 4px;
     }
 
-    .host-meta-row {
-      display: flex;
+    /* List View Overrides */
+    .host-tile.list-view .tile-content {
+      flex-direction: row;
       align-items: center;
-      gap: var(--spacing-sm);
-      margin-bottom: var(--spacing-sm);
+      padding: var(--spacing-sm) var(--spacing-md);
+    }
+
+    .host-tile.list-view .tile-main-info {
+      flex-direction: row;
+      justify-content: flex-start;
+      padding: 0;
+      border: none;
+      gap: var(--spacing-md);
+    }
+
+    .host-tile.list-view .tile-actions-col {
+      flex-direction: row;
+      border-left: none;
+      padding-left: 0;
+    }
+
+    .host-tile.list-view .host-name-row {
+      width: auto;
+      justify-content: flex-start;
+      gap: var(--spacing-xs);
+    }
+
+    .host-tile.list-view .host-name-text {
+      text-align: left;
+    }
+
+    .host-tile.list-view .host-tags-pill {
+      width: auto;
+      min-height: auto;
+    }
+
+    .host-tile.list-view .launch-btn {
+      width: auto;
+      margin-top: 0;
     }
 
     .host-tags {
@@ -822,10 +909,21 @@
       min-height: auto;
       flex: 1;
       align-items: center;
+      order: 1;
+      /* Ensure header comes first in list view */
     }
 
     .host-tile.list-view .host-identity {
       text-align: left;
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+    }
+
+    .host-tile.list-view .host-actions {
+      display: flex;
+      gap: var(--spacing-xs);
+      margin-left: var(--spacing-md);
     }
 
     .host-tile.list-view .host-meta-row {
@@ -833,6 +931,18 @@
       flex-shrink: 0;
       margin-left: auto;
       /* Push to right if needed, but flex gap handles spacing */
+      order: 2;
+      /* Ensure meta row comes second in list view */
+    }
+
+    .host-tile.list-view .host-connection-text {
+      display: none !important;
+      /* Always hide connection text in list view */
+    }
+
+    .host-tile.list-view .host-tags {
+      display: block !important;
+      /* Always show tags in list view */
     }
 
     .host-tile.list-view .launch-btn {
@@ -840,6 +950,8 @@
       margin-top: 0;
       padding: var(--spacing-xs) var(--spacing-lg);
       flex-shrink: 0;
+      order: 3;
+      /* Ensure launch button comes last in list view */
     }
 
     /* Adjust overlays for list view */
@@ -2175,19 +2287,23 @@
         return `
                     <div class="host-tile ${tagClass} ${viewClass}" data-host-name="${host.name}" id="tile-${host.name}">
                         <div class="tile-content">
-                            <div class="host-header">
-                                <div class="host-identity">
+                            <div class="tile-main-info">
+                                <div class="host-name-row">
                                     <div class="host-name-text">${host.name}</div>
+                                    <i class="${authIcon} auth-icon" title="${host.auth_method === 'key' ? 'SSH Key Authentication' : 'Password Authentication'}"></i>
+                                </div>
+                                
+                                <div class="host-tags-pill">
+                                    <div class="host-tags" style="background-color: ${tagColor}; color: white;">${tagsText}</div>
                                     <div class="host-connection-text">${host.username}@${host.hostname}:${host.port}</div>
                                 </div>
-                                <div class="auth-icon">
-                                    <i class="${authIcon}" title="${host.auth_method === 'key' ? 'SSH Key Authentication' : 'Password Authentication'}"></i>
-                                </div>
+
+                                <button class="launch-btn" onclick="event.stopPropagation(); app.connectToHost('${host.name}')" title="Launch SSH Session">
+                                    <i class="fas fa-rocket"></i> Launch
+                                </button>
                             </div>
-                            
-                            <div class="host-meta-row">
-                                <div class="host-tags" style="background-color: ${tagColor}; color: white;">${tagsText}</div>
-                                
+
+                            <div class="tile-actions-col">
                                 <button class="small-action-btn" onclick="event.stopPropagation(); app.copyToClipboard('${host.hostname}', 'Hostname')" title="Copy Hostname">
                                     <i class="far fa-copy"></i>
                                 </button>
@@ -2201,10 +2317,6 @@
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </div>
-
-                            <button class="launch-btn" onclick="event.stopPropagation(); app.connectToHost('${host.name}')" title="Launch SSH Session">
-                                <i class="fas fa-rocket"></i> Launch
-                            </button>
                         </div>
 
                         <div class="tile-overlay loading-state">
