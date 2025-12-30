@@ -508,10 +508,8 @@ class SSHManager:
         port = host.get('port', 22)
         auth_method = host.get('auth_method', 'password')
 
-        # SSH keep-alive options to prevent idle disconnections
-        # ServerAliveInterval: sends keep-alive packet every 60 seconds
-        # ServerAliveCountMax: disconnects after 3 failed attempts (180 seconds total)
-        keepalive_opts = "-o ServerAliveInterval=60 -o ServerAliveCountMax=3"
+        # SSH keep-alive options disabled - no automatic disconnection
+        keepalive_opts = ""
 
         # Authentication-specific options
         if auth_method == 'password':
@@ -569,7 +567,7 @@ class SSHManager:
 
                 # Try multiple methods to launch iTerm2
                 launch_success = False
-                
+
                 # Method 1: AppleScript
                 try:
                     launch_script = '''
@@ -582,7 +580,7 @@ class SSHManager:
                     print("✅ iTerm2 launched via AppleScript")
                 except subprocess.CalledProcessError:
                     pass
-                
+
                 # Method 2: open command
                 if not launch_success:
                     try:
@@ -591,12 +589,12 @@ class SSHManager:
                         print("✅ iTerm2 launched via 'open' command")
                     except subprocess.CalledProcessError:
                         pass
-                
+
                 if not launch_success:
                     print("⚠️  Warning: Could not launch iTerm2. Make sure it's installed.")
                     print("   You can install it from: https://iterm2.com/downloads.html")
                     return False
-                
+
                 # Wait longer for iTerm2 to fully start
                 print("   Waiting for iTerm2 to initialize...")
                 time.sleep(3)
@@ -720,10 +718,10 @@ class SSHManager:
             try:
                 applescript = create_applescript(profile_attempt)
                 result = subprocess.run(['osascript', '-e', applescript], check=True, capture_output=True, text=True)
-                
+
                 if profile_attempt != iterm_profile:
                     print(f"⚠️  Profile '{iterm_profile}' not found, using '{profile_attempt}' instead")
-                
+
                 print(f"✅ Session launched successfully!")
                 launch_success = True
 
@@ -742,7 +740,7 @@ class SSHManager:
                         stderr=subprocess.DEVNULL,
                         start_new_session=True  # Detach from parent process
                     )
-                
+
                 break  # Success, exit the retry loop
 
             except subprocess.CalledProcessError as e:
@@ -776,7 +774,7 @@ class SSHManager:
                     end if
                 end tell
                 '''
-                
+
                 result = subprocess.run(['osascript', '-e', simple_script], check=True, capture_output=True, text=True)
                 print(f"✅ Session launched successfully (using default profile)!")
                 launch_success = True
@@ -806,7 +804,7 @@ class SSHManager:
                 print(f"   2. Check if iTerm2 has necessary permissions (System Preferences > Security & Privacy)")
                 print(f"   3. Try running iTerm2 manually first")
                 print(f"   4. Check if you have any profile named 'Default' in iTerm2 preferences")
-                
+
                 # Clean up temp file
                 if temp_file_created and temp_pass_file and temp_pass_file.exists():
                     try:
