@@ -751,7 +751,7 @@
       text-align: center;
       padding: 2px 8px;
       width: 100%;
-      margin-bottom: 5px;
+      margin-bottom: 2px;
     }
 
     .host-tile.list-view .host-connection-text {
@@ -761,6 +761,20 @@
       display: none !important;
     }
 
+    .auth-method-row {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100%;
+      font-size: 1.2rem;
+      padding: 2px 0;
+      margin: 2px 0;
+      text-align: center;
+    }
+
+    .host-tile.list-view .auth-method-row {
+      display: none;
+    }
 
     .auth-icon {
       font-size: 0.875rem;
@@ -924,7 +938,7 @@
       justify-content: center;
       gap: var(--spacing-sm);
       transition: all 0.2s ease;
-      margin-top: auto;
+      margin-top: 5px;
     }
 
     .launch-btn:hover {
@@ -2385,8 +2399,8 @@
       }
 
       generateHostTileHTML(host, primaryTag) {
-        const authText = host.auth_method === 'key' ? 'K' : 'P';
-        const authTitle = host.auth_method === 'key' ? 'SSH Key' : 'Password';
+        const authText = host.auth_method === 'key' ? '🔑' : '＊＊＊';
+        const authTitle = host.auth_method === 'key' ? 'SSH Key Based' : 'Password Based Auth';
         // Pass all host tags to getTagClass and getTagColor instead of just primary tag
         const hostTags = host.tags || [];
         const tagClass = this.getTagClass(hostTags);
@@ -2400,12 +2414,15 @@
                             <div class="tile-main-info">
                                 <div class="host-name-row">
                                     <div class="host-name-text">${host.name}</div>
-                                    <span class="auth-icon" title="${authTitle}">${authText}</span>
                                 </div>
 
                                 <div class="host-tags-pill">
                                     <div class="host-tags" style="background-color: ${tagColor}; color: white;">${tagsText}</div>
                                     <div class="host-connection-text">${host.username}@${host.hostname}:${host.port}</div>
+                                </div>
+
+                                <div class="auth-method-row" title="${authTitle}">
+                                    ${authText}
                                 </div>
 
                                 <button class="launch-btn" onclick="event.stopPropagation(); app.connectToHost('${host.name}')" title="Launch SSH Session">
