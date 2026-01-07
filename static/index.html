@@ -23,15 +23,15 @@
       --error-color: #ef4444;
       --info-color: #3b82f6;
 
-      /* Tag Colors */
-      --tag-production: #dc3545;
-      --tag-staging: #fd7e14;
-      --tag-development: #198754;
-      --tag-testing: #6f42c1;
-      --tag-database: #0dcaf0;
-      --tag-web: #0d6efd;
-      --tag-api: #6610f2;
-      --tag-default: #6c757d;
+      /* Tag Colors - Softer, easier on eyes */
+      --tag-production: #e57373;
+      --tag-staging: #ffb74d;
+      --tag-development: #81c784;
+      --tag-testing: #ba68c8;
+      --tag-database: #4dd0e1;
+      --tag-web: #64b5f6;
+      --tag-api: #9575cd;
+      --tag-default: #90a4ae;
 
       /* UI Colors */
       --bg-primary: #ffffff;
@@ -551,7 +551,7 @@
     /* Host Tile */
     .host-tile {
       background: #000000;
-      border: 2px solid transparent;
+      border: 1px solid transparent;
       border-radius: var(--radius-xl);
       padding: var(--spacing-sm);
       transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
@@ -574,7 +574,6 @@
     }
 
     .host-tile:hover {
-      transform: translateY(-4px) scale(1.01);
       box-shadow: var(--shadow-xl);
       border-color: var(--primary-color);
     }
@@ -584,9 +583,9 @@
     }
 
     .host-tile.tag-production:hover {
-      background: linear-gradient(135deg, rgba(220, 53, 69, 0.08) 0%, rgba(220, 53, 69, 0.15) 100%);
+      background: linear-gradient(135deg, rgba(229, 115, 115, 0.08) 0%, rgba(229, 115, 115, 0.15) 100%);
       border-color: var(--tag-production);
-      box-shadow: 0 12px 30px rgba(220, 53, 69, 0.3);
+      box-shadow: 0 12px 30px rgba(229, 115, 115, 0.2);
     }
 
     .host-tile.tag-staging {
@@ -594,9 +593,9 @@
     }
 
     .host-tile.tag-staging:hover {
-      background: linear-gradient(135deg, rgba(253, 126, 20, 0.08) 0%, rgba(253, 126, 20, 0.15) 100%);
+      background: linear-gradient(135deg, rgba(255, 183, 77, 0.08) 0%, rgba(255, 183, 77, 0.15) 100%);
       border-color: var(--tag-staging);
-      box-shadow: 0 12px 30px rgba(253, 126, 20, 0.3);
+      box-shadow: 0 12px 30px rgba(255, 183, 77, 0.2);
     }
 
     .host-tile.tag-development,
@@ -606,9 +605,9 @@
 
     .host-tile.tag-development:hover,
     .host-tile.tag-dev:hover {
-      background: linear-gradient(135deg, rgba(25, 135, 84, 0.08) 0%, rgba(25, 135, 84, 0.15) 100%);
+      background: linear-gradient(135deg, rgba(129, 199, 132, 0.08) 0%, rgba(129, 199, 132, 0.15) 100%);
       border-color: var(--tag-development);
-      box-shadow: 0 12px 30px rgba(25, 135, 84, 0.3);
+      box-shadow: 0 12px 30px rgba(129, 199, 132, 0.2);
     }
 
     .host-tile.tag-testing,
@@ -618,9 +617,9 @@
 
     .host-tile.tag-testing:hover,
     .host-tile.tag-test:hover {
-      background: linear-gradient(135deg, rgba(111, 66, 193, 0.08) 0%, rgba(111, 66, 193, 0.15) 100%);
+      background: linear-gradient(135deg, rgba(186, 104, 200, 0.08) 0%, rgba(186, 104, 200, 0.15) 100%);
       border-color: var(--tag-testing);
-      box-shadow: 0 12px 30px rgba(111, 66, 193, 0.3);
+      box-shadow: 0 12px 30px rgba(186, 104, 200, 0.2);
     }
 
     .host-tile.tag-database,
@@ -630,9 +629,9 @@
 
     .host-tile.tag-database:hover,
     .host-tile.tag-db:hover {
-      background: linear-gradient(135deg, rgba(13, 202, 240, 0.08) 0%, rgba(13, 202, 240, 0.15) 100%);
+      background: linear-gradient(135deg, rgba(77, 208, 225, 0.08) 0%, rgba(77, 208, 225, 0.15) 100%);
       border-color: var(--tag-database);
-      box-shadow: 0 12px 30px rgba(13, 202, 240, 0.3);
+      box-shadow: 0 12px 30px rgba(77, 208, 225, 0.2);
     }
 
     .host-tile.tag-web {
@@ -640,9 +639,9 @@
     }
 
     .host-tile.tag-web:hover {
-      background: linear-gradient(135deg, rgba(13, 110, 253, 0.08) 0%, rgba(13, 110, 253, 0.15) 100%);
+      background: linear-gradient(135deg, rgba(100, 181, 246, 0.08) 0%, rgba(100, 181, 246, 0.15) 100%);
       border-color: var(--tag-web);
-      box-shadow: 0 12px 30px rgba(13, 110, 253, 0.3);
+      box-shadow: 0 12px 30px rgba(100, 181, 246, 0.2);
     }
 
     .host-tile.tag-api {
@@ -650,9 +649,9 @@
     }
 
     .host-tile.tag-api:hover {
-      background: linear-gradient(135deg, rgba(102, 16, 242, 0.08) 0%, rgba(102, 16, 242, 0.15) 100%);
+      background: linear-gradient(135deg, rgba(149, 117, 205, 0.08) 0%, rgba(149, 117, 205, 0.15) 100%);
       border-color: var(--tag-api);
-      box-shadow: 0 12px 30px rgba(102, 16, 242, 0.3);
+      box-shadow: 0 12px 30px rgba(149, 117, 205, 0.2);
     }
 
     .host-tile.tag-untagged {
@@ -660,9 +659,9 @@
     }
 
     .host-tile.tag-untagged:hover {
-      background: linear-gradient(135deg, rgba(108, 117, 125, 0.08) 0%, rgba(108, 117, 125, 0.15) 100%);
+      background: linear-gradient(135deg, rgba(144, 164, 174, 0.08) 0%, rgba(144, 164, 174, 0.15) 100%);
       border-color: var(--tag-default);
-      box-shadow: 0 12px 30px rgba(108, 117, 125, 0.3);
+      box-shadow: 0 12px 30px rgba(144, 164, 174, 0.2);
     }
 
     /* Host Tile Content */
@@ -761,34 +760,7 @@
       display: none !important;
     }
 
-    .auth-method-row {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      width: 100%;
-      font-size: 1.2rem;
-      padding: 2px 0;
-      margin: 2px 0;
-      text-align: center;
-    }
-
-    .host-tile.list-view .auth-method-row {
-      display: none;
-    }
-
-    .auth-icon {
-      font-size: 0.875rem;
-      font-weight: 700;
-      opacity: 0.8;
-      background: rgba(0, 0, 0, 0.1);
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    }
-
-    .host-tile:not(.list-view):hover .auth-icon {
-      display: none;
-    }
+    /* Auth method row removed - now using auth-indicator in tile-actions-col */
 
     /* List View Overrides */
     .host-tile.list-view .tile-content {
@@ -860,11 +832,6 @@
       text-overflow: ellipsis;
       max-width: 100%;
       text-align: center;
-      display: none;
-    }
-
-    /* Tile view: show on hover */
-    .host-tile:not(.list-view):hover .host-tags {
       display: block;
     }
 
@@ -922,6 +889,19 @@
     .small-action-btn.delete-btn:hover {
       color: var(--error-color);
       border-color: var(--error-color);
+    }
+
+    .auth-indicator {
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
     }
 
     .launch-btn {
@@ -1054,11 +1034,6 @@
 
     .host-tile.list-view .tile-actions-col {
       order: 2;
-    }
-
-    .host-tile.list-view:hover {
-      transform: translateX(4px);
-      scale: 1;
     }
 
     /* Adjust overlays for list view */
@@ -2399,7 +2374,7 @@
       }
 
       generateHostTileHTML(host, primaryTag) {
-        const authText = host.auth_method === 'key' ? '🔑' : '＊＊＊';
+        const authText = host.auth_method === 'key' ? '🔑' : '🌟';
         const authTitle = host.auth_method === 'key' ? 'SSH Key Based' : 'Password Based Auth';
         // Pass all host tags to getTagClass and getTagColor instead of just primary tag
         const hostTags = host.tags || [];
@@ -2421,16 +2396,15 @@
                                     <div class="host-connection-text">${host.username}@${host.hostname}:${host.port}</div>
                                 </div>
 
-                                <div class="auth-method-row" title="${authTitle}">
-                                    ${authText}
-                                </div>
-
                                 <button class="launch-btn" onclick="event.stopPropagation(); app.connectToHost('${host.name}')" title="Launch SSH Session">
                                     <i class="fas fa-rocket"></i> Launch
                                 </button>
                             </div>
 
                             <div class="tile-actions-col">
+                                <div class="auth-indicator" title="${authTitle}">
+                                    ${authText}
+                                </div>
                                 <button class="small-action-btn" onclick="event.stopPropagation(); app.copyToClipboard('${host.hostname}', 'Hostname')" title="Copy Hostname">
                                     <i class="far fa-copy"></i>
                                 </button>
@@ -2564,7 +2538,7 @@
           // Set loading state
           tile.classList.add('loading');
 
-          const minWait = new Promise(resolve => setTimeout(resolve, 1000));
+          const minWait = new Promise(resolve => setTimeout(resolve, 4000));
           const request = fetch('/api/connect', {
             method: 'POST',
             headers: {
