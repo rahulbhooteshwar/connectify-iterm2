@@ -243,7 +243,7 @@ print_post_install() {
     echo "  curl -fsSL https://raw.githubusercontent.com/rahulbhooteshwar/iterm2-ssh-session-manager/main/setup-autostart.sh | bash"
     echo ""
     print_info "Web UI: http://localhost:7890 (when server is running)"
-    print_info "Config: ~/.ssh_manager_config.json"
+    print_info "Config: ~/.connectify/hosts.json"
     echo ""
     print_info "Run 'connectify --help' for all options"
     echo ""

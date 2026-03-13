@@ -15,7 +15,38 @@ NC='\033[0m' # No Color
 INSTALL_DIR="$HOME/.local/bin"
 LIB_DIR="$HOME/.local/lib/connectify"
 CONFIG_DIR="$HOME/.connectify"
-CONFIG_FILE="$HOME/.ssh_manager_config.json"
+CONFIG_FILE="$HOME/.connectify/hosts.json"
+OLD_CONFIG_FILE="$HOME/.ssh_manager_config.json"
+LAUNCHAGENT_PLIST="$HOME/Library/LaunchAgents/com.connectify.ui.plist"
+
+# Parse command line arguments
+REMOVE_CONFIG=false
+REMOVE_KEYCHAIN=false
+FORCE=false
+
+for arg in "$@"; do
+    case $arg in
+        --remove-config)
+            REMOVE_CONFIG=true
+            ;;
+        --remove-keychain)
+            REMOVE_KEYCHAIN=true
+            ;;
+        --force)
+            FORCE=true
+            ;;
+        --help)
+            echo "Usage: uninstall.sh [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --remove-config      Also remove configuration files"
+            echo "  --remove-keychain    Show instructions to remove keychain entries"
+            echo "  --force              Skip confirmation prompt"
+            echo "  --help               Show this help message"
+            exit 0
+            ;;
+    esac
+done
 
 # Print colored output
 print_info() {
@@ -46,15 +77,29 @@ check_installed() {
 stop_ui_server() {
     print_info "Checking for running UI server..."
     
+    # Stop LaunchAgent if it exists
+    if [[ -f "$LAUNCHAGENT_PLIST" ]]; then
+        print_info "Stopping LaunchAgent..."
+        launchctl unload "$LAUNCHAGENT_PLIST" 2>/dev/null || true
+        sleep 1
+    fi
+    
+    # Kill any remaining processes on port 7890
     UI_PID=$(lsof -ti :7890 2>/dev/null || true)
     
     if [[ -n "$UI_PID" ]]; then
         print_info "Stopping UI server (PID: $UI_PID)..."
-        kill -9 "$UI_PID" 2>/dev/null || true
+        kill -9 $UI_PID 2>/dev/null || true
         sleep 1
         print_success "UI server stopped"
     else
         print_info "No UI server running"
+    fi
+    
+    # Remove LaunchAgent plist
+    if [[ -f "$LAUNCHAGENT_PLIST" ]]; then
+        rm -f "$LAUNCHAGENT_PLIST"
+        print_success "Removed LaunchAgent configuration"
     fi
 }
 
@@ -62,8 +107,8 @@ stop_ui_server() {
 remove_files() {
     print_info "Removing Connectify files..."
     
-    # Remove symlink
-    if [[ -L "$INSTALL_DIR/connectify" ]]; then
+    # Remove symlink or binary
+    if [[ -f "$INSTALL_DIR/connectify" ]] || [[ -L "$INSTALL_DIR/connectify" ]]; then
         rm -f "$INSTALL_DIR/connectify"
         print_success "Removed $INSTALL_DIR/connectify"
     fi
@@ -74,38 +119,23 @@ remove_files() {
         print_success "Removed $LIB_DIR"
     fi
     
-    # Remove old launch command if it exists (from old system install)
-    if [[ -f "/usr/local/bin/launch" ]]; then
-        print_info "Found old 'launch' command in /usr/local/bin"
-        print_warning "This requires sudo to remove"
-        read -p "Remove it? (y/N): " -n 1 -r
+    # Check for old system installation
+    if [[ -f "/usr/local/bin/launch" ]] || [[ -d "/usr/local/lib/connectify" ]]; then
         echo ""
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            sudo rm -f "/usr/local/bin/launch"
-            sudo rm -rf "/usr/local/lib/connectify" 2>/dev/null || true
-            print_success "Removed old system installation"
-        fi
+        print_warning "Found old system-wide installation in /usr/local/bin"
+        print_info "To remove it, run:"
+        echo "  sudo rm -f /usr/local/bin/launch"
+        echo "  sudo rm -rf /usr/local/lib/connectify"
+        echo ""
     fi
 }
 
-# Ask about config files
+# Remove config files if requested
 remove_config() {
-    echo ""
-    print_warning "Configuration files found:"
-    
-    if [[ -d "$CONFIG_DIR" ]]; then
-        echo "  - $CONFIG_DIR (logs, PID files)"
-    fi
-    
-    if [[ -f "$CONFIG_FILE" ]]; then
-        echo "  - $CONFIG_FILE (SSH host configurations)"
-    fi
-    
-    echo ""
-    read -p "Do you want to remove configuration files? (y/N): " -n 1 -r
-    echo ""
-    
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
+    if [[ "$REMOVE_CONFIG" == "true" ]]; then
+        echo ""
+        print_info "Removing configuration files..."
+        
         if [[ -d "$CONFIG_DIR" ]]; then
             rm -rf "$CONFIG_DIR"
             print_success "Removed $CONFIG_DIR"
@@ -116,29 +146,38 @@ remove_config() {
             print_success "Removed $CONFIG_FILE"
         fi
         
-        print_info "All configuration files removed"
+        # Also remove old config file if it exists
+        if [[ -f "$OLD_CONFIG_FILE" ]]; then
+            rm -f "$OLD_CONFIG_FILE"
+            print_success "Removed $OLD_CONFIG_FILE"
+        fi
     else
-        print_info "Configuration files kept"
-        print_info "You can manually remove them later:"
-        echo "  rm -rf $CONFIG_DIR"
-        echo "  rm -f $CONFIG_FILE"
+        # Check if config files exist and inform user
+        if [[ -d "$CONFIG_DIR" ]] || [[ -f "$CONFIG_FILE" ]] || [[ -f "$OLD_CONFIG_FILE" ]]; then
+            echo ""
+            print_info "Configuration files preserved:"
+            [[ -d "$CONFIG_DIR" ]] && echo "  - $CONFIG_DIR/ (hosts.json, logs, PID files)"
+            [[ -f "$OLD_CONFIG_FILE" ]] && echo "  - $OLD_CONFIG_FILE (old config, can be removed)"
+            echo ""
+            print_info "To remove them, run:"
+            echo "  rm -rf $CONFIG_DIR"
+            [[ -f "$OLD_CONFIG_FILE" ]] && echo "  rm -f $OLD_CONFIG_FILE"
+            echo ""
+        fi
     fi
 }
 
-# Clean up keychain entries
+# Show keychain cleanup instructions if requested
 clean_keychain() {
-    echo ""
-    print_warning "Connectify stores SSH passwords in macOS Keychain"
-    read -p "Do you want to remove stored passwords from Keychain? (y/N): " -n 1 -r
-    echo ""
-    
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        print_info "To remove Keychain entries, open 'Keychain Access' app and search for 'SSH_Manager'"
-        print_info "Then manually delete the entries"
+    if [[ "$REMOVE_KEYCHAIN" == "true" ]]; then
         echo ""
-        read -p "Press Enter to continue..."
-    else
-        print_info "Keychain entries kept"
+        print_warning "Keychain Cleanup"
+        print_info "Connectify stores SSH passwords in macOS Keychain"
+        print_info "To remove them:"
+        echo "  1. Open 'Keychain Access' app"
+        echo "  2. Search for 'SSH_Manager'"
+        echo "  3. Delete the entries"
+        echo ""
     fi
 }
 
@@ -172,16 +211,24 @@ main() {
     
     check_installed
     
-    print_warning "This will remove Connectify from your system"
-    read -p "Are you sure you want to uninstall? (y/N): " -n 1 -r
-    echo ""
-    
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        print_info "Uninstallation cancelled"
-        exit 0
+    # When piped (curl | sh), stdin is not available for interactive prompts
+    # So we proceed with uninstallation automatically
+    if [[ "$FORCE" != "true" ]] && [[ -t 0 ]]; then
+        # Only prompt if running interactively (not piped)
+        print_warning "This will remove Connectify from your system"
+        read -p "Are you sure you want to uninstall? (y/N): " -n 1 -r
+        echo ""
+        
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            print_info "Uninstallation cancelled"
+            exit 0
+        fi
+        echo ""
+    else
+        print_warning "Uninstalling Connectify..."
+        echo ""
     fi
     
-    echo ""
     stop_ui_server
     remove_files
     remove_config
@@ -197,7 +244,15 @@ main() {
     echo ""
     print_success "Uninstallation complete!"
     echo ""
-    print_info "To reinstall Connectify in the future, run:"
+    
+    if [[ "$REMOVE_CONFIG" != "true" ]] && ([[ -d "$CONFIG_DIR" ]] || [[ -f "$CONFIG_FILE" ]]); then
+        print_info "Configuration files were preserved"
+        print_info "To remove them, run:"
+        echo "  curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/iterm2-ssh-session-manager/main/uninstall.sh | sh -s -- --remove-config"
+        echo ""
+    fi
+    
+    print_info "To reinstall Connectify, run:"
     echo "  curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/iterm2-ssh-session-manager/main/install.sh | sh"
     echo ""
 }

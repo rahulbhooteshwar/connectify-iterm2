@@ -30,11 +30,46 @@ class CustomTheme(GreenPassion):
         self.List.selection_cursor = "🔸"
 
 class SSHManager:
-    def __init__(self, config_file="~/.ssh_manager_config.json"):
+    def __init__(self, config_file="~/.connectify/hosts.json"):
         self.config_file = Path(config_file).expanduser()
+        self.old_config_file = Path("~/.ssh_manager_config.json").expanduser()
+        
+        # Migrate from old config location if needed
+        self.migrate_old_config()
+        
         self.config = self.load_config()
         # Start background cleanup of old temp password files
         self.cleanup_old_temp_files()
+
+    def migrate_old_config(self):
+        """Migrate from old config location to new location"""
+        # Only migrate if old exists and new doesn't
+        if self.old_config_file.exists() and not self.config_file.exists():
+            print("🔄 Migrating configuration to new location...")
+            print(f"   Old: {self.old_config_file}")
+            print(f"   New: {self.config_file}")
+            
+            try:
+                # Create new config directory
+                os.makedirs(self.config_file.parent, exist_ok=True)
+                
+                # Copy old config to new location
+                with open(self.old_config_file, 'r') as f:
+                    old_config = json.load(f)
+                
+                with open(self.config_file, 'w') as f:
+                    json.dump(old_config, f, indent=2, ensure_ascii=False)
+                
+                # Remove old config file
+                os.remove(self.old_config_file)
+                
+                print("✅ Configuration migrated successfully!")
+                print(f"   Your hosts are now in: {self.config_file}")
+                print()
+            except Exception as e:
+                print(f"⚠️  Warning: Could not migrate config: {e}")
+                print(f"   Please manually move {self.old_config_file} to {self.config_file}")
+                print()
 
     def load_config(self):
         """Load SSH configuration from JSON file"""
@@ -1027,7 +1062,7 @@ INTERACTIVE FEATURES:
   • Automatic session naming with host information
 
 📁 CONFIGURATION:
-  Config file: ~/.ssh_manager_config.json
+  Config file: ~/.connectify/hosts.json
 
   Host properties:
     name           Display name for the host
@@ -1047,7 +1082,7 @@ INTERACTIVE FEATURES:
   • Use the search feature for quick access to specific hosts
 
 🔧 TROUBLESHOOTING:
-  • Config issues: Check ~/.ssh_manager_config.json syntax
+  • Config issues: Check ~/.connectify/hosts.json syntax
   • Keychain issues: Run 'connectify --debug' to check password storage
   • SSH key problems: Verify file paths and permissions
   • iTerm2 not opening: Check if iTerm2 is installed
@@ -1059,7 +1094,7 @@ Built with ❤️  by RB (Rahul Bhooteshwar)
     parser.add_argument('--add', action='store_true', help='Add a new SSH host')
     parser.add_argument('--list', action='store_true', help='List all hosts without launching')
     parser.add_argument('--debug', action='store_true', help='Debug keychain functionality')
-    parser.add_argument('--config', help='Path to config file', default='~/.ssh_manager_config.json')
+    parser.add_argument('--config', help='Path to config file', default='~/.connectify/hosts.json')
     parser.add_argument('--simple', action='store_true', help='Use simple numbered list instead of scrolling menu')
     parser.add_argument('--ui', action='store_true', help='Launch web interface')
     parser.add_argument('--port', type=int, default=7860, help='Port for web interface (default: 7860)')

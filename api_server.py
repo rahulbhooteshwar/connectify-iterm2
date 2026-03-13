@@ -55,7 +55,7 @@ class ImportRequest(BaseModel):
 
 
 class APISSHManager:
-    def __init__(self, config_file="~/.ssh_manager_config.json"):
+    def __init__(self, config_file="~/.connectify/hosts.json"):
         self.ssh_manager = SSHManager(config_file)
         self.all_hosts = []
         self.refresh_hosts_data()
@@ -659,7 +659,7 @@ async def get_cache_status():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def launch_api_server(config_file="~/.ssh_manager_config.json", port=7860, host="127.0.0.1", silent=False):
+def launch_api_server(config_file="~/.connectify/hosts.json", port=7860, host="127.0.0.1", silent=False):
     """Launch the FastAPI server"""
     global api_manager
 

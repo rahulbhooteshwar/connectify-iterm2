@@ -64,7 +64,7 @@ The web interface provides:
 
 ## Configuration
 
-On first run, a sample configuration is created at `~/.ssh_manager_config.json`:
+Configuration is stored at `~/.connectify/hosts.json`. On first run, a sample configuration is created automatically:
 
 ```json
 {
