@@ -214,68 +214,7 @@ verify_installation() {
     print_success "Files installed successfully"
 }
 
-setup_autostart() {
-    echo ""
-    print_info "Auto-Start Configuration"
-    echo ""
-    echo "Would you like Connectify UI server to start automatically when you log in?"
-    echo "This will create a LaunchAgent that starts the UI server in the background."
-    echo ""
-    read -p "Setup auto-start? (y/N): " -n 1 -r
-    echo ""
-    
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        print_info "Setting up auto-start..."
-        
-        mkdir -p ~/Library/LaunchAgents
-        
-        # Create plist with full path (LaunchAgent doesn't support ~ or $HOME)
-        cat > ~/Library/LaunchAgents/com.connectify.ui.plist << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.connectify.ui</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>$HOME/.local/bin/connectify</string>
-        <string>ui</string>
-        <string>start</string>
-    </array>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>/tmp/connectify-autostart.log</string>
-    <key>StandardErrorPath</key>
-    <string>/tmp/connectify-autostart.error.log</string>
-</dict>
-</plist>
-EOF
-        
-        launchctl load ~/Library/LaunchAgents/com.connectify.ui.plist 2>/dev/null || true
-        sleep 2
-        
-        if lsof -i :7890 >/dev/null 2>&1; then
-            print_success "Auto-start configured and UI server is now running!"
-            print_info "UI is available at: http://localhost:7890"
-        else
-            print_success "Auto-start configured!"
-            print_info "UI server will start automatically on next login"
-        fi
-        
-        echo ""
-        print_info "To disable auto-start later, run:"
-        echo "  launchctl unload ~/Library/LaunchAgents/com.connectify.ui.plist"
-        echo ""
-    else
-        print_info "Skipping auto-start setup"
-        print_info "You can start the UI server manually with: connectify ui start"
-        echo ""
-    fi
-}
+# No interactive setup - provide guidance in post-install message
 
 print_post_install() {
     echo ""
@@ -285,18 +224,28 @@ print_post_install() {
     echo "║                                                              ║"
     echo "╚══════════════════════════════════════════════════════════════╝"
     echo ""
-    print_info "Get started with these commands:"
+    print_success "Installation complete!"
     echo ""
+    print_info "Getting Started:"
+    echo ""
+    echo "  # Use the CLI tool"
     echo "  connectify                    # Launch SSH connection manager"
     echo "  connectify --add              # Add a new SSH host"
-    echo "  connectify --list             # List all hosts"
-    echo "  connectify ui start           # Start background UI server"
-    echo "  connectify --help             # Show all options"
+    echo "  connectify --list             # List all saved hosts"
     echo ""
-    print_info "Configuration file: ~/.ssh_manager_config.json"
-    print_info "UI will be available at: http://localhost:7890"
+    echo "  # Start the Web UI server (runs in background)"
+    echo "  connectify ui start           # Start UI server"
+    echo "  connectify ui status          # Check if running"
+    echo "  connectify ui logs            # View server logs"
+    echo "  connectify ui stop            # Stop server"
     echo ""
-    print_success "Happy connecting! 🚀"
+    echo "  # Configure auto-start (UI server starts automatically on login)"
+    echo "  curl -fsSL https://raw.githubusercontent.com/rahulbhooteshwar/iterm2-ssh-session-manager/main/setup-autostart.sh | bash"
+    echo ""
+    print_info "Web UI: http://localhost:7890 (when server is running)"
+    print_info "Config: ~/.ssh_manager_config.json"
+    echo ""
+    print_info "Run 'connectify --help' for all options"
     echo ""
 }
 
@@ -324,7 +273,6 @@ main() {
     install_binary
     verify_installation
     setup_path
-    setup_autostart
     print_post_install
 }
 

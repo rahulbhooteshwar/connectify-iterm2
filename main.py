@@ -1002,12 +1002,6 @@ UI SERVER MANAGEMENT:
   connectify ui logs            Show UI server logs
   connectify ui status          Check UI server status
 
-ADVANCED UI OPTIONS:
-  connectify --ui               Launch web interface (port 7860)
-  connectify --ui --port 8080   Launch web interface on custom port
-  connectify --ui --share       Launch web interface with shareable link
-  connectify --silent           Launch web interface silently in background (port 7890)
-
 INTERACTIVE FEATURES:
   🔍 Search/Filter          Search and filter hosts by name or tags
   ↑/↓ Navigation           Navigate through host list
