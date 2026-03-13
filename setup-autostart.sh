@@ -183,7 +183,7 @@ show_help() {
 main() {
     check_installed
     
-    case "${1:-status}" in
+    case "${1:-enable}" in
         enable)
             enable_autostart
             ;;

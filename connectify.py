@@ -200,17 +200,50 @@ def show_logs():
 
 def ui_status():
     """Show UI server status"""
+    # Check if server is running
     if is_ui_running():
         pid = get_ui_pid()
         print(f"✅ Connectify UI server is running")
         print(f"   PID: {pid}")
         print(f"   URL: http://localhost:{UI_PORT}")
         print(f"   Logs: {LOG_FILE}")
-        return 0
     else:
         print("❌ Connectify UI server is not running")
         print(f"   Start it with: connectify ui start")
-        return 1
+    
+    # Check auto-start configuration
+    print()
+    launchagent_plist = os.path.expanduser("~/Library/LaunchAgents/com.connectify.ui.plist")
+    
+    if os.path.exists(launchagent_plist):
+        # Check if it's loaded
+        result = subprocess.run(
+            "launchctl list | grep com.connectify.ui",
+            shell=True,
+            capture_output=True,
+            text=True
+        )
+        
+        if result.returncode == 0:
+            print("🔄 Auto-start: ✅ ENABLED")
+            print("   The UI server will start automatically on login")
+            print()
+            print("   To disable auto-start:")
+            print("   curl -fsSL https://raw.githubusercontent.com/rahulbhooteshwar/connectify-iterm2/main/setup-autostart.sh | bash -s disable")
+        else:
+            print("🔄 Auto-start: ⚠️  CONFIGURED but not loaded")
+            print("   LaunchAgent will activate on next login")
+            print()
+            print("   To load now:")
+            print("   launchctl load ~/Library/LaunchAgents/com.connectify.ui.plist")
+    else:
+        print("🔄 Auto-start: ❌ DISABLED")
+        print("   The UI server will not start automatically on login")
+        print()
+        print("   To enable auto-start:")
+        print("   curl -fsSL https://raw.githubusercontent.com/rahulbhooteshwar/connectify-iterm2/main/setup-autostart.sh | bash")
+    
+    return 0 if is_ui_running() else 1
 
 
 def handle_ui_command(args):
