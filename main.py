@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SSH Session Manager for iTerm2
+Connectify - SSH Session Manager for iTerm2
 A utility to manage and launch SSH sessions with credential storage and iTerm2 profile support
 
 Built with ❤️ by RB (Rahul Bhooteshwar)
@@ -968,36 +968,45 @@ class SSHManager:
             print(f"{i:2}. {host['name']} - {host['username']}@{host['hostname']}:{host['port']}{auth_info}{tags_str}")
 
 def main():
-    parser = argparse.ArgumentParser(description="SSH Session Manager for iTerm2",
+    parser = argparse.ArgumentParser(description="Connectify - SSH Session Manager for iTerm2",
                                      formatter_class=argparse.RawDescriptionHelpFormatter,
                                      epilog="""
 ╔══════════════════════════════════════════════════════════════╗
-║                SSH Session Manager for iTerm2                ║
+║              CONNECTIFY - SSH Session Manager                ║
 ║                     Comprehensive Help                      ║
 ╚══════════════════════════════════════════════════════════════╝
 
 🚀 QUICK START:
-  launch                    # Interactive host selection
-  launch prod               # Filter hosts containing "prod"
-  launch --add              # Add a new SSH host
-  launch --list             # List all configured hosts
-  launch --ui               # Launch web interface
+  connectify                    # Interactive host selection
+  connectify prod               # Filter hosts containing "prod"
+  connectify --add              # Add a new SSH host
+  connectify --list             # List all configured hosts
+  connectify ui start           # Start background UI server
 
 📖 DETAILED USAGE:
 
 BASIC COMMANDS:
-  launch                    Start interactive host selection
-  launch <filter>           Filter hosts by name or tags
-  launch --add              Add a new SSH host interactively
-  launch --list             List all hosts without connecting
-  launch --list <filter>    List hosts matching filter
-  launch --debug            Debug keychain functionality
-  launch --config <path>    Use custom config file
-  launch --simple           Use numbered list instead of scrolling menu
-  launch --ui               Launch web interface
-  launch --ui --port 8080   Launch web interface on custom port
-  launch --ui --share       Launch web interface with shareable link
-  launch --silent           Launch web interface silently in background (port 7890)
+  connectify                    Start interactive host selection
+  connectify <filter>           Filter hosts by name or tags
+  connectify --add              Add a new SSH host interactively
+  connectify --list             List all hosts without connecting
+  connectify --list <filter>    List hosts matching filter
+  connectify --debug            Debug keychain functionality
+  connectify --config <path>    Use custom config file
+  connectify --simple           Use numbered list instead of scrolling menu
+
+UI SERVER MANAGEMENT:
+  connectify ui start           Start background UI server (port 7890)
+  connectify ui stop            Stop UI server
+  connectify ui restart         Restart UI server
+  connectify ui logs            Show UI server logs
+  connectify ui status          Check UI server status
+
+ADVANCED UI OPTIONS:
+  connectify --ui               Launch web interface (port 7860)
+  connectify --ui --port 8080   Launch web interface on custom port
+  connectify --ui --share       Launch web interface with shareable link
+  connectify --silent           Launch web interface silently in background (port 7890)
 
 INTERACTIVE FEATURES:
   🔍 Search/Filter          Search and filter hosts by name or tags
@@ -1045,7 +1054,7 @@ INTERACTIVE FEATURES:
 
 🔧 TROUBLESHOOTING:
   • Config issues: Check ~/.ssh_manager_config.json syntax
-  • Keychain issues: Run 'launch --debug' to check password storage
+  • Keychain issues: Run 'connectify --debug' to check password storage
   • SSH key problems: Verify file paths and permissions
   • iTerm2 not opening: Check if iTerm2 is installed
   • First-time setup: You'll be prompted once for keyring access
