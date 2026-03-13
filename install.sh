@@ -18,19 +18,19 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 print_info() {
-    echo -e "${BLUE}ℹ️  $1${NC}"
+    printf "${BLUE}ℹ️  %s${NC}\n" "$1"
 }
 
 print_success() {
-    echo -e "${GREEN}✅ $1${NC}"
+    printf "${GREEN}✅ %s${NC}\n" "$1"
 }
 
 print_error() {
-    echo -e "${RED}❌ $1${NC}"
+    printf "${RED}❌ %s${NC}\n" "$1"
 }
 
 print_warning() {
-    echo -e "${YELLOW}⚠️  $1${NC}"
+    printf "${YELLOW}⚠️  %s${NC}\n" "$1"
 }
 
 check_macos() {
