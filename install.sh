@@ -5,7 +5,7 @@ set -e
 # No build required on user's machine!
 
 VERSION="${CONNECTIFY_VERSION:-latest}"
-GITHUB_REPO="rahulbhooteshwar/iterm2-ssh-session-manager"
+GITHUB_REPO="rahulbhooteshwar/connectify-iterm2"
 INSTALL_DIR="$HOME/.local/bin"
 LIB_DIR="$HOME/.local/lib/connectify"
 TEMP_DIR="/tmp/connectify-install-$$"
@@ -240,7 +240,7 @@ print_post_install() {
     echo "  connectify ui stop            # Stop server"
     echo ""
     echo "  # Configure auto-start (UI server starts automatically on login)"
-    echo "  curl -fsSL https://raw.githubusercontent.com/rahulbhooteshwar/iterm2-ssh-session-manager/main/setup-autostart.sh | bash"
+    echo "  curl -fsSL https://raw.githubusercontent.com/rahulbhooteshwar/connectify-iterm2/main/setup-autostart.sh | bash"
     echo ""
     print_info "Web UI: http://localhost:7890 (when server is running)"
     print_info "Config: ~/.connectify/hosts.json"

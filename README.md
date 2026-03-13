@@ -20,7 +20,7 @@ A powerful command-line utility to manage and launch SSH sessions with credentia
 No build required! Downloads pre-built binary:
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/iterm2-ssh-session-manager/main/install.sh | sh
+curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/connectify-iterm2/main/install.sh | sh
 ```
 
 This will:
@@ -111,16 +111,16 @@ The installer will offer to configure the UI server to start automatically when 
 
 ```bash
 # Download and run the setup script
-curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/iterm2-ssh-session-manager/main/setup-autostart.sh | bash -s enable
+curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/connectify-iterm2/main/setup-autostart.sh | bash -s enable
 
 # Or if you have the repo cloned:
 ./setup-autostart.sh enable
 
 # Check status
-curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/iterm2-ssh-session-manager/main/setup-autostart.sh | bash -s status
+curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/connectify-iterm2/main/setup-autostart.sh | bash -s status
 
 # Disable auto-start
-curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/iterm2-ssh-session-manager/main/setup-autostart.sh | bash -s disable
+curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/connectify-iterm2/main/setup-autostart.sh | bash -s disable
 ```
 
 The auto-start feature creates a LaunchAgent that:
@@ -134,7 +134,7 @@ The auto-start feature creates a LaunchAgent that:
 ### One-Line Uninstall
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/iterm2-ssh-session-manager/main/uninstall.sh | sh
+curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/connectify-iterm2/main/uninstall.sh | sh
 ```
 
 ### Manual Uninstall
@@ -251,9 +251,9 @@ MIT License
 
 ## Support
 
-- **Repository**: https://github.com/rahulbhooteshwar/iterm2-ssh-session-manager
-- **Issues**: https://github.com/rahulbhooteshwar/iterm2-ssh-session-manager/issues
-- **Discussions**: https://github.com/rahulbhooteshwar/iterm2-ssh-session-manager/discussions
+- **Repository**: https://github.com/rahulbhooteshwar/connectify-iterm2
+- **Issues**: https://github.com/rahulbhooteshwar/connectify-iterm2/issues
+- **Discussions**: https://github.com/rahulbhooteshwar/connectify-iterm2/discussions
 
 ---
 

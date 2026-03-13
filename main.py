@@ -1103,6 +1103,14 @@ Built with ❤️  by RB (Rahul Bhooteshwar)
 
     args = parser.parse_args()
 
+    # Show initialization message on first run
+    config_path = Path(args.config).expanduser()
+    old_config_path = Path("~/.ssh_manager_config.json").expanduser()
+    
+    if not config_path.exists() or (old_config_path.exists() and not config_path.exists()):
+        print("⏳ First run initialization (this may take a moment)...")
+        print()
+    
     manager = SSHManager(args.config)
 
     if args.debug:

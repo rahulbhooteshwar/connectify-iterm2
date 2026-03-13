@@ -248,12 +248,12 @@ main() {
     if [[ "$REMOVE_CONFIG" != "true" ]] && ([[ -d "$CONFIG_DIR" ]] || [[ -f "$CONFIG_FILE" ]]); then
         print_info "Configuration files were preserved"
         print_info "To remove them, run:"
-        echo "  curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/iterm2-ssh-session-manager/main/uninstall.sh | sh -s -- --remove-config"
+        echo "  curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/connectify-iterm2/main/uninstall.sh | sh -s -- --remove-config"
         echo ""
     fi
     
     print_info "To reinstall Connectify, run:"
-    echo "  curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/iterm2-ssh-session-manager/main/install.sh | sh"
+    echo "  curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/connectify-iterm2/main/install.sh | sh"
     echo ""
 }
 

@@ -50,7 +50,7 @@ jobs:
             ## Installation
             
             ```bash
-            curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/iterm2-ssh-session-manager/main/install.sh | sh
+            curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/connectify-iterm2/main/install.sh | sh
             ```
             
             ## What's New
@@ -74,7 +74,7 @@ jobs:
             connectify --help             # Show all options
             ```
             
-            See [README](https://github.com/rahulbhooteshwar/iterm2-ssh-session-manager) for full documentation.
+            See [README](https://github.com/rahulbhooteshwar/connectify-iterm2) for full documentation.
           draft: false
           prerelease: false
         env:

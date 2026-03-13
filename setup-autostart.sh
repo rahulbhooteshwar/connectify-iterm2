@@ -35,7 +35,7 @@ check_installed() {
     if ! command -v connectify &> /dev/null; then
         print_error "Connectify is not installed"
         print_info "Install it first with:"
-        echo "  curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/iterm2-ssh-session-manager/main/install.sh | sh"
+        echo "  curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/connectify-iterm2/main/install.sh | sh"
         exit 1
     fi
 }

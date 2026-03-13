@@ -8,7 +8,7 @@ VERSION="1.0.0"
 INSTALL_DIR="$HOME/.local/bin"
 LIB_DIR="$HOME/.local/lib/connectify"
 APP_NAME="connectify"
-GITHUB_REPO="rahulbhooteshwar/iterm2-ssh-session-manager"
+GITHUB_REPO="rahulbhooteshwar/connectify-iterm2"
 TEMP_DIR="/tmp/connectify-install"
 
 # Colors for output

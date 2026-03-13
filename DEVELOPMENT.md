@@ -34,8 +34,8 @@ pip install uv
 
 ```bash
 # Clone the repository
-git clone https://github.com/rahulbhooteshwar/iterm2-ssh-session-manager.git
-cd iterm2-ssh-session-manager
+git clone https://github.com/rahulbhooteshwar/connectify-iterm2.git
+cd connectify-iterm2
 
 # Install dependencies
 make setup
@@ -368,7 +368,7 @@ To reduce:
 ### Pre-Release Checklist
 
 1. **Verify GitHub URLs** in:
-   - `install.sh` (line 11: `GITHUB_REPO="rahulbhooteshwar/iterm2-ssh-session-manager"`)
+   - `install.sh` (line 11: `GITHUB_REPO="rahulbhooteshwar/connectify-iterm2"`)
    - `uninstall.sh` (bottom of file)
    - `README.md` (all instances should reference correct repo)
 
@@ -417,7 +417,7 @@ If you need to create a release manually:
 
 3. **Test installation**:
    ```bash
-   curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/iterm2-ssh-session-manager/main/install.sh | sh
+   curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/connectify-iterm2/main/install.sh | sh
    ```
 
 ## Resources
@@ -430,9 +430,9 @@ If you need to create a release manually:
 ## Support
 
 For development questions:
-- Repository: https://github.com/rahulbhooteshwar/iterm2-ssh-session-manager
-- Issues: https://github.com/rahulbhooteshwar/iterm2-ssh-session-manager/issues
-- Discussions: https://github.com/rahulbhooteshwar/iterm2-ssh-session-manager/discussions
+- Repository: https://github.com/rahulbhooteshwar/connectify-iterm2
+- Issues: https://github.com/rahulbhooteshwar/connectify-iterm2/issues
+- Discussions: https://github.com/rahulbhooteshwar/connectify-iterm2/discussions
 
 ---
 

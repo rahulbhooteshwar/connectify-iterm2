@@ -80,6 +80,7 @@ def start_ui():
         return 1
     
     print(f"🚀 Starting Connectify UI server on http://localhost:{UI_PORT}...")
+    print("⏳ First run may take a moment to initialize...")
     
     # Start server in background, redirect output to log file
     with open(LOG_FILE, 'w') as log:
