@@ -92,23 +92,38 @@ def start_ui():
             start_new_session=True  # Detach from parent
         )
     
-    # Wait a moment and check if it started
-    time.sleep(2)
+    # Wait for server to start with progressive retry
+    # First run can take 5-10 seconds due to initialization
+    max_wait = 12  # Total wait time in seconds
+    check_interval = 1  # Check every second
+    waited = 0
     
-    if is_ui_running():
-        pid = get_ui_pid()
-        if pid:
-            # Save PID for future reference
-            with open(PID_FILE, 'w') as f:
-                f.write(pid)
-        print(f"✅ Connectify UI server started successfully!")
-        print(f"🌐 Access it at: http://localhost:{UI_PORT}")
-        print(f"📋 Logs: {LOG_FILE}")
-        return 0
-    else:
-        print("❌ Failed to start UI server. Check logs for details:")
-        print(f"   tail -f {LOG_FILE}")
-        return 1
+    while waited < max_wait:
+        time.sleep(check_interval)
+        waited += check_interval
+        
+        if is_ui_running():
+            pid = get_ui_pid()
+            if pid:
+                # Save PID for future reference
+                with open(PID_FILE, 'w') as f:
+                    f.write(pid)
+            print(f"✅ Connectify UI server started successfully!")
+            print(f"🌐 Access it at: http://localhost:{UI_PORT}")
+            print(f"📋 Logs: {LOG_FILE}")
+            return 0
+        
+        # Show progress indicator for longer waits
+        if waited >= 3 and waited % 2 == 0:
+            print(f"   Still initializing... ({waited}s)")
+    
+    # If we get here, server didn't start in time
+    print("❌ Failed to start UI server. Check logs for details:")
+    print(f"   tail -f {LOG_FILE}")
+    print()
+    print("   The server may still be starting. Check status with:")
+    print("   connectify ui status")
+    return 1
 
 
 def stop_ui():
