@@ -49,7 +49,7 @@ check_not_root() {
 }
 
 check_path() {
-    """Check if ~/.local/bin is in PATH and guide user if not"""
+    # Check if ~/.local/bin is in PATH and guide user if not
     if [[ ":$PATH:" == *":$HOME/.local/bin:"* ]]; then
         return 0  # Already in PATH
     else
@@ -58,7 +58,7 @@ check_path() {
 }
 
 setup_path() {
-    """Guide user to add ~/.local/bin to PATH if needed"""
+    # Guide user to add ~/.local/bin to PATH if needed
     if check_path; then
         return 0
     fi

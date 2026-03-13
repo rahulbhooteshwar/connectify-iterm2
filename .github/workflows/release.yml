@@ -9,6 +9,8 @@ on:
 jobs:
   build-and-release:
     runs-on: macos-latest
+    permissions:
+      contents: write
     
     steps:
       - name: Checkout code
@@ -38,24 +40,10 @@ jobs:
           tar -czf connectify-macos-arm64.tar.gz connectify/
           cd ..
       
-      - name: Get version from tag
-        id: get_version
-        run: |
-          if [[ $GITHUB_REF == refs/tags/* ]]; then
-            VERSION=${GITHUB_REF#refs/tags/}
-          else
-            VERSION="latest"
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-      
       - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ steps.get_version.outputs.version }}
-          release_name: Connectify ${{ steps.get_version.outputs.version }}
+          files: ./dist/connectify-macos-arm64.tar.gz
           body: |
             # Connectify - SSH Session Manager for macOS
             
@@ -77,24 +65,17 @@ jobs:
             - macOS (Apple Silicon or Intel)
             - iTerm2
             
+            ## Usage
+            
+            ```bash
+            connectify                    # Interactive SSH session selector
+            connectify --add              # Add a new SSH host
+            connectify ui start           # Start background UI server
+            connectify --help             # Show all options
+            ```
+            
             See [README](https://github.com/rahulbhooteshwar/iterm2-ssh-session-manager) for full documentation.
           draft: false
           prerelease: false
-      
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./dist/connectify-macos-arm64.tar.gz
-          asset_name: connectify-macos-arm64.tar.gz
-          asset_content_type: application/gzip
-      
-      - name: Update latest tag
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: |
-          git config user.name github-actions
-          git config user.email github-actions@github.com
-          git tag -f latest
-          git push origin latest --force
