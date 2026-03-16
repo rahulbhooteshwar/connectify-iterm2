@@ -183,7 +183,7 @@ class SSHManager:
         """Store password in macOS Keychain using consolidated storage"""
         try:
             # Use a single service name for all SSH passwords
-            ssh_service = "ssh-session-manager"
+            ssh_service = "connectify-iterm2"
 
             # Get existing passwords or create new storage
             existing_passwords = self.get_all_passwords()
@@ -218,7 +218,7 @@ class SSHManager:
     def get_all_passwords(self):
         """Retrieve all stored SSH passwords from keyring"""
         try:
-            ssh_service = "ssh-session-manager"
+            ssh_service = "connectify-iterm2"
             passwords_json = keyring.get_password(ssh_service, "all_hosts")
 
             if passwords_json:

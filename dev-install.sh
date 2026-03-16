@@ -238,6 +238,52 @@ verify_installation() {
     print_success "Installation verified"
 }
 
+check_and_install_sshpass() {
+    print_info "Checking for sshpass (required for password authentication)..."
+    
+    # Check if sshpass is already installed
+    if command -v sshpass &> /dev/null; then
+        print_success "sshpass is already installed"
+        return 0
+    fi
+    
+    print_warning "sshpass not found"
+    print_info "sshpass is required for password-based SSH authentication"
+    echo ""
+    
+    # Check if Homebrew is available
+    if command -v brew &> /dev/null; then
+        echo "Would you like to install sshpass via Homebrew? (recommended)"
+        read -p "Install sshpass? (Y/n): " -n 1 -r
+        echo ""
+        
+        if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
+            print_info "Installing sshpass via Homebrew..."
+            if brew install hudochenkov/sshpass/sshpass; then
+                print_success "sshpass installed successfully"
+            else
+                print_warning "Failed to install sshpass automatically"
+                print_info "You can install it manually later with:"
+                print_info "  brew install hudochenkov/sshpass/sshpass"
+            fi
+        else
+            print_info "Skipping sshpass installation"
+            print_info "You can install it later with:"
+            print_info "  brew install hudochenkov/sshpass/sshpass"
+        fi
+    else
+        print_warning "Homebrew not found - cannot auto-install sshpass"
+        print_info ""
+        print_info "To use password authentication, install sshpass:"
+        print_info "  1. Install Homebrew: https://brew.sh"
+        print_info "  2. Then run: brew install hudochenkov/sshpass/sshpass"
+        print_info ""
+        print_info "Or install sshpass from: https://sourceforge.net/projects/sshpass/"
+    fi
+    
+    echo ""
+}
+
 # Setup auto-start on login
 setup_autostart() {
     echo ""
@@ -357,6 +403,7 @@ main() {
     fi
     
     verify_installation
+    check_and_install_sshpass
     setup_autostart
     print_post_install
 }
