@@ -11,6 +11,13 @@ import argparse
 import time
 import signal
 
+# Import version info
+try:
+    from version import VERSION, BUILD_DATE
+except ImportError:
+    VERSION = "unknown"
+    BUILD_DATE = "unknown"
+
 # Constants
 UI_PORT = 7890
 LOG_FILE = os.path.expanduser("~/.connectify/ui.log")
@@ -83,14 +90,17 @@ def start_ui():
     print("⏳ First run may take a moment to initialize...")
     
     # Start server in background, redirect output to log file
-    with open(LOG_FILE, 'w') as log:
-        process = subprocess.Popen(
-            launch_cmd,
-            shell=True,
-            stdout=log,
-            stderr=subprocess.STDOUT,
-            start_new_session=True  # Detach from parent
-        )
+    # Open log file in append mode and keep it open by passing file descriptor
+    log_fd = os.open(LOG_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
+    process = subprocess.Popen(
+        launch_cmd,
+        shell=True,
+        stdout=log_fd,
+        stderr=log_fd,
+        start_new_session=True,  # Detach from parent
+        close_fds=False  # Keep log file descriptor open
+    )
+    # Don't close log_fd here - let the subprocess inherit it
     
     # Wait for server to start with progressive retry
     # First run can take 5-10 seconds due to initialization
@@ -200,6 +210,10 @@ def show_logs():
 
 def ui_status():
     """Show UI server status"""
+    # Show version info
+    print(f"Connectify v{VERSION} ({BUILD_DATE})")
+    print()
+    
     # Check if server is running
     if is_ui_running():
         pid = get_ui_pid()
@@ -265,6 +279,12 @@ def handle_ui_command(args):
 
 def main():
     """Main entry point for connectify CLI"""
+    
+    # Handle version flag early
+    if len(sys.argv) > 1 and sys.argv[1] in ['--version', '-v', 'version']:
+        print(f"Connectify v{VERSION}")
+        print(f"Build: {BUILD_DATE}")
+        sys.exit(0)
     
     # Check if 'ui' command is being used
     if len(sys.argv) > 1 and sys.argv[1] == 'ui':

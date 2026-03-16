@@ -39,6 +39,7 @@ connectify                    # Interactive host selection
 connectify production         # Filter hosts by "production"
 connectify --add              # Add a new SSH host
 connectify --list             # List all configured hosts
+connectify --version          # Show version information
 connectify --help             # Show all options
 ```
 

@@ -22,6 +22,13 @@ import shutil
 import threading
 import glob
 
+# Import version info
+try:
+    from version import VERSION, BUILD_DATE
+except ImportError:
+    VERSION = "unknown"
+    BUILD_DATE = "unknown"
+
 # Custom theme for better visibility
 class CustomTheme(GreenPassion):
     def __init__(self):
@@ -30,9 +37,11 @@ class CustomTheme(GreenPassion):
         self.List.selection_cursor = "🔸"
 
 class SSHManager:
-    def __init__(self, config_file="~/.connectify/hosts.json"):
+    def __init__(self, config_file="~/.connectify/hosts.json", debug=False):
         self.config_file = Path(config_file).expanduser()
         self.old_config_file = Path("~/.ssh_manager_config.json").expanduser()
+        # Enable debug via --debug flag or CONNECTIFY_DEBUG env var
+        self.debug = debug or os.environ.get('CONNECTIFY_DEBUG', '').lower() in ('1', 'true', 'yes')
         
         # Migrate from old config location if needed
         self.migrate_old_config()
@@ -556,13 +565,31 @@ class SSHManager:
 
         # Try to use sshpass for password authentication if available
         if auth_method == 'password' and password and temp_file:
-            # Check if sshpass is available
+            # Check if sshpass is available - try common paths
+            sshpass_path = None
             try:
-                subprocess.run(['which', 'sshpass'], check=True, capture_output=True)
-                # Use temporary file approach to hide password completely
-                ssh_cmd = f"sshpass -f {temp_file} ssh -o StrictHostKeyChecking=no {keepalive_opts} {auth_opts} -p {port} {username}@{hostname}"
-                return ssh_cmd, True  # Return tuple indicating sshpass is used
+                result = subprocess.run(['which', 'sshpass'], check=True, capture_output=True, text=True)
+                sshpass_path = result.stdout.strip()
+                if self.debug:
+                    print(f"DEBUG: sshpass found at: {sshpass_path}")
             except subprocess.CalledProcessError:
+                # Try common installation paths
+                for path in ['/opt/homebrew/bin/sshpass', '/usr/local/bin/sshpass', '/usr/bin/sshpass']:
+                    if Path(path).exists():
+                        sshpass_path = path
+                        if self.debug:
+                            print(f"DEBUG: sshpass found at fallback path: {sshpass_path}")
+                        break
+            
+            if sshpass_path:
+                if self.debug:
+                    print(f"DEBUG: Using temp file: {temp_file}")
+                # Use temporary file approach to hide password completely
+                ssh_cmd = f"{sshpass_path} -f {temp_file} ssh -o StrictHostKeyChecking=no {keepalive_opts} {auth_opts} -p {port} {username}@{hostname}"
+                return ssh_cmd, True  # Return tuple indicating sshpass is used
+            else:
+                if self.debug:
+                    print(f"DEBUG: sshpass not found in any location")
                 print("ℹ sshpass not found, falling back to manual password entry")
 
         # Standard SSH command
@@ -670,8 +697,14 @@ class SSHManager:
         if host.get('auth_method') == 'password':
             service_name = f"ssh-{host['hostname']}"
             username = host['username']
+            
+            if self.debug:
+                print(f"DEBUG: Retrieving password for service_name={service_name}, username={username}")
 
             password = self.get_password(service_name, username)
+            
+            if self.debug:
+                print(f"DEBUG: Retrieved password: {'[PRESENT]' if password else '[NOT FOUND]'}")
 
             if not password:
                 # For CLI usage, prompt for password
@@ -702,6 +735,13 @@ class SSHManager:
             timestamp = int(time.time())  # Unix timestamp
             temp_filename = f".ssh_pass_{timestamp}_{uuid.uuid4().hex[:8]}"
             temp_pass_file = Path.home() / temp_filename
+            if self.debug:
+                print(f"DEBUG: Will create temp password file: {temp_pass_file}")
+        
+        if self.debug:
+            print(f"DEBUG: password is None: {password is None}")
+            print(f"DEBUG: password bool: {bool(password)}")
+            print(f"DEBUG: temp_pass_file: {temp_pass_file}")
 
         # Build SSH command
         ssh_command, uses_sshpass = self.build_ssh_command(host, password, temp_pass_file)
@@ -1026,6 +1066,7 @@ BASIC COMMANDS:
   connectify --add              Add a new SSH host interactively
   connectify --list             List all hosts without connecting
   connectify --list <filter>    List hosts matching filter
+  connectify --version          Show version information
   connectify --debug            Debug keychain functionality
   connectify --config <path>    Use custom config file
   connectify --simple           Use numbered list instead of scrolling menu
@@ -1094,6 +1135,7 @@ Built with ❤️  by RB (Rahul Bhooteshwar)
     parser.add_argument('--add', action='store_true', help='Add a new SSH host')
     parser.add_argument('--list', action='store_true', help='List all hosts without launching')
     parser.add_argument('--debug', action='store_true', help='Debug keychain functionality')
+    parser.add_argument('--version', action='store_true', help='Show version information')
     parser.add_argument('--config', help='Path to config file', default='~/.connectify/hosts.json')
     parser.add_argument('--simple', action='store_true', help='Use simple numbered list instead of scrolling menu')
     parser.add_argument('--ui', action='store_true', help='Launch web interface')
@@ -1111,7 +1153,14 @@ Built with ❤️  by RB (Rahul Bhooteshwar)
         print("⏳ First run initialization (this may take a moment)...")
         print()
     
-    manager = SSHManager(args.config)
+    # Handle version flag
+    if args.version:
+        print(f"Connectify v{VERSION}")
+        print(f"Build: {BUILD_DATE}")
+        return
+    
+    # Create manager with debug flag
+    manager = SSHManager(args.config, debug=args.debug)
 
     if args.debug:
         manager.debug_keychain()

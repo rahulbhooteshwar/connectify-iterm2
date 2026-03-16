@@ -2,9 +2,11 @@
 
 ## Planned Features & Improvements
 
+### 0. Fix tab interferrence issue ... launch something when it is launching.. change tab... it launches in current tab !! How to ensure it always launches it in the tab designated ... use some unique tab id.. & launch session in that only
+
 ### 1. iTerm2 Installation Detection ⏳
 
-**Priority:** High  
+**Priority:** High
 **Status:** Planned
 
 **Description:**
@@ -44,7 +46,7 @@ check_iterm2() {
 
 ### 2. iTerm2 Profile Management 🎨
 
-**Priority:** Medium  
+**Priority:** Medium
 **Status:** Planned
 
 **Description:**
@@ -196,3 +198,6 @@ To backup existing profiles first:
 - User experience and clear messaging are priorities
 - Installation/setup should be as frictionless as possible
 - Error messages should be actionable and helpful
+
+
+
