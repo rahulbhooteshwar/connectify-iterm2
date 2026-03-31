@@ -37,6 +37,10 @@ class CustomTheme(GreenPassion):
         self.List.selection_cursor = "🔸"
 
 class SSHManager:
+    # Class-level lock to serialize iTerm2 tab launches and prevent race conditions
+    # when multiple connections are launched simultaneously
+    _iterm_launch_lock = threading.Lock()
+    
     def __init__(self, config_file="~/.connectify/hosts.json", debug=False):
         self.config_file = Path(config_file).expanduser()
         self.old_config_file = Path("~/.ssh_manager_config.json").expanduser()
@@ -764,129 +768,140 @@ class SSHManager:
         escaped_host_name = host_name.replace('\\', '\\\\').replace('"', '\\"')
 
         def create_applescript(profile_name):
-            """Generate AppleScript with specified profile"""
+            """Generate AppleScript with specified profile.
+            
+            Uses explicit tab/session references to prevent race conditions when
+            multiple connections are launched simultaneously. The newTab/newWindow
+            reference is captured immediately after creation and used for all
+            subsequent operations, ensuring commands go to the correct tab even
+            if the user switches tabs or other launches occur concurrently.
+            """
             return f'''
             tell application "iTerm"
                 activate
                 if (count of windows) = 0 then
-                    create window with profile "{profile_name}"
+                    set newWindow to (create window with profile "{profile_name}")
+                    set targetSession to current session of newWindow
                 else
                     tell current window
-                        create tab with profile "{profile_name}"
+                        set newTab to (create tab with profile "{profile_name}")
+                        set targetSession to current session of newTab
                     end tell
                 end if
-                tell current session of current window
+                tell targetSession
                     set name to "{escaped_host_name}"
                     write text "{ssh_command}"
                 end tell
             end tell
             '''
 
-        # Try launching with specified profile, fallback to Default if it fails
-        launch_success = False
-        profiles_to_try = [iterm_profile] if iterm_profile != "Default" else ["Default"]
-        if iterm_profile != "Default":
-            profiles_to_try.append("Default")  # Add Default as fallback
+        # Acquire lock to serialize iTerm2 launches and prevent race conditions
+        # when multiple connections are launched simultaneously from the UI
+        with SSHManager._iterm_launch_lock:
+            # Try launching with specified profile, fallback to Default if it fails
+            launch_success = False
+            profiles_to_try = [iterm_profile] if iterm_profile != "Default" else ["Default"]
+            if iterm_profile != "Default":
+                profiles_to_try.append("Default")  # Add Default as fallback
 
-        last_error = None
-        for profile_attempt in profiles_to_try:
-            try:
-                applescript = create_applescript(profile_attempt)
-                result = subprocess.run(['osascript', '-e', applescript], check=True, capture_output=True, text=True)
+            last_error = None
+            for profile_attempt in profiles_to_try:
+                try:
+                    applescript = create_applescript(profile_attempt)
+                    result = subprocess.run(['osascript', '-e', applescript], check=True, capture_output=True, text=True)
 
-                if profile_attempt != iterm_profile:
-                    print(f"⚠️  Profile '{iterm_profile}' not found, using '{profile_attempt}' instead")
+                    if profile_attempt != iterm_profile:
+                        print(f"⚠️  Profile '{iterm_profile}' not found, using '{profile_attempt}' instead")
 
-                print(f"✅ Session launched successfully!")
-                launch_success = True
+                    print(f"✅ Session launched successfully!")
+                    launch_success = True
 
-                # Schedule background cleanup using separate subprocess
-                if temp_file_created and temp_pass_file:
-                    cleanup_command = [
-                        'python3', '-c',
-                        f'import time, os; time.sleep(60); '
-                        f'os.remove("{temp_pass_file}") if os.path.exists("{temp_pass_file}") else None'
-                    ]
+                    # Schedule background cleanup using separate subprocess
+                    if temp_file_created and temp_pass_file:
+                        cleanup_command = [
+                            'python3', '-c',
+                            f'import time, os; time.sleep(60); '
+                            f'os.remove("{temp_pass_file}") if os.path.exists("{temp_pass_file}") else None'
+                        ]
 
-                    # Start cleanup process in background and detach it
-                    subprocess.Popen(
-                        cleanup_command,
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                        start_new_session=True  # Detach from parent process
-                    )
+                        # Start cleanup process in background and detach it
+                        subprocess.Popen(
+                            cleanup_command,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                            start_new_session=True  # Detach from parent process
+                        )
 
-                break  # Success, exit the retry loop
+                    break  # Success, exit the retry loop
 
-            except subprocess.CalledProcessError as e:
-                last_error = e
-                error_msg = e.stderr if e.stderr else str(e)
-                print(f"⚠️  Profile '{profile_attempt}' failed: {error_msg}")
-                # Continue to next profile attempt
+                except subprocess.CalledProcessError as e:
+                    last_error = e
+                    error_msg = e.stderr if e.stderr else str(e)
+                    print(f"⚠️  Profile '{profile_attempt}' failed: {error_msg}")
+                    # Continue to next profile attempt
 
-        # If all profile attempts failed, try without specifying a profile (last resort)
-        if not launch_success:
-            print("ℹ️  Trying to launch without profile specification...")
-            try:
-                # Simple AppleScript without profile
-                simple_script = f'''
-                tell application "iTerm"
-                    activate
-                    if (count of windows) = 0 then
-                        set newWindow to (create window with default profile)
-                        tell current session of newWindow
+            # If all profile attempts failed, try without specifying a profile (last resort)
+            if not launch_success:
+                print("ℹ️  Trying to launch without profile specification...")
+                try:
+                    # Simple AppleScript without profile - uses explicit tab references
+                    # to prevent race conditions (same pattern as create_applescript)
+                    simple_script = f'''
+                    tell application "iTerm"
+                        activate
+                        if (count of windows) = 0 then
+                            set newWindow to (create window with default profile)
+                            set targetSession to current session of newWindow
+                        else
+                            tell current window
+                                set newTab to (create tab with default profile)
+                                set targetSession to current session of newTab
+                            end tell
+                        end if
+                        tell targetSession
                             set name to "{escaped_host_name}"
                             write text "{ssh_command}"
                         end tell
-                    else
-                        tell current window
-                            set newTab to (create tab with default profile)
-                            tell current session
-                                set name to "{escaped_host_name}"
-                                write text "{ssh_command}"
-                            end tell
-                        end tell
-                    end if
-                end tell
-                '''
+                    end tell
+                    '''
 
-                result = subprocess.run(['osascript', '-e', simple_script], check=True, capture_output=True, text=True)
-                print(f"✅ Session launched successfully (using default profile)!")
-                launch_success = True
+                    result = subprocess.run(['osascript', '-e', simple_script], check=True, capture_output=True, text=True)
+                    print(f"✅ Session launched successfully (using default profile)!")
+                    launch_success = True
 
-                # Schedule background cleanup
-                if temp_file_created and temp_pass_file:
-                    cleanup_command = [
-                        'python3', '-c',
-                        f'import time, os; time.sleep(60); '
-                        f'os.remove("{temp_pass_file}") if os.path.exists("{temp_pass_file}") else None'
-                    ]
-                    subprocess.Popen(
-                        cleanup_command,
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                        start_new_session=True
-                    )
+                    # Schedule background cleanup
+                    if temp_file_created and temp_pass_file:
+                        cleanup_command = [
+                            'python3', '-c',
+                            f'import time, os; time.sleep(60); '
+                            f'os.remove("{temp_pass_file}") if os.path.exists("{temp_pass_file}") else None'
+                        ]
+                        subprocess.Popen(
+                            cleanup_command,
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                            start_new_session=True
+                        )
 
-            except subprocess.CalledProcessError as e:
-                error_msg = e.stderr if e.stderr else str(e)
-                print(f"✗ Error launching iTerm2 (all methods failed)")
-                print(f"   Last error: {error_msg}")
-                print(f"   SSH command: {ssh_command}")
-                print(f"")
-                print(f"💡 Troubleshooting tips:")
-                print(f"   1. Make sure iTerm2 is installed and can be launched")
-                print(f"   2. Check if iTerm2 has necessary permissions (System Preferences > Security & Privacy)")
-                print(f"   3. Try running iTerm2 manually first")
-                print(f"   4. Check if you have any profile named 'Default' in iTerm2 preferences")
+                except subprocess.CalledProcessError as e:
+                    error_msg = e.stderr if e.stderr else str(e)
+                    print(f"✗ Error launching iTerm2 (all methods failed)")
+                    print(f"   Last error: {error_msg}")
+                    print(f"   SSH command: {ssh_command}")
+                    print(f"")
+                    print(f"💡 Troubleshooting tips:")
+                    print(f"   1. Make sure iTerm2 is installed and can be launched")
+                    print(f"   2. Check if iTerm2 has necessary permissions (System Preferences > Security & Privacy)")
+                    print(f"   3. Try running iTerm2 manually first")
+                    print(f"   4. Check if you have any profile named 'Default' in iTerm2 preferences")
 
-                # Clean up temp file
-                if temp_file_created and temp_pass_file and temp_pass_file.exists():
-                    try:
-                        temp_pass_file.unlink()
-                        print(f"🧹 Cleaned up temporary password file (launch failed)")
-                    except Exception as cleanup_error:
-                        print(f"⚠ Warning: Could not remove temporary file {temp_pass_file}: {cleanup_error}")
+                    # Clean up temp file
+                    if temp_file_created and temp_pass_file and temp_pass_file.exists():
+                        try:
+                            temp_pass_file.unlink()
+                            print(f"🧹 Cleaned up temporary password file (launch failed)")
+                        except Exception as cleanup_error:
+                            print(f"⚠ Warning: Could not remove temporary file {temp_pass_file}: {cleanup_error}")
 
     def add_host(self):
         """Interactive host addition"""
