@@ -31,6 +31,10 @@ class HostModel(BaseModel):
     ssh_key_path: Optional[str] = None
     iterm_profile: str = "Default"
     tags: List[str] = []
+    # SSH "-o" options (e.g. "PreferredAuthentications=password"). None means
+    # "not configured" so the backend applies auth-method defaults; an empty
+    # list means "no extra options".
+    ssh_options: Optional[List[str]] = None
 
 
 class HostCreate(HostModel):
@@ -523,7 +527,8 @@ async def export_template():
                 "password": "your_password_here",
                 "ssh_key_path": None,
                 "iterm_profile": "Default",
-                "tags": ["production", "web"]
+                "tags": ["production", "web"],
+                "ssh_options": ["PreferredAuthentications=password", "PubkeyAuthentication=no"]
             },
             {
                 "name": "Dev Server",
@@ -534,7 +539,8 @@ async def export_template():
                 "password": None,
                 "ssh_key_path": "~/.ssh/id_rsa",
                 "iterm_profile": "Development",
-                "tags": ["development", "testing"]
+                "tags": ["development", "testing"],
+                "ssh_options": ["PreferredAuthentications=publickey", "PasswordAuthentication=no"]
             }
         ],
         "_note": "For password authentication hosts, provide the password in the 'password' field. Passwords will be securely stored in keychain. For key-based auth, set password to null and provide ssh_key_path."

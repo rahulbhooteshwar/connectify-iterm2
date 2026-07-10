@@ -29,6 +29,34 @@ except ImportError:
     VERSION = "unknown"
     BUILD_DATE = "unknown"
 
+# Default SSH "-o" options applied per authentication method when a host does
+# not explicitly define its own `ssh_options` (kept for backward compatibility
+# with hosts created before options were configurable from the UI).
+DEFAULT_SSH_OPTIONS = {
+    'password': [
+        "PreferredAuthentications=password",
+        "PubkeyAuthentication=no",
+    ],
+    'key': [
+        "PreferredAuthentications=publickey",
+        "PasswordAuthentication=no",
+    ],
+}
+
+
+def resolve_ssh_options(host):
+    """Resolve the list of SSH `-o` options for a host.
+
+    Uses the host's explicit `ssh_options` when present (including an empty
+    list, which means "no extra options"), otherwise falls back to the
+    auth-method defaults for hosts that predate configurable options.
+    """
+    options = host.get('ssh_options')
+    if options is None:
+        auth_method = host.get('auth_method', 'password')
+        return list(DEFAULT_SSH_OPTIONS.get(auth_method, []))
+    return list(options)
+
 # Custom theme for better visibility
 class CustomTheme(GreenPassion):
     def __init__(self):
@@ -559,13 +587,9 @@ class SSHManager:
         # SSH keep-alive options disabled - no automatic disconnection
         keepalive_opts = ""
 
-        # Authentication-specific options
-        if auth_method == 'password':
-            # Force password authentication and disable pubkey auth
-            auth_opts = "-o PreferredAuthentications=password -o PubkeyAuthentication=no"
-        else:
-            # Force public key authentication and disable password auth
-            auth_opts = "-o PreferredAuthentications=publickey -o PasswordAuthentication=no"
+        # SSH "-o" options are configured per host from the UI. Fall back to
+        # auth-method defaults for hosts that don't define them explicitly.
+        auth_opts = " ".join(f"-o {opt}" for opt in resolve_ssh_options(host))
 
         # Try to use sshpass for password authentication if available
         if auth_method == 'password' and password and temp_file:

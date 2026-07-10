@@ -1230,6 +1230,96 @@
       color: white;
     }
 
+    /* Advanced SSH Options (collapsible) */
+    .ssh-options-details {
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      background: var(--bg-secondary);
+      overflow: hidden;
+    }
+
+    .ssh-options-summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 0.65rem 0.85rem;
+      font-weight: 500;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      user-select: none;
+    }
+
+    .ssh-options-summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .ssh-options-summary .chevron {
+      transition: transform 0.2s ease;
+      color: var(--text-secondary);
+      font-size: 0.8rem;
+    }
+
+    .ssh-options-details[open] .ssh-options-summary .chevron {
+      transform: rotate(90deg);
+    }
+
+    .ssh-options-count {
+      margin-left: auto;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      background: var(--bg-tertiary);
+      padding: 1px 8px;
+      border-radius: 999px;
+    }
+
+    .ssh-options-body {
+      padding: 0.25rem 0.85rem 0.85rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      border-top: 1px solid var(--border-color);
+    }
+
+    .ssh-option-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.6rem;
+      cursor: pointer;
+      padding: 0.35rem 0.25rem;
+      border-radius: var(--radius-sm);
+    }
+
+    .ssh-option-item:hover {
+      background: var(--bg-tertiary);
+    }
+
+    .ssh-option-item input[type="checkbox"] {
+      margin-top: 0.2rem;
+      width: 16px;
+      height: 16px;
+      accent-color: var(--primary-color);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .ssh-option-text {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    .ssh-option-label {
+      font-size: 0.875rem;
+      color: var(--text-primary);
+    }
+
+    .ssh-option-flag {
+      font-size: 0.72rem;
+      color: var(--text-secondary);
+      font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+    }
+
     /* Export/Import Modals */
     .export-option-btn {
       background: var(--bg-secondary);
@@ -1681,7 +1771,18 @@
             <datalist id="profileList"></datalist>
           </div>
 
-
+          <div class="form-group" style="margin-bottom: 1.5rem;">
+            <details class="ssh-options-details" id="sshOptionsDetails">
+              <summary class="ssh-options-summary">
+                <i class="fas fa-chevron-right chevron"></i>
+                Advanced SSH Options
+                <span class="ssh-options-count" id="sshOptionsCount">0 selected</span>
+              </summary>
+              <div class="ssh-options-body" id="sshOptionsBody">
+                <!-- SSH option checkboxes are rendered here -->
+              </div>
+            </details>
+          </div>
 
           <div style="display: flex; justify-content: flex-end; gap: 1rem;">
             <button type="button" id="cancelHostBtn" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem;">Cancel</button>
@@ -1802,6 +1903,22 @@
         this.currentView = localStorage.getItem('sshManagerView') || 'grid';
         this.isLoading = false;
 
+        // Available SSH "-o" options exposed in the "Advanced SSH Options" section.
+        this.sshOptionDefs = [
+          { flag: 'PreferredAuthentications=password', label: 'Prefer password authentication' },
+          { flag: 'PubkeyAuthentication=no', label: 'Disable public key authentication' },
+          { flag: 'PreferredAuthentications=publickey', label: 'Prefer public key authentication' },
+          { flag: 'PasswordAuthentication=no', label: 'Disable password authentication' },
+          { flag: 'StrictHostKeyChecking=no', label: "Skip host key checking (don't prompt on new hosts)" }
+        ];
+
+        // Sensible defaults applied per auth method for new hosts (mirrors the
+        // previous hardcoded backend behaviour).
+        this.defaultSshOptions = {
+          password: ['PreferredAuthentications=password', 'PubkeyAuthentication=no'],
+          key: ['PreferredAuthentications=publickey', 'PasswordAuthentication=no']
+        };
+
         // DOM elements
         this.elements = {
           searchBox: document.getElementById('searchBox'),
@@ -1844,6 +1961,11 @@
           hostPassword: document.getElementById('hostPassword'),
           togglePasswordBtn: document.getElementById('togglePasswordBtn'),
           keyField: document.getElementById('keyField'),
+
+          // Advanced SSH Options
+          sshOptionsDetails: document.getElementById('sshOptionsDetails'),
+          sshOptionsBody: document.getElementById('sshOptionsBody'),
+          sshOptionsCount: document.getElementById('sshOptionsCount'),
 
           // Tag Input Elements
           tagContainer: document.getElementById('tagContainer'),
@@ -1946,7 +2068,7 @@
         }
 
         if (this.elements.authMethod) {
-          this.elements.authMethod.addEventListener('change', () => this.toggleAuthFields());
+          this.elements.authMethod.addEventListener('change', () => this.onAuthMethodChange());
         }
 
         if (this.elements.cancelDeleteBtn) {
@@ -2112,7 +2234,49 @@
         dropdown.style.display = 'block';
       }
 
+      renderSshOptionCheckboxes() {
+        const body = this.elements.sshOptionsBody;
+        if (!body || body.dataset.rendered === 'true') return;
 
+        body.innerHTML = this.sshOptionDefs.map((opt, idx) => `
+          <label class="ssh-option-item">
+            <input type="checkbox" class="ssh-option-checkbox" id="sshOpt-${idx}" value="${opt.flag}">
+            <span class="ssh-option-text">
+              <span class="ssh-option-label">${opt.label}</span>
+              <span class="ssh-option-flag">-o ${opt.flag}</span>
+            </span>
+          </label>
+        `).join('');
+
+        body.querySelectorAll('.ssh-option-checkbox').forEach(cb => {
+          cb.addEventListener('change', () => this.updateSshOptionsCount());
+        });
+
+        body.dataset.rendered = 'true';
+      }
+
+      setSshOptions(options) {
+        this.renderSshOptionCheckboxes();
+        const selected = new Set(options || []);
+        this.elements.sshOptionsBody.querySelectorAll('.ssh-option-checkbox').forEach(cb => {
+          cb.checked = selected.has(cb.value);
+        });
+        this.updateSshOptionsCount();
+      }
+
+      getSelectedSshOptions() {
+        if (!this.elements.sshOptionsBody) return [];
+        return Array.from(this.elements.sshOptionsBody.querySelectorAll('.ssh-option-checkbox'))
+          .filter(cb => cb.checked)
+          .map(cb => cb.value);
+      }
+
+      updateSshOptionsCount() {
+        const count = this.getSelectedSshOptions().length;
+        if (this.elements.sshOptionsCount) {
+          this.elements.sshOptionsCount.textContent = `${count} selected`;
+        }
+      }
 
       debounce(func, wait) {
         let timeout;
@@ -2675,6 +2839,13 @@
             this.renderTagPills();
             this.updateHiddenTagInput();
 
+            // Initialize SSH options: use the host's saved options when present,
+            // otherwise fall back to the defaults for its auth method.
+            const savedOptions = Array.isArray(host.ssh_options)
+              ? host.ssh_options
+              : (this.defaultSshOptions[host.auth_method] || []);
+            this.setSshOptions(savedOptions);
+
             // Handle password placeholder
 
             // Handle password placeholder
@@ -2693,6 +2864,15 @@
           this.currentModalTags = [];
           this.renderTagPills();
           this.updateHiddenTagInput();
+
+          // Pre-check the defaults for the current auth method
+          const method = document.getElementById('authMethod').value;
+          this.setSshOptions(this.defaultSshOptions[method] || []);
+        }
+
+        // Collapse the advanced section by default each time the modal opens
+        if (this.elements.sshOptionsDetails) {
+          this.elements.sshOptionsDetails.open = false;
         }
 
         this.toggleAuthFields();
@@ -2701,6 +2881,14 @@
 
       closeModal(modal) {
         modal.classList.remove('show');
+      }
+
+      onAuthMethodChange() {
+        // When the user switches auth method, reset the advanced SSH options
+        // to that method's sensible defaults.
+        const method = this.elements.authMethod.value;
+        this.setSshOptions(this.defaultSshOptions[method] || []);
+        this.toggleAuthFields();
       }
 
       toggleAuthFields() {
@@ -2762,6 +2950,7 @@
           ssh_key_path: document.getElementById('sshKeyPath').value || null,
           iterm_profile: document.getElementById('itermProfile').value,
           tags: this.currentModalTags,
+          ssh_options: this.getSelectedSshOptions(),
           password: document.getElementById('hostPassword').value || null
         };
 
