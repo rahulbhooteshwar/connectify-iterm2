@@ -69,10 +69,12 @@
       --spacing-xl: 2rem;
       --spacing-2xl: 3rem;
 
-      --radius-sm: 0.25rem;
-      --radius-md: 0.5rem;
-      --radius-lg: 0.75rem;
-      --radius-xl: 1rem;
+      /* Corners are tight on purpose - cards and dialogs read as panels
+         rather than as bubbles. Pills keep their own 999px radius. */
+      --radius-sm: 0.15rem;
+      --radius-md: 0.25rem;
+      --radius-lg: 0.35rem;
+      --radius-xl: 0.5rem;
     }
 
     /* Dark mode variables */
@@ -115,12 +117,12 @@
 
     ::-webkit-scrollbar-track {
       background: #1a1a1a;
-      border-radius: 10px;
+      border-radius: var(--radius-sm);
     }
 
     ::-webkit-scrollbar-thumb {
       background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
-      border-radius: 10px;
+      border-radius: var(--radius-sm);
       border: 2px solid #1a1a1a;
     }
 
@@ -657,7 +659,7 @@
 
     .host-tags {
       padding: 2px 8px;
-      border-radius: 12px;
+      border-radius: var(--radius-sm);
       font-size: 0.75rem;
       font-weight: 600;
       text-transform: uppercase;
@@ -1023,8 +1025,44 @@
       text-align: center;
       box-shadow: var(--shadow-xl);
       max-width: 400px;
+      /* Never taller than the window: the body scrolls, the action row does
+         not go with it */
+      max-height: 80vh;
+      overflow-y: auto;
+      overscroll-behavior: contain;
       transform: scale(0.9);
       transition: transform 0.3s ease;
+    }
+
+    /* The row of buttons that closes a dialog. Pulled out to the dialog's
+       edges and pinned to the bottom of the scrollport, so it stays reachable
+       however long the form gets. */
+    /* The dialog's own bottom padding would leave a gap under the pinned row
+       for content to scroll through, so the row provides it instead */
+    .connection-modal:has(.modal-actions) {
+      padding-bottom: 0;
+    }
+
+    .modal-actions {
+      position: sticky;
+      bottom: 0;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin: var(--spacing-lg) calc(-1 * var(--spacing-2xl)) 0;
+      padding: var(--spacing-md) var(--spacing-2xl);
+      background: var(--bg-primary);
+      border-top: 1px solid var(--border-color);
+      border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+    }
+
+    .modal-actions.actions-end {
+      justify-content: flex-end;
+    }
+
+    .modal-actions.actions-center {
+      justify-content: center;
     }
 
     .connection-overlay.show .connection-modal {
@@ -2169,7 +2207,7 @@
             </details>
           </div>
 
-          <div style="display: flex; justify-content: flex-end; gap: 1rem;">
+          <div class="modal-actions actions-end">
             <button type="button" id="cancelHostBtn" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem;">Cancel</button>
             <button type="submit" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem; background: var(--primary-color); color: white; border-color: var(--primary-color);">Save Host</button>
           </div>
@@ -2195,7 +2233,7 @@
             <small class="profile-hint">There is no recovery - if you forget this passcode the credentials are gone.</small>
           </div>
           <div id="vaultUnlockError" class="vault-error" style="display: none;"></div>
-          <div style="display: flex; justify-content: flex-end; gap: 1rem;">
+          <div class="modal-actions actions-end">
             <button type="button" id="cancelVaultUnlockBtn" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem;">Cancel</button>
             <button type="submit" id="vaultUnlockSubmitBtn" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem; background: var(--primary-color); color: white; border-color: var(--primary-color);">Unlock</button>
           </div>
@@ -2259,7 +2297,7 @@
 
           <div id="credentialError" class="vault-error" style="display: none;"></div>
 
-          <div style="display: flex; justify-content: flex-end; gap: 1rem;">
+          <div class="modal-actions actions-end">
             <button type="button" id="cancelCredentialBtn" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem;">Cancel</button>
             <button type="submit" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem; background: var(--primary-color); color: white; border-color: var(--primary-color);">Save Credential</button>
           </div>
@@ -2294,7 +2332,7 @@
         <h3 id="credentialDeleteTitle" style="margin-bottom: 0.75rem;">Delete credential?</h3>
         <p id="credentialDeleteMessage" style="color: var(--text-secondary); margin-bottom: 1rem;"></p>
         <ul id="credentialDeleteHosts" class="credential-host-list" style="display: none;"></ul>
-        <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1.25rem;">
+        <div class="modal-actions actions-end">
           <button id="cancelCredentialDeleteBtn" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem;">Close</button>
           <button id="confirmCredentialDeleteBtn" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem; background: var(--error-color); color: white; border-color: var(--error-color);">Delete</button>
         </div>
@@ -2309,7 +2347,7 @@
         </div>
         <h3>Delete Host?</h3>
         <p style="margin-bottom: 1.5rem; color: var(--text-secondary);">Are you sure you want to delete <strong id="deleteHostName"></strong>? This action cannot be undone.</p>
-        <div style="display: flex; justify-content: center; gap: 1rem;">
+        <div class="modal-actions actions-center">
           <button id="cancelDeleteBtn" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem;">Cancel</button>
           <button id="confirmDeleteBtn" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem; background: var(--error-color); color: white; border-color: var(--error-color);">Delete</button>
         </div>
@@ -2332,7 +2370,7 @@
             <p>Download an example configuration file</p>
           </button>
         </div>
-        <div style="display: flex; justify-content: center;">
+        <div class="modal-actions actions-center">
           <button id="cancelExportBtn" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem;">Close</button>
         </div>
       </div>
@@ -2352,7 +2390,7 @@
           <h4 style="color: var(--text-primary); margin-top: var(--spacing-lg);">Preview</h4>
           <div id="importPreviewList" class="import-preview"></div>
         </div>
-        <div style="display: flex; justify-content: center; gap: var(--spacing-md); margin-top: var(--spacing-lg);">
+        <div class="modal-actions actions-center">
           <button id="cancelImportBtn" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem;">Cancel</button>
           <button id="confirmImportBtn" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem; background: var(--primary-color); color: white; border-color: var(--primary-color); display: none;">Import</button>
         </div>
