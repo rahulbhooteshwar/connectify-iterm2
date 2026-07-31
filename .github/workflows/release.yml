@@ -4,7 +4,12 @@ on:
   push:
     tags:
       - 'v*'  # Trigger on version tags like v1.0.0
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, without the leading v (e.g. 2.0.0)'
+        required: true
+        type: string
 
 jobs:
   build-and-release:
@@ -32,9 +37,15 @@ jobs:
       
       - name: Inject version information
         run: |
-          # Extract version from git tag (e.g., v1.0.0 -> 1.0.0)
-          VERSION="${GITHUB_REF#refs/tags/v}"
+          # From the tag when pushed, from the input when run manually
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
           BUILD_DATE=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
           
           # Update version.py with release info
           cat > version.py << EOF
@@ -63,38 +74,57 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
+          # Tags the checked-out commit when this is run manually; matches the
+          # pushed tag otherwise
+          tag_name: v${{ env.VERSION }}
+          name: v${{ env.VERSION }}
           files: ./dist/connectify-macos-arm64.tar.gz
           body: |
             # Connectify - SSH Session Manager for macOS
-            
+
+            ## Requirements
+
+            - macOS with [iTerm2](https://iterm2.com/index.html) (required)
+            - [iTerm2 browser plugin](https://iterm2.com/browser-plugin.html)
+              (optional - only for the bundled `connectify-UI` profile)
+
             ## Installation
-            
+
             ```bash
             curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/connectify-iterm2/main/install.sh | sh
             ```
-            
-            ## What's New
-            
-            - SSH session management with iTerm2 integration
-            - Web UI with background server support (hosts, groups, tile themes)
-            - Auto-start configuration
-            - Secure credential storage in macOS Keychain
-            
-            ## Requirements
-            
-            - macOS (Apple Silicon or Intel)
-            - iTerm2
-            
+
+            ## What's in it
+
+            - **Encrypted credentials vault** - SSH passwords and key passphrases
+              in an AES-256-GCM file unlocked by your passcode, not the Keychain
+            - **No sshpass** - secrets reach ssh through OpenSSH's own askpass
+              mechanism over a private FIFO: never on disk, never on a command
+              line, never in your shell history
+            - **Web UI** for hosts, groups, per-host tile themes and profiles
+            - **Bundled iTerm2 profiles** (PERSONAL / NON-PROD / PROD / UI)
+              installed for you
+
+            ## Upgrading from 1.x
+
+            Credentials are **not** migrated from the macOS Keychain. On first
+            start Connectify removes the old `auth_method`, `ssh_key_path` and
+            `password` fields from `hosts.json`; create your credentials on the
+            Vault page and assign one to each host. The interactive CLI is gone -
+            hosts are managed in the web UI, and `connectify` now covers
+            `ui start|stop|restart|status|logs`, `profiles`, `doctor` and
+            `version`.
+
             ## Usage
-            
+
             ```bash
             connectify ui start           # Start the web UI server (background)
             connectify ui status          # Check if it is running
             connectify doctor             # Diagnostics
             connectify --help             # Show all commands
             ```
-            
-            See [README](https://github.com/rahulbhooteshwar/connectify-iterm2) for full documentation.
+
+            See the [README](https://github.com/rahulbhooteshwar/connectify-iterm2) for full documentation.
           draft: false
           prerelease: false
         env:
