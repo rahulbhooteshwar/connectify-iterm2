@@ -11,7 +11,6 @@ import os
 import sys
 import argparse
 import subprocess
-import keyring
 import time
 from pathlib import Path
 import threading
@@ -107,6 +106,9 @@ class SSHManager:
         self.migrate_old_config()
         
         self.config = self.load_config()
+
+        # Drop pre-vault fields from the host list (see the method for why)
+        self.clean_legacy_host_fields()
 
         # Make sure the iTerm2 profiles shipped with Connectify are present.
         # Runs once per version (tracked by a marker file), so upgrades pick up
@@ -266,37 +268,6 @@ class SSHManager:
             self.save_config()
             return True
         raise ValueError(f"Host '{host_name}' not found")
-
-    def get_password(self, service_name, username):
-        """Read a password from the legacy macOS Keychain storage.
-
-        Only used to migrate old installs into the encrypted vault.
-        """
-        try:
-            all_passwords = self.get_all_passwords()
-            host_key = f"{username}@{service_name.replace('ssh-', '')}"
-            return all_passwords.get(host_key)
-        except Exception as e:
-            print(f"✗ Error retrieving password: {e}")
-            return None
-
-    def get_all_passwords(self):
-        """Read every password from the legacy macOS Keychain storage."""
-        try:
-            ssh_service = "connectify-iterm2"
-            passwords_json = keyring.get_password(ssh_service, "all_hosts")
-
-            if passwords_json:
-                return json.loads(passwords_json)
-            else:
-                return {}
-        except Exception as e:
-            # The legacy keychain is only consulted for migration; on a machine
-            # without a keyring backend this is simply "nothing to migrate".
-            if self.debug:
-                print(f"DEBUG: Could not read legacy keychain: {e}")
-            # Return empty dict if no passwords stored yet or error occurred
-            return {}
 
     def cleanup_old_temp_files(self):
         """Tidy up scratch files in the background (non-blocking).
@@ -542,93 +513,46 @@ class SSHManager:
                 session.cleanup()
                 return False
 
-    def legacy_keychain_passwords(self):
-        """Passwords still sitting in the old macOS Keychain storage."""
-        try:
-            return self.get_all_passwords()
-        except Exception:
-            return {}
+    # Fields that predate the credentials vault. They described how to
+    # authenticate; that now lives on the credential, so they are stripped on
+    # startup rather than lingering as a second, stale source of truth.
+    LEGACY_HOST_FIELDS = ('auth_method', 'ssh_key_path', 'password')
 
-    def build_legacy_credentials(self):
-        """Turn pre-vault host settings into vault credentials.
+    def clean_legacy_host_fields(self):
+        """Remove pre-vault authentication fields from hosts.json.
 
-        Password hosts bring their keychain password across (one credential per
-        host); key hosts share a credential per key file, since that's how keys
-        are actually used. Returns ``(credentials, assignments, summary)`` where
-        assignments maps host name -> credential name.
+        The SSH options a host uses to be given by its auth method, so those
+        are materialised first - otherwise dropping `auth_method` would
+        silently change how an existing host connects. Every host ends up with
+        a `credential` field, empty until one is picked in the UI.
         """
-        legacy_passwords = self.legacy_keychain_passwords()
-        credentials = []
-        assignments = {}
-        summary = {'passwords': 0, 'keys': 0, 'skipped': []}
-        used_names = set()
-
-        def unique_name(base):
-            candidate = base
-            suffix = 2
-            while candidate.lower() in used_names:
-                candidate = f"{base}-{suffix}"
-                suffix += 1
-            used_names.add(candidate.lower())
-            return candidate
-
-        keys_by_path = {}
-
-        for host in self.config.get('hosts', []):
-            if host.get('credential'):
-                continue
-
-            auth_method = host.get('auth_method', 'password')
-            host_name = host.get('name', '')
-
-            if auth_method == 'key':
-                key_path = (host.get('ssh_key_path') or '').strip()
-                if not key_path:
-                    summary['skipped'].append(host_name)
-                    continue
-
-                if key_path not in keys_by_path:
-                    name = unique_name(Path(key_path).name or 'ssh-key')
-                    keys_by_path[key_path] = name
-                    credentials.append({
-                        'name': name,
-                        'type': 'key',
-                        'description': f'Imported from {host_name}',
-                        'ssh_key_path': key_path,
-                        'passphrase': '',
-                    })
-                    summary['keys'] += 1
-
-                assignments[host_name] = keys_by_path[key_path]
-            else:
-                host_key = f"{host.get('username')}@{host.get('hostname')}"
-                password = legacy_passwords.get(host_key)
-                if not password:
-                    summary['skipped'].append(host_name)
-                    continue
-
-                name = unique_name(host_name or host_key)
-                credentials.append({
-                    'name': name,
-                    'type': 'password',
-                    'description': f'Imported from {host_name}',
-                    'password': password,
-                })
-                assignments[host_name] = name
-                summary['passwords'] += 1
-
-        return credentials, assignments, summary
-
-    def apply_credential_assignments(self, assignments):
-        """Point hosts at their migrated credentials."""
         changed = 0
+
         for host in self.config.get('hosts', []):
-            credential = assignments.get(host.get('name'))
-            if credential and not host.get('credential'):
-                host['credential'] = credential
-                changed += 1
+            touched = False
+
+            if host.get('ssh_options') is None:
+                defaults = DEFAULT_SSH_OPTIONS.get(host.get('auth_method', 'password'))
+                if defaults:
+                    host['ssh_options'] = list(defaults)
+                    touched = True
+
+            for field in self.LEGACY_HOST_FIELDS:
+                if field in host:
+                    del host[field]
+                    touched = True
+
+            if 'credential' not in host:
+                host['credential'] = ''
+                touched = True
+
+            changed += 1 if touched else 0
+
         if changed:
             self.save_config()
+            print(f"🧹 Cleaned pre-vault fields from {changed} host(s) - "
+                  f"assign credentials in the Vault")
+
         return changed
 
     def hosts_using_credential(self, credential_name):

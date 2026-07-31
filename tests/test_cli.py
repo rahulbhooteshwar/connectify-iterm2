@@ -87,7 +87,7 @@ def test_interactive_manager_methods_are_gone(removed):
 def test_manager_keeps_what_the_web_ui_needs():
     for kept in ['launch_iterm_session', 'filter_hosts', 'get_host', 'add_host_programmatic',
                  'update_host', 'delete_host', 'hosts_using_credential',
-                 'rename_credential_references', 'build_legacy_credentials']:
+                 'rename_credential_references', 'clean_legacy_host_fields']:
         assert hasattr(main_module.SSHManager, kept), f"{kept} is still used by the API"
 
 

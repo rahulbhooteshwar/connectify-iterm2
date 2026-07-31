@@ -143,8 +143,9 @@ Works with both the PyInstaller bundle and the source checkout.
 The SSH engine behind the web UI:
 - SSH host configuration (load/save/CRUD)
 - iTerm2 session launching, using a credential resolved from the vault
-- Credential associations: which hosts use a credential, renaming, and the
-  one-time migration of legacy Keychain passwords / key paths
+- Credential associations: which hosts use a credential and renaming
+- `clean_legacy_host_fields()` strips pre-vault auth fields from hosts.json on
+  startup, materialising the SSH options they implied first
 - `main()` starts the web server (no interactive terminal UI)
 
 ### 2b. vault.py - Credentials Vault
@@ -154,7 +155,9 @@ The SSH engine behind the web UI:
   needs the derived key, so a locked vault simply can't be read.
 - `VaultSessions` keeps unlocked keys in server memory only, keyed by an opaque
   token handed to the browser tab. Nothing is persisted, so a page reload
-  re-locks the vault; sessions also expire when idle.
+  re-locks the vault; sessions also expire when idle. The UI asks for the
+  passcode on load and revokes its token via `sendBeacon` on `pagehide`, so the
+  vault's unlocked window is exactly the app's lifetime.
 - The API layer passes the token in the `X-Vault-Token` header and answers a
   locked vault with `401 {"code": "vault_locked"}`, which the UI turns into the
   unlock dialog (and retries the original request afterwards).

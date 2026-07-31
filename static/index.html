@@ -333,6 +333,8 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      /* Buttons that pair an icon with a label need breathing room between them */
+      gap: 0.5rem;
       width: 2.25rem;
       height: 2.25rem;
     }
@@ -1154,6 +1156,52 @@
     .tag-option.selected {
       background: var(--primary-color);
       color: white;
+    }
+
+    /* Slim, non-intrusive status line (vault lock/unlock and friends) */
+    .mini-toast {
+      position: fixed;
+      /* Clear of the footer so it never sits on top of anything */
+      bottom: 4.5rem;
+      left: 50%;
+      transform: translate(-50%, calc(100% + var(--spacing-xl)));
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      max-width: min(90vw, 30rem);
+      padding: 0.4rem 0.9rem;
+      border-radius: 999px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      box-shadow: var(--shadow-lg);
+      color: var(--text-primary);
+      font-size: 0.85rem;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: transform 0.25s ease, opacity 0.25s ease;
+      opacity: 0;
+      z-index: 1200;
+      pointer-events: none;
+    }
+
+    .mini-toast.show {
+      transform: translate(-50%, 0);
+      opacity: 1;
+    }
+
+    .mini-toast i {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+    }
+
+    .mini-toast.mini-success i {
+      color: var(--success-color);
+    }
+
+    .mini-toast.mini-error i {
+      color: var(--error-color);
     }
 
     /* Credentials Vault page */
@@ -2262,6 +2310,12 @@
       </div>
     </div>
 
+    <!-- Slim status line for vault lock/unlock -->
+    <div id="miniToast" class="mini-toast">
+      <i class="fas fa-lock"></i>
+      <span id="miniToastText"></span>
+    </div>
+
     <!-- Connection Status Toast -->
     <div id="connectionToast" class="connection-toast">
       <div class="toast-content">
@@ -2384,6 +2438,10 @@
           credentialHint: document.getElementById('credentialHint'),
           addCredentialInlineBtn: document.getElementById('addCredentialInlineBtn'),
 
+          // Slim status line
+          miniToast: document.getElementById('miniToast'),
+          miniToastText: document.getElementById('miniToastText'),
+
           // Vault page
           vaultBtn: document.getElementById('vaultBtn'),
           vaultView: document.getElementById('vaultView'),
@@ -2500,7 +2558,14 @@
         await this.loadTags();
         await this.loadGroups();
         this.loadProfiles();
+
+        // The vault is locked whenever the app is opened, so ask for the
+        // passcode up front rather than waiting for the first action
         await this.loadVaultStatus();
+        this.setupVaultLifecycle();
+        if (!this.vaultToken) {
+          this.promptForVault();
+        }
         this.setView(this.currentView);
       }
 
@@ -2859,6 +2924,28 @@
         });
       }
 
+      /**
+       * The vault's lifetime is the app's lifetime: it unlocks when the page
+       * opens and locks again when it closes. The token only ever lives in
+       * this tab's memory, so a reload or a second tab starts locked too.
+       */
+      setupVaultLifecycle() {
+        const lockOnExit = () => {
+          if (!this.vaultToken) return;
+          const token = this.vaultToken;
+          this.vaultToken = null;
+          // sendBeacon survives page teardown, unlike a normal fetch
+          const blob = new Blob([JSON.stringify({ token })], { type: 'application/json' });
+          if (navigator.sendBeacon) {
+            navigator.sendBeacon('/api/vault/lock-beacon', blob);
+          }
+        };
+
+        // pagehide covers closing, navigating away and the bfcache on Safari
+        window.addEventListener('pagehide', lockOnExit);
+        window.addEventListener('beforeunload', lockOnExit);
+      }
+
       async loadVaultStatus() {
         try {
           const response = await fetch('/api/vault/status', {
@@ -2957,13 +3044,7 @@
           this.updateVaultButton();
           this.closeVaultUnlockModal(true);
 
-          if (creating) {
-            this.showToast(this.describeMigration(data.migration), 'success');
-            await this.loadHosts();
-            this.renderHosts();
-          } else {
-            this.showToast('Vault unlocked', 'success');
-          }
+          this.showMiniToast(creating ? 'Vault created' : 'Vault unlocked', 'unlocked');
 
           if (this.elements.vaultView.style.display !== 'none') {
             await this.renderVaultPage();
@@ -2972,16 +3053,6 @@
           console.error('Vault error:', error);
           this.showError(this.elements.vaultUnlockError, 'Could not reach the vault');
         }
-      }
-
-      describeMigration(migration) {
-        if (!migration || !migration.credentials) return 'Vault created';
-        const parts = [`Vault created with ${migration.credentials} imported credential(s)`];
-        if (migration.hosts) parts.push(`${migration.hosts} host(s) linked`);
-        if (migration.skipped && migration.skipped.length) {
-          parts.push(`${migration.skipped.length} host(s) need a credential`);
-        }
-        return parts.join(' - ');
       }
 
       async lockVault() {
@@ -2998,7 +3069,7 @@
         this.vaultToken = null;
         this.credentials = [];
         this.updateVaultButton();
-        this.showToast('Vault locked', 'info');
+        this.showMiniToast('Vault locked', 'locked');
         if (this.elements.vaultView.style.display !== 'none') {
           await this.renderVaultPage();
         }
@@ -4277,6 +4348,33 @@
         setTimeout(() => {
           toast.classList.remove('show');
         }, duration);
+      }
+
+      /**
+       * One-line status pill for small state changes (vault lock/unlock).
+       * Sits at the bottom centre, ignores pointer events and is short enough
+       * not to cover anything the user might be reading or clicking.
+       */
+      showMiniToast(message, type = 'info', duration = 2200) {
+        const toast = this.elements.miniToast;
+        if (!toast) return;
+
+        const icons = {
+          success: 'fas fa-check',
+          error: 'fas fa-exclamation-circle',
+          locked: 'fas fa-lock',
+          unlocked: 'fas fa-lock-open',
+          info: 'fas fa-info-circle'
+        };
+
+        toast.className = `mini-toast mini-${type}`;
+        toast.querySelector('i').className = icons[type] || icons.info;
+        this.elements.miniToastText.textContent = message;
+
+        requestAnimationFrame(() => toast.classList.add('show'));
+
+        clearTimeout(this._miniToastTimer);
+        this._miniToastTimer = setTimeout(() => toast.classList.remove('show'), duration);
       }
 
       // Manage Hosts Methods - REMOVED (Merged into Dashboard)

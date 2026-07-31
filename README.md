@@ -127,15 +127,22 @@ locked with a passcode you choose. It replaces the macOS Keychain entirely.
 - Hosts reference a credential **by name**, so one credential can serve many
   hosts and rotating a password is a single edit.
 
+Upgrading from a pre-vault install? Connectify drops the old `auth_method`,
+`ssh_key_path` and `password` fields from `hosts.json` on startup (keeping the
+SSH options they implied) and leaves each host's credential empty - create your
+credentials in the vault and pick them on the hosts. Old macOS Keychain entries
+are left untouched; remove them from Keychain Access whenever you like.
+
 Open the vault from the 🔒 icon in the toolbar, next to import/export.
 
 ### Locking
 
-The vault is **locked every time you open the page**. Unlocking asks for the
-passcode once; the derived key stays in the server's memory for that tab only
-and is never written to disk or to the browser. Reload the page - or press
-**Lock** - and it's locked again. Reading, editing and connecting all require it
-to be unlocked.
+Connectify asks for the passcode **as soon as you open the app**, on whichever
+page you land on, and **locks the vault again when you close it**. The derived
+key stays in the server's memory for that tab only and is never written to disk
+or handed to the browser, so a reload, a second tab or a restart all start
+locked. Pressing **Lock** does the same on demand. Reading, editing and
+connecting all require it to be unlocked.
 
 ### Managing credentials
 
@@ -149,14 +156,6 @@ credential without leaving the host you're editing.
 - **Renaming** a credential updates every host that referenced it.
 - **Deleting** is blocked while any host uses the credential - the dialog lists
   those hosts by name. Unused credentials just ask for confirmation.
-
-### Migrating from the Keychain
-
-The first time you create the vault, Connectify imports what it can from the old
-setup: passwords out of the macOS Keychain (one credential per host) and SSH key
-paths (one credential per key file, shared by the hosts using it). Your hosts are
-re-pointed at the imported credentials automatically. Anything it couldn't import
-is reported so you can fill in the gaps.
 
 ### How a session is launched
 

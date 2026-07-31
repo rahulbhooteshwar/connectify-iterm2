@@ -380,10 +380,6 @@ def run_doctor():
 
         print(f"   OpenSSH      : {describe_openssh()}")
 
-        legacy = manager.legacy_keychain_passwords()
-        if legacy:
-            print(f"   Legacy keychain: {len(legacy)} password(s) still in the macOS Keychain")
-            print("                    (they migrate into the vault when you create it)")
     except Exception as e:
         print(f"   ⚠️  Could not inspect configuration: {e}")
         return 1

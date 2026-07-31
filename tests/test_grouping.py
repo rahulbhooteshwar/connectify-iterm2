@@ -48,3 +48,51 @@ def test_group_hosts_with_no_groups_at_all():
 
     assert groups == {}
     assert [h["name"] for h in ungrouped] == ["a", "b"]
+
+
+# --- pre-vault host fields ---------------------------------------------------
+
+def test_legacy_auth_fields_are_stripped_on_startup(tmp_path):
+    """Secrets live in the vault, so hosts must not keep describing auth."""
+    import json
+    from main import SSHManager
+
+    config = tmp_path / "hosts.json"
+    config.write_text(json.dumps({"hosts": [
+        {"name": "pw-host", "hostname": "a", "username": "u", "port": 22,
+         "auth_method": "password", "password": "left-over"},
+        {"name": "key-host", "hostname": "b", "username": "u", "port": 22,
+         "auth_method": "key", "ssh_key_path": "~/.ssh/id_rsa",
+         "ssh_options": ["StrictHostKeyChecking=no"]},
+    ]}))
+
+    SSHManager(str(config))
+    hosts = {h["name"]: h for h in json.loads(config.read_text())["hosts"]}
+
+    for host in hosts.values():
+        assert "auth_method" not in host
+        assert "ssh_key_path" not in host
+        assert "password" not in host
+        assert host["credential"] == "", "credential starts empty - pick one in the vault"
+
+    # The options the auth method used to imply are kept, so connections
+    # behave the same as before the fields were dropped
+    assert hosts["pw-host"]["ssh_options"] == [
+        "PreferredAuthentications=password", "PubkeyAuthentication=no"]
+    # An explicit list is left alone
+    assert hosts["key-host"]["ssh_options"] == ["StrictHostKeyChecking=no"]
+
+
+def test_cleanup_leaves_a_modern_config_alone(tmp_path):
+    import json
+    from main import SSHManager
+
+    config = tmp_path / "hosts.json"
+    original = {"hosts": [{"name": "h", "hostname": "a", "username": "u", "port": 22,
+                           "credential": "prod-admin", "ssh_options": []}]}
+    config.write_text(json.dumps(original))
+
+    manager = SSHManager(str(config))
+
+    assert manager.clean_legacy_host_fields() == 0
+    assert json.loads(config.read_text()) == original

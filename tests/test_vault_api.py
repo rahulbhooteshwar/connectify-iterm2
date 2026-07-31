@@ -68,6 +68,7 @@ def test_status_before_the_vault_exists(vault_env):
 def test_create_unlock_and_lock(vault_env):
     headers, body = create_vault()
     assert body["success"] is True
+    assert "migration" not in body, "nothing is imported from the old setup"
 
     # The token from create is immediately usable
     assert client.get("/api/vault/credentials", headers=headers).status_code == 200
@@ -120,46 +121,6 @@ def test_changing_the_passcode_relocks_other_pages(vault_env):
 
     new_headers = unlock("a different passcode")
     assert client.get("/api/vault/credentials", headers=new_headers).status_code == 200
-
-
-# --- migration ---------------------------------------------------------------
-
-def test_creating_the_vault_migrates_legacy_hosts(tmp_path, monkeypatch):
-    monkeypatch.setattr(api_server, "vault", vault_module.Vault(tmp_path / "vault.json"))
-    monkeypatch.setattr(api_server, "vault_sessions", vault_module.VaultSessions())
-
-    config = tmp_path / "hosts.json"
-    config.write_text(json.dumps({"hosts": [
-        {"name": "legacy-pw", "hostname": "pw.example.com", "username": "admin",
-         "port": 22, "auth_method": "password"},
-        {"name": "legacy-key", "hostname": "key.example.com", "username": "dev",
-         "port": 22, "auth_method": "key", "ssh_key_path": "~/.ssh/id_rsa"},
-    ]}))
-
-    manager = SSHManager(str(config))
-    # Pretend the old keychain still holds this host's password
-    monkeypatch.setattr(manager, "legacy_keychain_passwords",
-                        lambda: {"admin@pw.example.com": "from-keychain"})
-    monkeypatch.setattr(api_server.api_manager, "ssh_manager", manager)
-    api_server.api_manager.refresh_hosts_data()
-
-    headers, body = create_vault()
-
-    assert body["migration"]["passwords"] == 1
-    assert body["migration"]["keys"] == 1
-    assert body["migration"]["hosts"] == 2
-
-    names = {c["name"] for c in client.get("/api/vault/credentials", headers=headers).json()["credentials"]}
-    assert names == {"legacy-pw", "id_rsa"}
-
-    # Hosts now point at their migrated credential
-    hosts = {h["name"]: h for h in json.loads(config.read_text())["hosts"]}
-    assert hosts["legacy-pw"]["credential"] == "legacy-pw"
-    assert hosts["legacy-key"]["credential"] == "id_rsa"
-
-    # ...and the password came across intact
-    stored = client.get("/api/vault/credentials/legacy-pw", headers=headers).json()["credential"]
-    assert stored["password"] == "from-keychain"
 
 
 # --- credential CRUD ---------------------------------------------------------
@@ -220,7 +181,8 @@ def test_renaming_a_credential_updates_host_associations(vault_env, tmp_path):
     hosts = {h["name"]: h for h in json.loads((tmp_path / "hosts.json").read_text())["hosts"]}
     assert hosts["prod-web"]["credential"] == "prod-root"
     assert hosts["dev-box"]["credential"] == "prod-root"
-    assert "credential" not in hosts["no-creds"]
+    # A host with no credential is left alone (startup gives it an empty one)
+    assert hosts["no-creds"]["credential"] == ""
 
 
 def test_deleting_a_credential_in_use_is_refused_and_names_the_hosts(vault_env):

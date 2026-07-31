@@ -6,7 +6,6 @@ import os
 block_cipher = None
 
 # Collect all data and hidden imports for packages
-keyring_datas, keyring_binaries, keyring_hiddenimports = collect_all('keyring')
 fastapi_datas, fastapi_binaries, fastapi_hiddenimports = collect_all('fastapi')
 uvicorn_datas, uvicorn_binaries, uvicorn_hiddenimports = collect_all('uvicorn')
 pydantic_datas, pydantic_binaries, pydantic_hiddenimports = collect_all('pydantic')
@@ -29,12 +28,9 @@ if os.path.exists(profiles_dir):
 a = Analysis(
     ['connectify.py', 'main.py', 'api_server.py'],
     pathex=[],
-    binaries=[] + keyring_binaries + fastapi_binaries + uvicorn_binaries + pydantic_binaries + cryptography_binaries,
-    datas=[] + keyring_datas + fastapi_datas + uvicorn_datas + pydantic_datas + cryptography_datas + additional_datas,
+    binaries=[] + fastapi_binaries + uvicorn_binaries + pydantic_binaries + cryptography_binaries,
+    datas=[] + fastapi_datas + uvicorn_datas + pydantic_datas + cryptography_datas + additional_datas,
     hiddenimports=[
-        'keyring.backends.macOS',
-        'keyring.backends.OS_X',
-        'keyring.backends.SecretService',
         'importlib.metadata',
         'importlib_metadata',
         # FastAPI dependencies
@@ -62,7 +58,7 @@ a = Analysis(
         # Credentials vault encryption
         'cryptography',
         'cryptography.hazmat.primitives.ciphers.aead',
-    ] + keyring_hiddenimports + fastapi_hiddenimports + uvicorn_hiddenimports + pydantic_hiddenimports + cryptography_hiddenimports,
+    ] + fastapi_hiddenimports + uvicorn_hiddenimports + pydantic_hiddenimports + cryptography_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

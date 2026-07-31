@@ -12,7 +12,7 @@ import threading
 import time
 import logging
 
-from fastapi import Depends, FastAPI, Header, HTTPException, BackgroundTasks
+from fastapi import Depends, FastAPI, Header, HTTPException, BackgroundTasks, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -459,24 +459,10 @@ async def vault_status(x_vault_token: Optional[str] = Header(None)):
 
 @app.post("/api/vault/create")
 async def vault_create(request: VaultPasscodeRequest):
-    """Create the vault, migrating any pre-vault credentials into it"""
+    """Create the vault and unlock it for this page"""
     try:
-        credentials, assignments, summary = api_manager.ssh_manager.build_legacy_credentials()
-        key = vault.create(request.passcode, credentials)
-        migrated_hosts = api_manager.ssh_manager.apply_credential_assignments(assignments)
-        api_manager.refresh_hosts_data()
-
-        return {
-            "success": True,
-            "token": vault_sessions.create(key),
-            "migration": {
-                "credentials": len(credentials),
-                "hosts": migrated_hosts,
-                "passwords": summary['passwords'],
-                "keys": summary['keys'],
-                "skipped": summary['skipped'],
-            },
-        }
+        key = vault.create(request.passcode)
+        return {"success": True, "token": vault_sessions.create(key)}
     except vault_module.VaultError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -504,6 +490,23 @@ async def vault_lock(x_vault_token: Optional[str] = Header(None)):
     """Forget this page's unlocked session"""
     vault_sessions.revoke(x_vault_token)
     return {"success": True, "message": "Vault locked"}
+
+
+@app.post("/api/vault/lock-beacon")
+async def vault_lock_beacon(request: Request):
+    """Lock the vault from a page that is going away.
+
+    ``navigator.sendBeacon`` can't set headers, so the token comes in the body.
+    This is what makes "closing the app locks the vault" reliable, including
+    when the tab is closed outright.
+    """
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+
+    vault_sessions.revoke(payload.get('token'))
+    return {"success": True}
 
 
 @app.post("/api/vault/passcode")
