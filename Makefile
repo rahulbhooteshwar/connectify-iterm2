@@ -42,14 +42,17 @@ dev-install: build
 	@echo "🚀 Installing locally for development..."
 	@./dev-install.sh
 
+# Archive named for the machine you're on - CI builds one per architecture
+ARCH := $(shell uname -m | sed 's/x86_64/amd64/')
+
 release: build
-	@echo "📦 Creating release archive..."
-	@cd dist && tar -czf connectify-macos-arm64.tar.gz connectify/
-	@echo "✅ Release archive created: ./dist/connectify-macos-arm64.tar.gz"
+	@echo "📦 Creating release archive for $(ARCH)..."
+	@cd dist && tar -czf connectify-macos-$(ARCH).tar.gz connectify/
+	@echo "✅ Release archive created: ./dist/connectify-macos-$(ARCH).tar.gz"
 	@echo ""
-	@echo "To create a GitHub release:"
-	@echo "  1. Push a version tag: git tag v1.0.0 && git push origin v1.0.0"
-	@echo "  2. GitHub Actions will automatically build and publish"
+	@echo "To publish a release (builds both arm64 and amd64):"
+	@echo "  • Push a version tag:  git tag v2.0.1 && git push origin v2.0.1"
+	@echo "  • Or run the 'Build and Release' workflow manually with a version"
 
 clean:
 	@echo "🧹 Cleaning build artifacts..."

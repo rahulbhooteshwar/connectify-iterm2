@@ -15,7 +15,8 @@ A web-based manager for your SSH sessions, with credentials in an encrypted loca
 
 ## Requirements
 
-- macOS
+- macOS on **Apple Silicon or Intel** - releases ship a build for each, and the
+  installer picks the right one
 - **[iTerm2](https://iterm2.com/index.html)** - required. Connectify launches every
   session in iTerm2, so the installer stops if it isn't installed.
 - **[iTerm2 browser plugin](https://iterm2.com/browser-plugin.html)** - optional.

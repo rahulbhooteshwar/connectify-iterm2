@@ -238,6 +238,18 @@ The `connectify.spec` file configures PyInstaller to:
 - Create a directory-based distribution (not single-file)
 - Exclude user config files
 
+### Releases
+
+`.github/workflows/release.yml` runs on a version tag (`v*`) or a manual
+dispatch with a version input. It builds **once per architecture** - macos-14
+for `arm64`, macos-13 for `amd64` - because PyInstaller only ever produces a
+binary for the machine it runs on. Each build verifies with `lipo -archs` that
+it really is the architecture it claims, smoke-tests the binary, and uploads
+`connectify-macos-<arch>.tar.gz`; a final job publishes both to one release.
+
+`make release` archives a build for whatever machine you are on, named the same
+way.
+
 ### Build Process
 
 ```bash

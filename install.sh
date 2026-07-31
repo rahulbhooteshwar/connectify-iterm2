@@ -171,15 +171,18 @@ setup_path() {
 }
 
 detect_architecture() {
+    # Releases ship one build per architecture; note that on Apple Silicon a
+    # shell running under Rosetta reports x86_64, which is still correct - that
+    # build runs fine there.
     ARCH=$(uname -m)
-    if [[ "$ARCH" == "arm64" ]]; then
-        echo "arm64"
-    elif [[ "$ARCH" == "x86_64" ]]; then
-        echo "amd64"
-    else
-        print_error "Unsupported architecture: $ARCH"
-        exit 1
-    fi
+    case "$ARCH" in
+        arm64)  echo "arm64" ;;
+        x86_64) echo "amd64" ;;
+        *)
+            print_error "Unsupported architecture: $ARCH"
+            exit 1
+            ;;
+    esac
 }
 
 download_binary() {
@@ -206,7 +209,8 @@ download_binary() {
             print_info ""
             print_info "This might mean:"
             print_info "  1. No release has been published yet"
-            print_info "  2. The release doesn't have the binary for your architecture"
+            print_info "  2. That release has no connectify-macos-${arch}.tar.gz build"
+            print_info "     (releases from v2.0.1 on ship both arm64 and amd64)"
             print_info ""
             print_info "For development installation, use:"
             print_info "  ./dev-install.sh"
