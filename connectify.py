@@ -283,6 +283,32 @@ def handle_profiles_command(command):
         return 1
 
 
+def describe_openssh():
+    """Report whether ssh can take secrets from Connectify's askpass helper.
+
+    Passwords and key passphrases are delivered via SSH_ASKPASS_REQUIRE=force,
+    which OpenSSH gained in 8.4. Older versions just prompt in the terminal.
+    """
+    try:
+        result = subprocess.run(['ssh', '-V'], capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return "❌ ssh not found"
+
+    banner = (result.stderr or result.stdout).strip().split(',')[0]
+
+    try:
+        version = banner.split('_', 1)[1]
+        major, minor = version.split('.')[:2]
+        supported = (int(major), int(''.join(c for c in minor if c.isdigit()) or 0)) >= (8, 4)
+    except (IndexError, ValueError):
+        return f"{banner} (could not check askpass support)"
+
+    if supported:
+        return f"{banner} ✅ askpass supported (no sshpass needed)"
+    return (f"{banner} ⚠️  older than 8.4 - passwords will be prompted in the "
+            f"terminal instead of being supplied automatically")
+
+
 def run_doctor():
     """Print everything useful for diagnosing a broken setup"""
     print(f"Connectify v{VERSION} ({BUILD_DATE})")
@@ -351,6 +377,8 @@ def run_doctor():
         else:
             print(f"   Vault file   : {store.path}")
             print("   Status       : ⬜ not created yet - open the Vault page in the web UI")
+
+        print(f"   OpenSSH      : {describe_openssh()}")
 
         legacy = manager.legacy_keychain_passwords()
         if legacy:

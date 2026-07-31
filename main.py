@@ -12,13 +12,13 @@ import sys
 import argparse
 import subprocess
 import keyring
-import uuid
 import time
 from pathlib import Path
 import threading
 import glob
 
 import iterm_profiles
+import ssh_session
 
 # Import version info
 try:
@@ -299,62 +299,33 @@ class SSHManager:
             return {}
 
     def cleanup_old_temp_files(self):
-        """Clean up old temporary password files in background (non-blocking)"""
+        """Tidy up scratch files in the background (non-blocking).
+
+        Two things to sweep: leftover session directories from sessions that
+        were killed before their launcher could clean up, and the password
+        files the pre-vault implementation used to drop in $HOME (nothing
+        creates those any more, so every one of them is stale).
+        """
         def cleanup_worker():
             try:
-                import time
-                import os
+                ssh_session.sweep_runtime_dir()
 
-                # Find all ssh temp password files in home directory
-                home_dir = Path.home()
-                pattern = str(home_dir / ".ssh_pass_*")
-                temp_files = glob.glob(pattern)
-
-                current_time = time.time()
-                cleanup_threshold = 5 * 60  # 5 minutes in seconds
-                cleaned_count = 0
-
-                for temp_file_path in temp_files:
+                legacy_files = glob.glob(str(Path.home() / ".ssh_pass_*"))
+                for path in legacy_files:
                     try:
-                        temp_file = Path(temp_file_path)
-                        filename = temp_file.name
-
-                        # Extract timestamp from filename: .ssh_pass_TIMESTAMP_UUID
-                        if filename.startswith('.ssh_pass_'):
-                            parts = filename.split('_')
-                            if len(parts) >= 3:  # ['.ssh', 'pass', 'timestamp', 'uuid']
-                                try:
-                                    file_timestamp = int(parts[2])
-                                    file_age = current_time - file_timestamp
-
-                                    # If file is older than 5 minutes, remove it
-                                    if file_age > cleanup_threshold:
-                                        temp_file.unlink()
-                                        cleaned_count += 1
-                                except (ValueError, IndexError):
-                                    # If we can't parse timestamp, check file modification time as fallback
-                                    file_mtime = temp_file.stat().st_mtime
-                                    file_age = current_time - file_mtime
-                                    if file_age > cleanup_threshold:
-                                        temp_file.unlink()
-                                        cleaned_count += 1
-                    except (OSError, FileNotFoundError):
-                        # File might have been deleted by another process, ignore
+                        Path(path).unlink()
+                    except OSError:
                         pass
 
-                # Only print if we actually cleaned something (for debugging)
-                if cleaned_count > 0:
-                    print(f"🧹 Cleaned up {cleaned_count} old temporary password file(s)")
-
-            except Exception as e:
-                # Silently handle any errors in background cleanup
+                if legacy_files:
+                    print(f"🧹 Removed {len(legacy_files)} leftover password file(s) "
+                          f"from the pre-vault version")
+            except Exception:
+                # Background housekeeping must never break a launch
                 pass
 
-        # Run cleanup in background thread
         cleanup_thread = threading.Thread(target=cleanup_worker, daemon=True)
         cleanup_thread.start()
-
-
 
     def filter_hosts(self, filter_term=None):
         """Filter hosts based on search term"""
@@ -378,66 +349,6 @@ class SSHManager:
                 filtered_hosts.append(host)
 
         return filtered_hosts
-
-    def build_ssh_command(self, host, credential=None, temp_file=None):
-        """Build the SSH command for a host using its vault credential."""
-        hostname = host['hostname']
-        username = host['username']
-        port = host.get('port', 22)
-        credential = credential or {}
-        auth_method = credential.get('type') or host.get('auth_method', 'password')
-        password = credential.get('password')
-
-        # SSH keep-alive options disabled - no automatic disconnection
-        keepalive_opts = ""
-
-        # SSH "-o" options are configured per host from the UI. Fall back to
-        # auth-method defaults for hosts that don't define them explicitly.
-        auth_opts = " ".join(f"-o {opt}" for opt in resolve_ssh_options(host))
-
-        # Try to use sshpass for password authentication if available
-        if auth_method == 'password' and password and temp_file:
-            # Check if sshpass is available - try common paths
-            sshpass_path = None
-            try:
-                result = subprocess.run(['which', 'sshpass'], check=True, capture_output=True, text=True)
-                sshpass_path = result.stdout.strip()
-                if self.debug:
-                    print(f"DEBUG: sshpass found at: {sshpass_path}")
-            except subprocess.CalledProcessError:
-                # Try common installation paths
-                for path in ['/opt/homebrew/bin/sshpass', '/usr/local/bin/sshpass', '/usr/bin/sshpass']:
-                    if Path(path).exists():
-                        sshpass_path = path
-                        if self.debug:
-                            print(f"DEBUG: sshpass found at fallback path: {sshpass_path}")
-                        break
-            
-            if sshpass_path:
-                if self.debug:
-                    print(f"DEBUG: Using temp file: {temp_file}")
-                # Use temporary file approach to hide password completely
-                ssh_cmd = f"{sshpass_path} -f {temp_file} ssh -o StrictHostKeyChecking=no {keepalive_opts} {auth_opts} -p {port} {username}@{hostname}"
-                return ssh_cmd, True  # Return tuple indicating sshpass is used
-            else:
-                if self.debug:
-                    print(f"DEBUG: sshpass not found in any location")
-                print("ℹ sshpass not found, falling back to manual password entry")
-
-        # Standard SSH command
-        ssh_cmd = f"ssh -p {port} {keepalive_opts} {auth_opts}"
-
-        if auth_method == 'key':
-            ssh_key_path = credential.get('ssh_key_path') or host.get('ssh_key_path')
-            if ssh_key_path:
-                key_path = Path(ssh_key_path).expanduser()
-                if key_path.exists():
-                    ssh_cmd += f" -i {key_path}"
-                else:
-                    print(f"Warning: SSH key not found at {key_path}")
-
-        ssh_cmd += f" {username}@{hostname}"
-        return ssh_cmd, False  # Return tuple indicating sshpass is not used
 
     def _ensure_iterm_running(self):
         """Ensure iTerm2 is running, launch it if not"""
@@ -516,198 +427,120 @@ class SSHManager:
     def launch_iterm_session(self, host, credential=None):
         """Launch an iTerm2 session for a host, using its vault credential.
 
-        ``credential`` is the decrypted record from the vault (resolved by the
-        caller, which holds the unlocked key); ``None`` means the host has no
-        credential and only key-less SSH is possible.
+        The session is started as iTerm2's session *command*, so no shell runs
+        it: the command never appears in the tab or in the shell history. Any
+        password or key passphrase reaches ssh through an askpass helper
+        reading a private FIFO, so it is never written to disk, never passed on
+        a command line, and sshpass is not involved.
         """
         iterm_profile = host.get('iterm_profile', 'Default')
-
-        # Show launching message
         host_name = host.get('name', f"{host['username']}@{host['hostname']}")
         print(f"🚀 Launching {host_name} session...")
 
-        # Check if iTerm2 is running and launch it if not
         self._ensure_iterm_running()
 
-        # The password (if any) comes from the vault credential
         credential = credential or {}
-        password = credential.get('password')
-
-        if credential.get('type') == 'password' and not password:
-            username = host['username']
+        if credential.get('type') == 'password' and not credential.get('password'):
             print(f"⚠️  Credential '{credential.get('name')}' has no password stored")
             print(f"⚠️  Fix it in the Vault and try again")
             raise ValueError(f"Password required for {host_name} but missing from the vault")
 
-        # Generate unique temporary file name for password with timestamp
-        temp_pass_file = None
-        if password:
-            timestamp = int(time.time())  # Unix timestamp
-            temp_filename = f".ssh_pass_{timestamp}_{uuid.uuid4().hex[:8]}"
-            temp_pass_file = Path.home() / temp_filename
-            if self.debug:
-                print(f"DEBUG: Will create temp password file: {temp_pass_file}")
-        
+        session = ssh_session.prepare_session(
+            host, credential, ssh_options=resolve_ssh_options(host)
+        )
+
         if self.debug:
-            print(f"DEBUG: password is None: {password is None}")
-            print(f"DEBUG: password bool: {bool(password)}")
-            print(f"DEBUG: temp_pass_file: {temp_pass_file}")
+            print(f"DEBUG: launcher: {session.launcher}")
+            print(f"DEBUG: secret channel: {'yes' if session.channel else 'no'}")
 
-        # Build SSH command
-        ssh_command, uses_sshpass = self.build_ssh_command(host, credential, temp_pass_file)
-
-        # Handle secure password file for sshpass with proper cleanup
-        temp_file_created = False
-        if uses_sshpass and password and temp_pass_file:
-            try:
-                with open(temp_pass_file, 'w') as f:
-                    f.write(password)
-                os.chmod(temp_pass_file, 0o600)  # Secure permissions
-                temp_file_created = True
-            except Exception as e:
-                print(f"Error creating temporary password file: {e}")
-                return
-
-
-
-        # Escape quotes and backslashes for AppleScript
         escaped_host_name = host_name.replace('\\', '\\\\').replace('"', '\\"')
+        escaped_command = session.command.replace('\\', '\\\\').replace('"', '\\"')
 
         def create_applescript(profile_name):
-            """Generate AppleScript with specified profile.
-            
-            Uses explicit tab/session references to prevent race conditions when
-            multiple connections are launched simultaneously. The newTab/newWindow
-            reference is captured immediately after creation and used for all
-            subsequent operations, ensuring commands go to the correct tab even
-            if the user switches tabs or other launches occur concurrently.
+            """AppleScript that opens a tab running the launcher directly.
+
+            Explicit tab/window references avoid races when several sessions
+            are launched at once, and passing the launcher as the session's
+            command means nothing is ever typed into a shell.
             """
             return f'''
             tell application "iTerm"
                 activate
                 if (count of windows) = 0 then
-                    set newWindow to (create window with profile "{profile_name}")
+                    set newWindow to (create window with profile "{profile_name}" command "{escaped_command}")
                     set targetSession to current session of newWindow
                 else
                     tell current window
-                        set newTab to (create tab with profile "{profile_name}")
+                        set newTab to (create tab with profile "{profile_name}" command "{escaped_command}")
                         set targetSession to current session of newTab
                     end tell
                 end if
                 tell targetSession
                     set name to "{escaped_host_name}"
-                    write text "{ssh_command}"
                 end tell
             end tell
             '''
 
-        # Acquire lock to serialize iTerm2 launches and prevent race conditions
-        # when multiple connections are launched simultaneously from the UI
+        # Serialize launches so concurrent connections don't fight over the
+        # "current window"
         with SSHManager._iterm_launch_lock:
-            # Try launching with specified profile, fallback to Default if it fails
-            launch_success = False
-            profiles_to_try = [iterm_profile] if iterm_profile != "Default" else ["Default"]
+            profiles_to_try = [iterm_profile]
             if iterm_profile != "Default":
-                profiles_to_try.append("Default")  # Add Default as fallback
+                profiles_to_try.append("Default")
 
-            last_error = None
             for profile_attempt in profiles_to_try:
                 try:
-                    applescript = create_applescript(profile_attempt)
-                    result = subprocess.run(['osascript', '-e', applescript], check=True, capture_output=True, text=True)
+                    subprocess.run(['osascript', '-e', create_applescript(profile_attempt)],
+                                   check=True, capture_output=True, text=True)
 
                     if profile_attempt != iterm_profile:
                         print(f"⚠️  Profile '{iterm_profile}' not found, using '{profile_attempt}' instead")
 
                     print(f"✅ Session launched successfully!")
-                    launch_success = True
-
-                    # Schedule background cleanup using separate subprocess
-                    if temp_file_created and temp_pass_file:
-                        cleanup_command = [
-                            'python3', '-c',
-                            f'import time, os; time.sleep(60); '
-                            f'os.remove("{temp_pass_file}") if os.path.exists("{temp_pass_file}") else None'
-                        ]
-
-                        # Start cleanup process in background and detach it
-                        subprocess.Popen(
-                            cleanup_command,
-                            stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL,
-                            start_new_session=True  # Detach from parent process
-                        )
-
-                    break  # Success, exit the retry loop
+                    return True
 
                 except subprocess.CalledProcessError as e:
-                    last_error = e
                     error_msg = e.stderr if e.stderr else str(e)
                     print(f"⚠️  Profile '{profile_attempt}' failed: {error_msg}")
-                    # Continue to next profile attempt
 
-            # If all profile attempts failed, try without specifying a profile (last resort)
-            if not launch_success:
-                print("ℹ️  Trying to launch without profile specification...")
-                try:
-                    # Simple AppleScript without profile - uses explicit tab references
-                    # to prevent race conditions (same pattern as create_applescript)
-                    simple_script = f'''
-                    tell application "iTerm"
-                        activate
-                        if (count of windows) = 0 then
-                            set newWindow to (create window with default profile)
-                            set targetSession to current session of newWindow
-                        else
-                            tell current window
-                                set newTab to (create tab with default profile)
-                                set targetSession to current session of newTab
-                            end tell
-                        end if
-                        tell targetSession
-                            set name to "{escaped_host_name}"
-                            write text "{ssh_command}"
+            # Last resort: let iTerm2 pick the profile itself
+            try:
+                fallback_script = f'''
+                tell application "iTerm"
+                    activate
+                    if (count of windows) = 0 then
+                        set newWindow to (create window with default profile command "{escaped_command}")
+                        set targetSession to current session of newWindow
+                    else
+                        tell current window
+                            set newTab to (create tab with default profile command "{escaped_command}")
+                            set targetSession to current session of newTab
                         end tell
+                    end if
+                    tell targetSession
+                        set name to "{escaped_host_name}"
                     end tell
-                    '''
+                end tell
+                '''
+                subprocess.run(['osascript', '-e', fallback_script],
+                               check=True, capture_output=True, text=True)
+                print(f"✅ Session launched successfully (using default profile)!")
+                return True
 
-                    result = subprocess.run(['osascript', '-e', simple_script], check=True, capture_output=True, text=True)
-                    print(f"✅ Session launched successfully (using default profile)!")
-                    launch_success = True
+            except subprocess.CalledProcessError as e:
+                error_msg = e.stderr if e.stderr else str(e)
+                print(f"✗ Error launching iTerm2 (all methods failed)")
+                print(f"   Last error: {error_msg}")
+                print(f"")
+                print(f"💡 Troubleshooting tips:")
+                print(f"   1. Make sure iTerm2 is installed and can be launched")
+                print(f"   2. Check if iTerm2 has necessary permissions (System Settings > Privacy & Security)")
+                print(f"   3. Try running iTerm2 manually first")
+                print(f"   4. Check that you have a profile named 'Default' in iTerm2 preferences")
 
-                    # Schedule background cleanup
-                    if temp_file_created and temp_pass_file:
-                        cleanup_command = [
-                            'python3', '-c',
-                            f'import time, os; time.sleep(60); '
-                            f'os.remove("{temp_pass_file}") if os.path.exists("{temp_pass_file}") else None'
-                        ]
-                        subprocess.Popen(
-                            cleanup_command,
-                            stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL,
-                            start_new_session=True
-                        )
-
-                except subprocess.CalledProcessError as e:
-                    error_msg = e.stderr if e.stderr else str(e)
-                    print(f"✗ Error launching iTerm2 (all methods failed)")
-                    print(f"   Last error: {error_msg}")
-                    print(f"   SSH command: {ssh_command}")
-                    print(f"")
-                    print(f"💡 Troubleshooting tips:")
-                    print(f"   1. Make sure iTerm2 is installed and can be launched")
-                    print(f"   2. Check if iTerm2 has necessary permissions (System Preferences > Security & Privacy)")
-                    print(f"   3. Try running iTerm2 manually first")
-                    print(f"   4. Check if you have any profile named 'Default' in iTerm2 preferences")
-
-                    # Clean up temp file
-                    if temp_file_created and temp_pass_file and temp_pass_file.exists():
-                        try:
-                            temp_pass_file.unlink()
-                            print(f"🧹 Cleaned up temporary password file (launch failed)")
-                        except Exception as cleanup_error:
-                            print(f"⚠ Warning: Could not remove temporary file {temp_pass_file}: {cleanup_error}")
+                # Nothing was launched, so nothing will clean up after us
+                session.cleanup()
+                return False
 
     def legacy_keychain_passwords(self):
         """Passwords still sitting in the old macOS Keychain storage."""

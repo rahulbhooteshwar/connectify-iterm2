@@ -122,7 +122,8 @@ locked with a passcode you choose. It replaces the macOS Keychain entirely.
   passcode is never stored - a wrong one simply fails to decrypt. The file is
   written atomically and is owner-readable only (`0600`).
 - Credentials are **named** (`prod-admin`, `laptop-key`) and typed: a *password*,
-  or an *SSH key* with an optional passphrase. Each has an optional description.
+  or an *SSH key* with an optional passphrase (which is used to unlock the key
+  at connect time). Each has an optional description.
 - Hosts reference a credential **by name**, so one credential can serve many
   hosts and rotating a password is a single edit.
 
@@ -156,6 +157,28 @@ setup: passwords out of the macOS Keychain (one credential per host) and SSH key
 paths (one credential per key file, shared by the hosts using it). Your hosts are
 re-pointed at the imported credentials automatically. Anything it couldn't import
 is reported so you can fill in the gaps.
+
+### How a session is launched
+
+Connectify never types your password anywhere. When you connect:
+
+1. The ssh command line is written to a launcher script in a private `0700`
+   directory - it contains no secret, only the FIFO's path.
+2. iTerm2 runs that launcher as the session's **command**, so no shell is
+   involved: nothing appears in the tab's scrollback, and nothing is recorded in
+   `~/.zsh_history`.
+3. If a secret is needed, `ssh` asks Connectify's askpass helper
+   (`SSH_ASKPASS` + `SSH_ASKPASS_REQUIRE=force`), which reads it once from a
+   FIFO. The bytes go from Connectify straight into `ssh` - never to disk, never
+   onto a command line.
+4. The launcher deletes its directory as soon as ssh exits; a sweep on startup
+   clears anything left by a killed session.
+
+The same mechanism answers **SSH key passphrase** prompts, so passphrase-protected
+keys work - store the passphrase alongside the key path in its credential.
+
+This needs OpenSSH 8.4+ for `SSH_ASKPASS_REQUIRE` (macOS Monterey and later).
+On something older, ssh simply prompts for the password in the tab as usual.
 
 ## Groups and Tile Themes
 
@@ -336,8 +359,14 @@ Verify iTerm2 is installed and set as default terminal.
 
 - Passwords and key passphrases are stored in an AES-256-GCM encrypted vault at
   `~/.connectify/vault.json`, unlocked by your passcode (scrypt-derived key)
-- SSH keys use standard SSH key authentication
-- Temporary password files are created with secure permissions and automatically cleaned up
+- **Secrets are never written to disk to start a session.** They reach `ssh`
+  through an askpass helper reading a private FIFO - a kernel rendezvous point
+  that stores nothing - so no password file is ever created
+- **Secrets never appear on a command line**, so they can't be seen in `ps`
+- **Nothing is typed into a shell.** iTerm2 runs the session directly, so the
+  SSH command never lands in the terminal scrollback or your shell history
+- No `sshpass`: password authentication uses OpenSSH's own `SSH_ASKPASS`
+  mechanism, which also unlocks passphrase-protected SSH keys
 - UI server runs locally on 127.0.0.1 (not exposed to network by default)
 
 ## Requirements

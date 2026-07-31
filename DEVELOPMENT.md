@@ -100,6 +100,7 @@ connectify/
 ├── api_server.py              # FastAPI web server
 ├── iterm_profiles.py          # Bundled profile install + iTerm2 discovery
 ├── vault.py                   # Encrypted credentials vault (AES-256-GCM + scrypt)
+├── ssh_session.py             # Leak-free session launch (askpass over a FIFO)
 ├── profiles/                  # iTerm2 profiles shipped with Connectify
 │   ├── connectify-PERSONAL.json
 │   ├── connectify-NONPROD.json
@@ -157,6 +158,22 @@ The SSH engine behind the web UI:
 - The API layer passes the token in the `X-Vault-Token` header and answers a
   locked vault with `401 {"code": "vault_locked"}`, which the UI turns into the
   unlock dialog (and retries the original request afterwards).
+
+### 2c. ssh_session.py - Launching Sessions
+
+Builds everything a session needs without ever putting a secret on disk or on a
+command line:
+- `build_ssh_argv()` - the ssh command line (no secrets, no sshpass)
+- `SecretChannel` - a FIFO in a private 0700 directory that hands the password
+  or key passphrase to ssh's askpass helper, a bounded number of times and only
+  for a limited window. The FIFO is replaced between hand-offs so a draining
+  reader can't pick up a second copy.
+- `prepare_session()` - writes the askpass helper and the launcher script, then
+  arms the channel. `main.py` passes `session.command` to iTerm2 as the session
+  *command*, so no shell runs it and nothing reaches the shell history.
+
+Requires OpenSSH 8.4+ (`SSH_ASKPASS_REQUIRE=force`); older versions fall back to
+prompting in the terminal. `connectify doctor` reports the installed version.
 
 ### 3. iterm_profiles.py - iTerm2 Profiles
 
