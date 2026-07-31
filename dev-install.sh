@@ -238,6 +238,21 @@ verify_installation() {
     print_success "Installation verified"
 }
 
+install_iterm_profiles() {
+    print_info "Installing Connectify iTerm2 profiles..."
+
+    # Copies the bundled profiles into iTerm2's DynamicProfiles folder.
+    # Never fail the install over this.
+    if "$LIB_DIR/connectify" profiles install; then
+        print_success "iTerm2 profiles installed"
+    else
+        print_warning "Could not install iTerm2 profiles automatically"
+        print_info "You can retry later with: connectify profiles install"
+    fi
+
+    echo ""
+}
+
 check_and_install_sshpass() {
     print_info "Checking for sshpass (required for password authentication)..."
     
@@ -403,6 +418,7 @@ main() {
     fi
     
     verify_installation
+    install_iterm_profiles
     check_and_install_sshpass
     setup_autostart
     print_post_install

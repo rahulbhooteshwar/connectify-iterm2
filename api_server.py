@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
 
+import iterm_profiles
 from main import SSHManager
 
 
@@ -85,6 +86,15 @@ class APISSHManager:
             host_tags = host.get('tags', [])
             tags.update(host_tags)
         return sorted(list(tags))
+
+    def get_available_profiles(self):
+        """Get every iTerm2 profile that can be assigned to a host"""
+        host_profiles = [
+            host.get('iterm_profile')
+            for host in self.all_hosts
+            if host.get('iterm_profile')
+        ]
+        return iterm_profiles.list_available_profiles(extra_names=host_profiles)
 
     def get_hosts_by_tag_groups(self, search_term="", tag_filter=""):
         """Get hosts organized by tag groups"""
@@ -378,6 +388,41 @@ async def get_tags():
             "tags": tags
         }
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/profiles")
+async def get_profiles():
+    """Get all iTerm2 profiles available for host configuration"""
+    try:
+        api_manager.refresh_hosts_data()
+        profiles = api_manager.get_available_profiles()
+        return {
+            "success": True,
+            "profiles": profiles,
+            "bundled": [p["name"] for p in iterm_profiles.list_bundled_profiles()]
+        }
+    except Exception as e:
+        logging.error(f"Error listing iTerm2 profiles: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/profiles/install")
+async def install_profiles():
+    """(Re)install the iTerm2 profiles shipped with Connectify"""
+    try:
+        result = iterm_profiles.install_bundled_profiles(force=True, quiet=True)
+        changed = result["installed"] + result["updated"]
+        return {
+            "success": not result["errors"],
+            "message": (
+                f"Installed {len(changed)} profile(s) into iTerm2"
+                if changed else "iTerm2 profiles are already up to date"
+            ),
+            "result": result
+        }
+    except Exception as e:
+        logging.error(f"Error installing iTerm2 profiles: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

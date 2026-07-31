@@ -1230,6 +1230,99 @@
       color: white;
     }
 
+    /* iTerm2 Profile Picker */
+    .profile-select {
+      position: relative;
+    }
+
+    .profile-select .search-input {
+      padding-right: 68px;
+    }
+
+    .profile-icon-btn {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 0.25rem 0.4rem;
+      font-size: 0.85rem;
+      line-height: 1;
+    }
+
+    .profile-icon-btn:hover {
+      color: var(--primary-color);
+    }
+
+    .profile-refresh-btn {
+      right: 34px;
+    }
+
+    .profile-toggle-btn {
+      right: 8px;
+    }
+
+    .profile-option {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+
+    .profile-option.active {
+      background: var(--bg-secondary);
+    }
+
+    /* The currently selected profile keeps its highlight even when the
+       keyboard cursor moves onto it */
+    .profile-option.selected,
+    .profile-option.selected.active {
+      background: var(--primary-color);
+      color: white;
+    }
+
+    .profile-option.selected .profile-source {
+      border-color: rgba(255, 255, 255, 0.6);
+      color: white;
+    }
+
+    .profile-option-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .profile-source {
+      flex-shrink: 0;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 0.1rem 0.5rem;
+      border-radius: 999px;
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+    }
+
+    .profile-source.source-connectify {
+      border-color: var(--primary-color);
+      color: var(--primary-color);
+    }
+
+    .profile-empty {
+      padding: 0.5rem 1rem;
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+    }
+
+    .profile-hint {
+      display: block;
+      margin-top: 0.35rem;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
     /* Advanced SSH Options (collapsible) */
     .ssh-options-details {
       border: 1px solid var(--border-color);
@@ -1767,8 +1860,18 @@
 
           <div class="form-group" style="margin-bottom: 1rem;">
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">iTerm Profile</label>
-            <input type="text" id="itermProfile" list="profileList" value="Default" class="search-input" style="width: 100%;">
-            <datalist id="profileList"></datalist>
+            <div class="profile-select" id="profileSelect">
+              <input type="text" id="itermProfile" value="Default" class="search-input" style="width: 100%;"
+                     placeholder="Search iTerm2 profiles..." autocomplete="off">
+              <button type="button" id="refreshProfilesBtn" class="profile-icon-btn profile-refresh-btn" title="Reload profiles from iTerm2">
+                <i class="fas fa-sync-alt"></i>
+              </button>
+              <button type="button" id="profileToggleBtn" class="profile-icon-btn profile-toggle-btn" title="Show all profiles">
+                <i class="fas fa-chevron-down"></i>
+              </button>
+              <div id="profileDropdown" class="tag-dropdown"></div>
+            </div>
+            <small id="profileHint" class="profile-hint"></small>
           </div>
 
           <div class="form-group" style="margin-bottom: 1.5rem;">
@@ -1900,6 +2003,9 @@
         this.hosts = [];
         this.filteredHosts = [];
         this.allTags = [];
+        // iTerm2 profiles discovered at runtime (see loadProfiles)
+        this.availableProfiles = [];
+        this.profileHighlightIndex = -1;
         this.currentView = localStorage.getItem('sshManagerView') || 'grid';
         this.isLoading = false;
 
@@ -1967,6 +2073,14 @@
           sshOptionsBody: document.getElementById('sshOptionsBody'),
           sshOptionsCount: document.getElementById('sshOptionsCount'),
 
+          // iTerm2 Profile Picker
+          profileSelect: document.getElementById('profileSelect'),
+          itermProfile: document.getElementById('itermProfile'),
+          profileDropdown: document.getElementById('profileDropdown'),
+          profileToggleBtn: document.getElementById('profileToggleBtn'),
+          refreshProfilesBtn: document.getElementById('refreshProfilesBtn'),
+          profileHint: document.getElementById('profileHint'),
+
           // Tag Input Elements
           tagContainer: document.getElementById('tagContainer'),
           tagInput: document.getElementById('tagInput'),
@@ -2000,6 +2114,7 @@
         console.log('Initializing SSH Session Manager...');
         await this.loadHosts();
         await this.loadTags();
+        this.loadProfiles();
         this.setView(this.currentView);
       }
 
@@ -2084,6 +2199,9 @@
 
         // Tag Input Events
         this.setupTagInput();
+
+        // iTerm2 Profile Picker Events
+        this.setupProfileInput();
 
         // Import/Export Events
         if (this.elements.importBtn) {
@@ -2232,6 +2350,223 @@
         });
 
         dropdown.style.display = 'block';
+      }
+
+      // ---- iTerm2 profile picker -------------------------------------------
+
+      async loadProfiles(notify = false) {
+        try {
+          const response = await fetch('/api/profiles');
+          const data = await response.json();
+
+          if (data.success && Array.isArray(data.profiles)) {
+            this.availableProfiles = data.profiles;
+            this.profilesUnavailable = false;
+            this.updateProfileHint();
+            if (notify) {
+              this.showToast(`Found ${data.profiles.length} iTerm2 profile(s)`, 'success');
+            }
+            return this.availableProfiles;
+          }
+          throw new Error(data.detail || 'Failed to load profiles');
+        } catch (error) {
+          console.error('Error loading iTerm2 profiles:', error);
+          // Fall back to whatever the configured hosts already reference so
+          // the picker still works if iTerm2 can't be inspected.
+          const names = new Set(this.hosts.map(h => h.iterm_profile).filter(Boolean));
+          names.add('Default');
+          this.availableProfiles = Array.from(names)
+            .sort((a, b) => a.localeCompare(b))
+            .map(name => ({ name, source: 'host' }));
+          this.profilesUnavailable = true;
+          this.updateProfileHint();
+          if (notify) {
+            this.showToast('Could not read profiles from iTerm2', 'warning');
+          }
+          return this.availableProfiles;
+        }
+      }
+
+      updateProfileHint() {
+        const hint = this.elements.profileHint;
+        if (!hint) return;
+
+        if (this.profilesUnavailable) {
+          hint.textContent = 'Could not read profiles from iTerm2 - you can still type a profile name.';
+          return;
+        }
+
+        const total = this.availableProfiles.length;
+        const shipped = this.availableProfiles.filter(p => p.source === 'connectify').length;
+        hint.textContent = shipped
+          ? `${total} profile(s) available - ${shipped} shipped with Connectify`
+          : `${total} profile(s) available from iTerm2`;
+      }
+
+      setupProfileInput() {
+        const input = this.elements.itermProfile;
+        const dropdown = this.elements.profileDropdown;
+        if (!input || !dropdown) return;
+
+        input.addEventListener('input', () => this.showProfileDropdown(input.value));
+        input.addEventListener('focus', () => this.showProfileDropdown(''));
+
+        input.addEventListener('keydown', (e) => {
+          const options = dropdown.querySelectorAll('.profile-option');
+
+          if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (dropdown.style.display !== 'block' || options.length === 0) {
+              this.showProfileDropdown('');
+              return;
+            }
+            const delta = e.key === 'ArrowDown' ? 1 : -1;
+            const count = options.length;
+            this.profileHighlightIndex = (this.profileHighlightIndex + delta + count) % count;
+            this.highlightProfileOption();
+          } else if (e.key === 'Enter') {
+            if (dropdown.style.display === 'block' && this.profileHighlightIndex >= 0 && options.length) {
+              e.preventDefault();
+              this.selectProfile(options[this.profileHighlightIndex].dataset.profile);
+            }
+          } else if (e.key === 'Escape') {
+            this.hideProfileDropdown();
+          }
+        });
+
+        if (this.elements.profileToggleBtn) {
+          this.elements.profileToggleBtn.addEventListener('click', () => {
+            if (dropdown.style.display === 'block') {
+              this.hideProfileDropdown();
+            } else {
+              this.showProfileDropdown('');
+              input.focus();
+            }
+          });
+        }
+
+        if (this.elements.refreshProfilesBtn) {
+          this.elements.refreshProfilesBtn.addEventListener('click', async () => {
+            const icon = this.elements.refreshProfilesBtn.querySelector('i');
+            icon.classList.add('fa-spin');
+            await this.loadProfiles(true);
+            icon.classList.remove('fa-spin');
+            if (dropdown.style.display === 'block') {
+              this.showProfileDropdown(input.value);
+            }
+          });
+        }
+
+        // Close when clicking outside the picker
+        document.addEventListener('click', (e) => {
+          if (!this.elements.profileSelect.contains(e.target)) {
+            this.hideProfileDropdown();
+          }
+        });
+      }
+
+      getFilteredProfiles(searchTerm) {
+        const term = (searchTerm || '').trim();
+        const lowerTerm = term.toLowerCase();
+        const current = (this.elements.itermProfile.value || '').trim();
+        const profiles = this.availableProfiles.slice();
+        const known = name => profiles.some(p => p.name.toLowerCase() === name.toLowerCase());
+
+        if (!term) {
+          // Browsing the full list: keep the saved value selectable even if
+          // iTerm2 doesn't report it (profile renamed or removed).
+          if (current && !known(current)) {
+            profiles.push({ name: current, source: 'custom' });
+          }
+          return profiles;
+        }
+
+        const filtered = profiles.filter(p => p.name.toLowerCase().includes(lowerTerm));
+
+        // Nothing matched - offer the typed text itself, profile names are free-form
+        if (filtered.length === 0) {
+          filtered.push({ name: term, source: 'custom' });
+        }
+
+        return filtered;
+      }
+
+      showProfileDropdown(searchTerm) {
+        const dropdown = this.elements.profileDropdown;
+        const profiles = this.getFilteredProfiles(searchTerm);
+        const selected = (this.elements.itermProfile.value || '').trim().toLowerCase();
+
+        dropdown.innerHTML = '';
+        this.profileHighlightIndex = -1;
+
+        if (profiles.length === 0) {
+          const empty = document.createElement('div');
+          empty.className = 'profile-empty';
+          empty.textContent = 'No matching profiles - the typed name will be used as-is';
+          dropdown.appendChild(empty);
+          dropdown.style.display = 'block';
+          return;
+        }
+
+        profiles.forEach((profile, index) => {
+          const option = document.createElement('div');
+          option.className = 'tag-option profile-option';
+          option.dataset.profile = profile.name;
+
+          const name = document.createElement('span');
+          name.className = 'profile-option-name';
+          name.textContent = profile.name;
+          option.appendChild(name);
+
+          const sourceLabels = {
+            connectify: 'Connectify',
+            dynamic: 'Dynamic',
+            iterm2: 'iTerm2',
+            host: 'In use',
+            custom: 'Custom'
+          };
+          const source = document.createElement('span');
+          source.className = `profile-source source-${profile.source || 'iterm2'}`;
+          source.textContent = sourceLabels[profile.source] || 'iTerm2';
+          option.appendChild(source);
+
+          if (profile.name.toLowerCase() === selected) {
+            option.classList.add('selected');
+            this.profileHighlightIndex = index;
+          }
+
+          option.addEventListener('mousedown', (e) => {
+            // mousedown so the click isn't lost to the input's blur
+            e.preventDefault();
+            this.selectProfile(profile.name);
+          });
+
+          dropdown.appendChild(option);
+        });
+
+        dropdown.style.display = 'block';
+        this.highlightProfileOption();
+      }
+
+      highlightProfileOption() {
+        const options = this.elements.profileDropdown.querySelectorAll('.profile-option');
+        options.forEach((option, index) => {
+          option.classList.toggle('active', index === this.profileHighlightIndex);
+        });
+        if (this.profileHighlightIndex >= 0 && options[this.profileHighlightIndex]) {
+          options[this.profileHighlightIndex].scrollIntoView({ block: 'nearest' });
+        }
+      }
+
+      hideProfileDropdown() {
+        this.elements.profileDropdown.style.display = 'none';
+        this.profileHighlightIndex = -1;
+      }
+
+      selectProfile(name) {
+        if (!name) return;
+        this.elements.itermProfile.value = name;
+        this.hideProfileDropdown();
       }
 
       renderSshOptionCheckboxes() {
@@ -2802,16 +3137,10 @@
         const modal = this.elements.hostModal;
         const form = this.elements.hostForm;
 
-        // Populate profile datalist
-        const profileList = document.getElementById('profileList');
-        profileList.innerHTML = '';
-        const profiles = new Set(this.hosts.map(h => h.iterm_profile).filter(p => p));
-        profiles.add('Default');
-        Array.from(profiles).sort().forEach(profile => {
-          const option = document.createElement('option');
-          option.value = profile;
-          profileList.appendChild(option);
-        });
+        // Pull the current iTerm2 profile list (profiles can be added/removed
+        // in iTerm2 while this page is open)
+        this.hideProfileDropdown();
+        this.loadProfiles();
 
         // Reset form
         form.reset();
@@ -2880,6 +3209,9 @@
       }
 
       closeModal(modal) {
+        if (modal === this.elements.hostModal) {
+          this.hideProfileDropdown();
+        }
         modal.classList.remove('show');
       }
 

@@ -7,6 +7,7 @@ A powerful command-line utility to manage and launch SSH sessions with credentia
 - 🔐 **Secure credential storage** using macOS Keychain
 - 🎯 **Interactive host selection** with tag-based filtering
 - 🖥️ **iTerm2 integration** with custom profiles
+- 🎨 **Bundled iTerm2 profiles** (PERSONAL / NON-PROD / PROD) installed for you
 - 🔍 **Smart search and filtering** by name or tags
 - ⚡ **Fast host management** - add, list, and connect
 - 🏷️ **Tag-based organization** for better host grouping
@@ -39,6 +40,7 @@ connectify                    # Interactive host selection
 connectify production         # Filter hosts by "production"
 connectify --add              # Add a new SSH host
 connectify --list             # List all configured hosts
+connectify profiles list      # Show bundled + available iTerm2 profiles
 connectify --version          # Show version information
 connectify --help             # Show all options
 ```
@@ -62,6 +64,37 @@ The web interface provides:
 - 🔍 **Real-time search** and filtering
 - 🖱️ **Click-to-connect** functionality
 - 📱 **Responsive design** for desktop and mobile
+
+## iTerm2 Profiles
+
+Connectify ships three ready-made iTerm2 profiles and installs them for you:
+
+| Profile | Badge | Use for |
+|---------|-------|---------|
+| `connectify-PERSONAL` | PERSONAL | Personal / local machines |
+| `connectify-NONPROD` | NON-PROD | Dev, QA and staging boxes |
+| `connectify-PROD` | PRODUCTION | Production - hard to miss |
+
+They are installed as [iTerm2 Dynamic Profiles](https://iterm2.com/documentation-dynamic-profiles.html)
+into `~/Library/Application Support/iTerm2/DynamicProfiles/` during installation,
+so they show up in iTerm2 (and in Connectify) without any manual import. Upgrades
+refresh them automatically.
+
+```bash
+connectify profiles list      # Bundled profiles + everything iTerm2 offers
+connectify profiles install   # (Re)install the bundled profiles
+```
+
+Set `CONNECTIFY_SKIP_PROFILE_INSTALL=1` if you'd rather manage profiles yourself.
+Uninstalling Connectify removes the `connectify-*` profiles again.
+
+### Choosing a profile for a host
+
+The **iTerm Profile** field in the web UI (and the prompt in `connectify --add`)
+lists every profile iTerm2 currently knows about - your own profiles, the shipped
+Connectify ones and any other dynamic profiles - so you can use any theme you
+already have. The list is searchable, refreshable, and still accepts a manually
+typed profile name.
 
 ## Configuration
 

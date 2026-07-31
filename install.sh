@@ -214,6 +214,21 @@ verify_installation() {
     print_success "Files installed successfully"
 }
 
+install_iterm_profiles() {
+    print_info "Installing Connectify iTerm2 profiles..."
+
+    # The binary knows where its bundled profiles live and copies them into
+    # iTerm2's DynamicProfiles folder. Never fail the install over this.
+    if "$LIB_DIR/connectify" profiles install; then
+        print_success "iTerm2 profiles installed"
+    else
+        print_warning "Could not install iTerm2 profiles automatically"
+        print_info "You can retry later with: connectify profiles install"
+    fi
+
+    echo ""
+}
+
 check_and_install_sshpass() {
     print_info "Checking for sshpass (required for password authentication)..."
     
@@ -285,6 +300,10 @@ print_post_install() {
     echo "  connectify ui logs            # View server logs"
     echo "  connectify ui stop            # Stop server"
     echo ""
+    echo "  # iTerm2 profiles shipped with Connectify"
+    echo "  connectify profiles list      # Show bundled + available profiles"
+    echo "  connectify profiles install   # Reinstall the bundled profiles"
+    echo ""
     echo "  # Configure auto-start (UI server starts automatically on login)"
     echo "  curl -fsSL https://raw.githubusercontent.com/rahulbhooteshwar/connectify-iterm2/main/setup-autostart.sh | bash"
     echo ""
@@ -318,6 +337,7 @@ main() {
     extract_binary
     install_binary
     verify_installation
+    install_iterm_profiles
     check_and_install_sshpass
     setup_path
     print_post_install

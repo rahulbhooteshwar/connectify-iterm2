@@ -22,6 +22,11 @@ if os.path.exists(static_dir):
     # Add all static files
     additional_datas.append((static_dir, 'static'))
 
+# Add the iTerm2 profiles shipped with Connectify
+profiles_dir = os.path.join(current_dir, 'profiles')
+if os.path.exists(profiles_dir):
+    additional_datas.append((profiles_dir, 'profiles'))
+
 a = Analysis(
     ['main.py', 'api_server.py'],
     pathex=[],

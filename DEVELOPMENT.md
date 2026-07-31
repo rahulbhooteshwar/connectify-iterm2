@@ -101,6 +101,11 @@ connectify/
 ├── connectify.py              # CLI wrapper with ui subcommands
 ├── main.py                    # Core SSH manager functionality
 ├── api_server.py              # FastAPI web server
+├── iterm_profiles.py          # Bundled profile install + iTerm2 discovery
+├── profiles/                  # iTerm2 profiles shipped with Connectify
+│   ├── connectify-PERSONAL.json
+│   ├── connectify-NONPROD.json
+│   └── connectify-PROD.json
 ├── connectify.spec            # PyInstaller build configuration
 ├── pyproject.toml             # Python dependencies
 ├── Makefile                   # Build automation
@@ -133,7 +138,21 @@ Handles:
 - iTerm2 profile support
 - Configuration management
 
-### 3. api_server.py - Web Server
+### 3. iterm_profiles.py - iTerm2 Profiles
+
+Handles:
+- Installing `profiles/connectify-*.json` into
+  `~/Library/Application Support/iTerm2/DynamicProfiles/` (idempotent, runs on
+  install and once per version at startup)
+- Discovering every available profile from iTerm2's preferences and the
+  DynamicProfiles folder, which feeds `GET /api/profiles` and the UI dropdown
+
+To add a new bundled profile: export it from iTerm2, save it as
+`profiles/connectify-<NAME>.json` in the Dynamic Profile format
+(`{"Profiles": [ ... ]}`) with a unique `Guid` and a `Name` that matches the
+file name. It is picked up by the build and installers automatically.
+
+### 4. api_server.py - Web Server
 
 Handles:
 - FastAPI web server
@@ -141,7 +160,7 @@ Handles:
 - Static file serving
 - CORS configuration
 
-### 4. static/index.html - Web UI
+### 5. static/index.html - Web UI
 
 Single-page application with:
 - Tile-based host display

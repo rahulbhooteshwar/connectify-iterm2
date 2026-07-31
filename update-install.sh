@@ -25,6 +25,9 @@ chmod +x "$LIB_DIR/connectify"
 rm -f "$INSTALL_DIR/connectify"
 ln -s "$LIB_DIR/connectify" "$INSTALL_DIR/connectify"
 
+# Refresh the bundled iTerm2 profiles
+"$LIB_DIR/connectify" profiles install || echo "⚠️  Could not install iTerm2 profiles"
+
 echo "✅ Connectify updated successfully!"
 echo ""
 echo "Installed to: $INSTALL_DIR/connectify"

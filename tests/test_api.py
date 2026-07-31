@@ -74,6 +74,45 @@ def test_update_host(mock_ssh_manager):
     assert response.json()['success'] is True
     mock_ssh_manager.update_host.assert_called_once()
 
+def test_get_profiles(mock_ssh_manager):
+    """The profile dropdown is fed from iTerm2, not a hardcoded list"""
+    mock_ssh_manager.config = {'hosts': [{'name': 'Test Host', 'iterm_profile': 'Legacy Profile'}]}
+
+    discovered = [
+        {"name": "Default", "guid": "abc", "source": "iterm2", "is_default": True},
+        {"name": "connectify-PROD", "guid": "def", "source": "connectify", "is_default": False},
+    ]
+
+    with patch('api_server.iterm_profiles.list_available_profiles', return_value=discovered) as mock_list:
+        response = client.get("/api/profiles")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data['success'] is True
+    assert [p['name'] for p in data['profiles']] == ["Default", "connectify-PROD"]
+    assert "connectify-PROD" in data['bundled']
+    # Profiles already used by hosts are passed through so they stay selectable
+    assert mock_list.call_args.kwargs['extra_names'] == ['Legacy Profile']
+
+
+def test_install_profiles(mock_ssh_manager):
+    install_result = {
+        "installed": ["connectify-PROD.json"],
+        "updated": [],
+        "unchanged": [],
+        "errors": [],
+        "target_dir": "/tmp/DynamicProfiles",
+    }
+
+    with patch('api_server.iterm_profiles.install_bundled_profiles', return_value=install_result):
+        response = client.post("/api/profiles/install")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data['success'] is True
+    assert "1 profile(s)" in data['message']
+
+
 def test_delete_host(mock_ssh_manager):
     mock_ssh_manager.delete_host.return_value = True
     

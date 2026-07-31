@@ -260,6 +260,28 @@ def ui_status():
     return 0 if is_ui_running() else 1
 
 
+def handle_profiles_command(command):
+    """Handle 'connectify profiles ...' subcommands"""
+    try:
+        import iterm_profiles
+    except ImportError:
+        print("❌ Error: profile support not available. Installation may be corrupted.")
+        return 1
+
+    if command == 'install':
+        result = iterm_profiles.install_bundled_profiles(force=True)
+        print()
+        print("💡 Restart iTerm2 (or open a new window) if the profiles don't show up right away")
+        return 1 if result['errors'] else 0
+    elif command in ('list', 'status'):
+        iterm_profiles.print_profiles_status()
+        return 0
+    else:
+        print(f"❌ Unknown profiles command: {command}")
+        print("   Usage: connectify profiles [install|list]")
+        return 1
+
+
 def handle_ui_command(args):
     """Handle UI subcommands"""
     if args.ui_command == 'start':
@@ -286,6 +308,22 @@ def main():
         print(f"Build: {BUILD_DATE}")
         sys.exit(0)
     
+    # Check if 'profiles' command is being used
+    if len(sys.argv) > 1 and sys.argv[1] == 'profiles':
+        parser = argparse.ArgumentParser(
+            prog='connectify profiles',
+            description='Manage the iTerm2 profiles shipped with Connectify'
+        )
+        parser.add_argument(
+            'profiles_command',
+            nargs='?',
+            default='list',
+            choices=['install', 'list', 'status'],
+            help='Profile command (default: list)'
+        )
+        args = parser.parse_args(sys.argv[2:])
+        sys.exit(handle_profiles_command(args.profiles_command))
+
     # Check if 'ui' command is being used
     if len(sys.argv) > 1 and sys.argv[1] == 'ui':
         # Create UI subcommand parser

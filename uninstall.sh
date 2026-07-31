@@ -130,6 +130,24 @@ remove_files() {
     fi
 }
 
+# Remove the iTerm2 profiles Connectify installed
+remove_iterm_profiles() {
+    local profiles_dir="$HOME/Library/Application Support/iTerm2/DynamicProfiles"
+    local removed=0
+
+    shopt -s nullglob
+    for profile in "$profiles_dir"/connectify-*.json; do
+        rm -f "$profile"
+        print_success "Removed $(basename "$profile") from iTerm2"
+        removed=1
+    done
+    shopt -u nullglob
+
+    if [[ $removed -eq 1 ]]; then
+        print_info "Restart iTerm2 to drop the profiles from its list"
+    fi
+}
+
 # Remove config files if requested
 remove_config() {
     if [[ "$REMOVE_CONFIG" == "true" ]]; then
@@ -231,6 +249,7 @@ main() {
     
     stop_ui_server
     remove_files
+    remove_iterm_profiles
     remove_config
     clean_keychain
     verify_uninstall

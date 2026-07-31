@@ -22,6 +22,8 @@ import shutil
 import threading
 import glob
 
+import iterm_profiles
+
 # Import version info
 try:
     from version import VERSION, BUILD_DATE
@@ -68,7 +70,10 @@ class SSHManager:
     # Class-level lock to serialize iTerm2 tab launches and prevent race conditions
     # when multiple connections are launched simultaneously
     _iterm_launch_lock = threading.Lock()
-    
+
+    # Escape hatch in the interactive profile picker for names iTerm2 doesn't report
+    MANUAL_PROFILE_CHOICE = "✏️  Enter profile name manually..."
+
     def __init__(self, config_file="~/.connectify/hosts.json", debug=False):
         self.config_file = Path(config_file).expanduser()
         self.old_config_file = Path("~/.ssh_manager_config.json").expanduser()
@@ -79,8 +84,42 @@ class SSHManager:
         self.migrate_old_config()
         
         self.config = self.load_config()
+
+        # Make sure the iTerm2 profiles shipped with Connectify are present.
+        # Runs once per version (tracked by a marker file), so upgrades pick up
+        # profile changes without re-running the installer.
+        self.ensure_iterm_profiles()
+
         # Start background cleanup of old temp password files
         self.cleanup_old_temp_files()
+
+    def ensure_iterm_profiles(self):
+        """Install the bundled iTerm2 profiles if they are not in place yet."""
+        try:
+            result = iterm_profiles.ensure_profiles_installed(VERSION, quiet=True)
+        except Exception as e:
+            if self.debug:
+                print(f"DEBUG: Profile installation skipped: {e}")
+            return
+
+        if not result:
+            return
+
+        changed = result.get('installed', []) + result.get('updated', [])
+        if changed:
+            names = ", ".join(Path(name).stem for name in changed)
+            print(f"🎨 Installed Connectify iTerm2 profiles: {names}")
+        for error in result.get('errors', []):
+            print(f"⚠️  Could not install iTerm2 profile - {error}")
+
+    def get_available_iterm_profiles(self):
+        """All iTerm2 profiles available for host configuration."""
+        host_profiles = [
+            host.get('iterm_profile')
+            for host in self.config.get('hosts', [])
+            if host.get('iterm_profile')
+        ]
+        return iterm_profiles.list_available_profiles(extra_names=host_profiles)
 
     def migrate_old_config(self):
         """Migrate from old config location to new location"""
@@ -927,6 +966,34 @@ class SSHManager:
                         except Exception as cleanup_error:
                             print(f"⚠ Warning: Could not remove temporary file {temp_pass_file}: {cleanup_error}")
 
+    def prompt_for_iterm_profile(self):
+        """Ask for an iTerm2 profile, listing the ones actually available."""
+        try:
+            available = self.get_available_iterm_profiles()
+        except Exception:
+            available = []
+
+        if len(available) > 1:
+            choices = [p['name'] for p in available] + [self.MANUAL_PROFILE_CHOICE]
+            answer = inquirer.prompt(
+                [inquirer.List('iterm_profile',
+                               message="iTerm2 profile",
+                               choices=choices,
+                               default="Default")],
+                theme=CustomTheme()
+            )
+            selected = (answer or {}).get('iterm_profile')
+            if selected and selected != self.MANUAL_PROFILE_CHOICE:
+                return selected
+
+        answer = inquirer.prompt(
+            [inquirer.Text('iterm_profile',
+                           message="iTerm2 profile name (optional)",
+                           default="Default")],
+            theme=CustomTheme()
+        )
+        return (answer or {}).get('iterm_profile') or "Default"
+
     def add_host(self):
         """Interactive host addition"""
         print("\n=== Add New SSH Host ===")
@@ -955,11 +1022,13 @@ class SSHManager:
             key_answers = inquirer.prompt(key_questions, theme=CustomTheme())
             answers.update(key_answers)
 
+        # iTerm2 profile - offer everything iTerm2 currently knows about
+        # (including the profiles shipped with Connectify) instead of asking
+        # the user to remember exact profile names.
+        answers['iterm_profile'] = self.prompt_for_iterm_profile()
+
         # Optional fields
         optional_questions = [
-            inquirer.Text('iterm_profile',
-                         message="iTerm2 profile name (optional)",
-                         default="Default"),
             inquirer.Text('tags',
                          message="Tags (comma-separated, optional)")
         ]
@@ -1140,6 +1209,10 @@ INTERACTIVE FEATURES:
   • Assign custom iTerm2 profiles to hosts
   • Different colors, fonts, and settings per environment
   • Automatic session naming with host information
+  • Connectify ships ready-made profiles (connectify-PERSONAL,
+    connectify-PROD, connectify-NONPROD) and installs them into iTerm2
+  • 'connectify --profiles' lists every profile available for a host
+  • 'connectify --install-profiles' reinstalls the shipped profiles
 
 📁 CONFIGURATION:
   Config file: ~/.connectify/hosts.json
@@ -1177,6 +1250,8 @@ Built with ❤️  by RB (Rahul Bhooteshwar)
     parser.add_argument('--version', action='store_true', help='Show version information')
     parser.add_argument('--config', help='Path to config file', default='~/.connectify/hosts.json')
     parser.add_argument('--simple', action='store_true', help='Use simple numbered list instead of scrolling menu')
+    parser.add_argument('--profiles', action='store_true', help='Show bundled and available iTerm2 profiles')
+    parser.add_argument('--install-profiles', action='store_true', help='(Re)install the bundled iTerm2 profiles into iTerm2')
     parser.add_argument('--ui', action='store_true', help='Launch web interface')
     parser.add_argument('--port', type=int, default=7860, help='Port for web interface (default: 7860)')
     parser.add_argument('--share', action='store_true', help='Create shareable link for web interface')
@@ -1197,7 +1272,18 @@ Built with ❤️  by RB (Rahul Bhooteshwar)
         print(f"Connectify v{VERSION}")
         print(f"Build: {BUILD_DATE}")
         return
-    
+
+    # Profile management doesn't need the host config
+    if args.install_profiles:
+        result = iterm_profiles.install_bundled_profiles(force=True)
+        print()
+        print("💡 Restart iTerm2 (or open a new window) if the profiles don't show up right away")
+        sys.exit(1 if result['errors'] else 0)
+
+    if args.profiles:
+        iterm_profiles.print_profiles_status()
+        sys.exit(0)
+
     # Create manager with debug flag
     manager = SSHManager(args.config, debug=args.debug)
 
