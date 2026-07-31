@@ -60,20 +60,80 @@ resolve_version() {
     echo "${tag#v}"
 }
 
+file_size() {
+    # wc rather than stat: no BSD/GNU flag differences to worry about
+    [[ -f "$1" ]] && wc -c < "$1" | tr -d ' ' || echo 0
+}
+
+content_length() {
+    # tolower() rather than awk's IGNORECASE, which macOS's BSD awk does not
+    # have. HTTP/2 sends the header lower-case, HTTP/1.1 capitalised, and -L
+    # means several header blocks - the last one is the one that counts.
+    curl -fsSLI "$1" 2>/dev/null \
+        | awk 'tolower($0) ~ /^content-length:/ { v = $2 } END { gsub(/[^0-9]/, "", v); print v + 0 }'
+}
+
+megabytes() {
+    awk -v bytes="$1" 'BEGIN { printf "%.1f MB", bytes / 1048576 }'
+}
+
+draw_bar() {
+    # curl's own --progress-bar is a row of '#'. This is the same block bar the
+    # installer proper uses, drawn from the size of the file as it grows.
+    local done_bytes="$1" total="$2" width=32 filled=0 percent=0 head='' tail='' i
+    if (( total > 0 )); then
+        percent=$(( done_bytes * 100 / total ))
+        filled=$(( done_bytes * width / total ))
+        (( filled > width )) && filled=$width
+    fi
+
+    # Different glyphs, not just different colours: the bar has to read as
+    # partly full on a terminal without colour too
+    for (( i = 0; i < filled; i++ )); do head+='━'; done
+    for (( i = filled; i < width; i++ )); do tail+='─'; done
+
+    if (( total > 0 )); then
+        printf "\r  ${CYAN}%s${DIM}%s${NC} %3d%%  ${DIM}%s / %s${NC}" \
+            "$head" "$tail" "$percent" "$(megabytes "$done_bytes")" "$(megabytes "$total")"
+    else
+        # No content-length: show what has arrived rather than a fake bar
+        printf "\r  ${CYAN}▪${NC} ${DIM}%s downloaded${NC}" "$(megabytes "$done_bytes")"
+    fi
+}
+
 download() {
     local version="$1" arch="$2"
     local archive="connectify-macos-${arch}.tar.gz"
     local url="https://github.com/${GITHUB_REPO}/releases/download/v${version}/${archive}"
+    local target="${TEMP_DIR}/${archive}"
 
     say "$(printf "Downloading Connectify ${BOLD}v%s${NC} ${DIM}(%s)${NC}" "$version" "$arch")" >&2
 
-    if ! curl -fL --progress-bar "$url" -o "${TEMP_DIR}/${archive}" >&2; then
+    local total
+    total=$(content_length "$url")
+
+    curl -fsSL "$url" -o "$target" &
+    local pid=$!
+
+    if [[ -t 1 ]]; then
+        while kill -0 "$pid" 2>/dev/null; do
+            draw_bar "$(file_size "$target")" "$total" >&2
+            sleep 0.1
+        done
+    fi
+
+    if ! wait "$pid"; then
         printf "\n" >&2
         die "Could not download ${archive} from ${url}"
     fi
 
-    ok "$(du -h "${TEMP_DIR}/${archive}" | cut -f1 | tr -d ' ') downloaded" >&2
-    echo "${TEMP_DIR}/${archive}"
+    if [[ -t 1 ]]; then
+        draw_bar "$(file_size "$target")" "$(file_size "$target")" >&2
+        printf "\n" >&2
+    fi
+
+    ok "$(megabytes "$(file_size "$target")") downloaded" >&2
+    echo "$target"
 }
 
 main() {

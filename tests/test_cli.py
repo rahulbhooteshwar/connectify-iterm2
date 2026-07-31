@@ -119,6 +119,21 @@ def test_installer_ui_is_bundled_not_a_host_dependency():
         assert gone not in bootstrap
 
 
+def test_the_bootstrap_draws_its_own_progress_bar():
+    """curl's --progress-bar is a row of '#'; the download deserves better."""
+    with open(os.path.join(REPO_ROOT, 'install.sh')) as f:
+        bootstrap = f.read()
+
+    # Ignore comments - one of them names the flag it replaced
+    code = '\n'.join(l for l in bootstrap.splitlines() if not l.lstrip().startswith('#'))
+    assert '--progress-bar' not in code
+
+    assert 'draw_bar()' in bootstrap
+    assert '━' in bootstrap and '─' in bootstrap, "filled and empty read apart without colour"
+    # BSD awk (what macOS ships) has no IGNORECASE
+    assert 'IGNORECASE' not in code
+
+
 def test_install_and_upgrade_are_documented_commands():
     result = run_cli('--help')
     assert 'connectify upgrade' in result.stdout
