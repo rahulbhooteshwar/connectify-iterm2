@@ -114,7 +114,9 @@ connectify/
 ├── uninstall.sh               # Uninstallation script
 ├── static/                    # Web UI assets
 │   ├── index.html            # Single-page web interface
-│   └── vendor/fontawesome/   # Vendored icon font (no CDN at runtime)
+│   └── vendor/               # Vendored assets - the UI loads no CDNs at runtime
+│       ├── fontawesome/      # Icon font (solid + regular)
+│       └── montserrat/       # UI typeface (variable, latin + latin-ext)
 ├── tests/                     # Test files
 └── docs/                      # Documentation
     ├── README.md             # User documentation
