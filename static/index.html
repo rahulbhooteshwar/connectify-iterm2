@@ -138,7 +138,8 @@
     .header {
       background: #000000;
       color: white;
-      padding: var(--spacing-md) var(--spacing-xl);
+      /* Kept short: it holds identity and the find controls, nothing else */
+      padding: var(--spacing-sm) var(--spacing-lg);
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
       border-bottom: 1px solid #222;
       flex-shrink: 0;
@@ -159,20 +160,22 @@
       display: flex;
       justify-content: flex-end;
       align-items: center;
-      gap: var(--spacing-lg);
+      gap: var(--spacing-md);
     }
 
     .header-left {
       display: flex;
-      align-items: center;
-      gap: var(--spacing-lg);
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: center;
+      gap: 0;
       flex-shrink: 0;
-      min-width: 400px;
     }
 
     .header-title {
-      font-size: 1.75rem;
+      font-size: 1.15rem;
       font-weight: 700;
+      line-height: 1.2;
       display: flex;
       align-items: center;
       gap: var(--spacing-sm);
@@ -180,15 +183,30 @@
       white-space: nowrap;
     }
 
+    /* Sits on the subtitle line rather than taking a row of its own */
+    .header-subtitle {
+      margin: 0.1rem 0 0;
+      font-size: 0.7rem;
+      font-weight: 400;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+
     .host-count {
-      background: #1a1a1a;
-      padding: var(--spacing-xs) var(--spacing-sm);
-      border-radius: var(--radius-xl);
-      font-size: 0.875rem;
+      font-size: 0.7rem;
       font-weight: 500;
-      border: 1px solid #333;
       color: #10b981;
       white-space: nowrap;
+    }
+
+    .host-count::before {
+      content: '\00b7';
+      margin-right: 0.4rem;
+      color: var(--text-muted);
     }
 
     .auth-legend {
@@ -205,30 +223,14 @@
     }
 
     /* Controls */
-    .controls {
-      display: flex;
-      gap: var(--spacing-lg);
-      align-items: center;
-    }
-
-    .controls-center {
-      display: flex;
-      gap: var(--spacing-lg);
-      align-items: center;
-      margin-right: auto;
-    }
-
-    .controls-right {
-      display: flex;
-      gap: var(--spacing-sm);
-      align-items: center;
-    }
-
     .search-container {
       position: relative;
       display: flex;
       align-items: center;
-      width: 350px;
+      /* Takes the room the action buttons used to occupy */
+      flex: 1;
+      min-width: 12rem;
+      max-width: 44rem;
     }
 
     .search-icon {
@@ -1716,16 +1718,69 @@
     .footer {
       background: var(--bg-secondary);
       border-top: 1px solid var(--border-color);
-      padding: 0.35rem var(--spacing-lg);
-      display: flex;
+      padding: 0.3rem var(--spacing-lg);
+      /* Three tracks so the actions stay centred on the page however wide the
+         credit and the GitHub link happen to be */
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
       align-items: center;
-      justify-content: space-between;
       gap: var(--spacing-md);
       flex-shrink: 0;
-      min-height: 1.9rem;
+      min-height: 2.4rem;
     }
 
+    .footer-actions {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--spacing-xs);
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    /* Label + icon, small enough to live in a slim footer */
+    .footer-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.25rem 0.7rem;
+      border: 1px solid var(--border-color);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: inherit;
+      font-size: 0.72rem;
+      font-weight: 500;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+    }
+
+    .footer-action:hover {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      border-color: var(--text-muted);
+    }
+
+    .footer-action i {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      transition: color 0.2s ease;
+    }
+
+    /* Each action keeps the colour it had in the header */
+    .footer-action.action-add i { color: var(--success-color); }
+    .footer-action.action-import i { color: var(--info-color); }
+    .footer-action.action-export i { color: var(--primary-color); }
+    .footer-action.action-vault i { color: var(--warning-color); }
+
+    .footer-action.action-add:hover { color: var(--success-color); border-color: var(--success-color); }
+    .footer-action.action-import:hover { color: var(--info-color); border-color: var(--info-color); }
+    .footer-action.action-export:hover { color: var(--primary-color); border-color: var(--primary-color); }
+    .footer-action.action-vault:hover { color: var(--warning-color); border-color: var(--warning-color); }
+
     .footer-credit {
+      min-width: 0;
       color: var(--text-muted);
       font-size: 0.7rem;
       line-height: 1.2;
@@ -1734,6 +1789,7 @@
     .footer-link {
       display: inline-flex;
       align-items: center;
+      justify-self: end;
       gap: 0.4rem;
       color: var(--text-muted);
       font-size: 0.7rem;
@@ -1752,37 +1808,30 @@
     /* Responsive Design */
     @media (max-width: 768px) {
       .header {
-        padding: var(--spacing-md);
+        padding: var(--spacing-sm);
       }
 
       .header-content {
         flex-direction: column;
-        gap: var(--spacing-md);
-        text-align: center;
+        gap: var(--spacing-sm);
+      }
+
+      .header-left {
+        align-items: center;
       }
 
       .header-right {
         width: 100%;
-      }
-
-      .controls {
-        flex-direction: column;
-        width: 100%;
-      }
-
-      .controls-center {
-        flex-direction: column;
-        width: 100%;
-        margin-right: 0;
-      }
-
-      .controls-right {
-        width: 100%;
-        justify-content: center;
+        flex-wrap: wrap;
       }
 
       .search-container {
-        width: 100%;
+        flex-basis: 100%;
+        max-width: none;
+      }
+
+      .filter-container {
+        flex: 1;
       }
 
       .host-tile.list-view .host-name-row {
@@ -1803,8 +1852,22 @@
         padding: 0;
       }
 
+      /* Stack the three footer regions, actions still centred */
       .footer {
-        padding: 0.35rem var(--spacing-sm);
+        grid-template-columns: 1fr;
+        justify-items: center;
+        gap: var(--spacing-xs);
+        padding: 0.4rem var(--spacing-sm);
+        text-align: center;
+      }
+
+      .footer-actions {
+        order: -1;
+        width: 100%;
+      }
+
+      .footer-link {
+        justify-self: center;
       }
 
       /* Just the icon when there's no room for the repo name */
@@ -1883,6 +1946,8 @@
      otherwise capitalise the first letter of each one. -->
 <body autocapitalize="off" autocorrect="off" spellcheck="false">
   <!-- Header -->
+  <!-- The header is for finding things: identity, then search, filter and the
+       grid/list toggle. Everything that changes something lives in the footer. -->
   <header class="header">
     <div class="header-content">
       <div class="header-left">
@@ -1890,51 +1955,31 @@
           <i class="fas fa-terminal"></i>
           Connectify
         </h1>
-        <p style="margin: 0; font-size: 0.75rem; color: var(--text-muted); font-weight: 400;">SSH Session Manager</p>
-        <span class="host-count" id="hostCount">0 hosts</span>
+        <p class="header-subtitle">
+          SSH Session Manager
+          <span class="host-count" id="hostCount">0 hosts</span>
+        </p>
       </div>
+
       <div class="header-right">
-        <!-- Search and Filter Controls -->
-        <div class="controls">
-          <div class="controls-center">
-            <div class="search-container">
-              <i class="fas fa-search search-icon"></i>
-              <input type="text" id="searchBox" class="search-input" placeholder="Search hosts by name or tags..." autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
-              <button id="clearSearch" class="clear-search-btn" title="Clear search">
-                <i class="fas fa-times"></i>
-              </button>
-            </div>
-
-            <div class="filter-container">
-              <i class="fas fa-tags filter-icon"></i>
-              <select id="tagFilter" class="tag-filter">
-                <option value="">All Tags</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="controls-right">
-            <button id="addHostBtn" class="control-btn" title="Add New Host" style="color: var(--success-color); border-color: var(--success-color);">
-              <i class="fas fa-plus"></i>
-            </button>
-            <button id="importBtn" class="control-btn" title="Import Hosts" style="color: var(--info-color); border-color: var(--info-color);">
-              <i class="fas fa-file-import"></i>
-            </button>
-            <button id="exportBtn" class="control-btn" title="Export Hosts" style="color: var(--primary-color); border-color: var(--primary-color);">
-              <i class="fas fa-file-export"></i>
-            </button>
-            <button id="vaultBtn" class="control-btn" title="Credentials Vault" style="color: var(--warning-color); border-color: var(--warning-color);">
-              <i class="fas fa-lock"></i>
-            </button>
-            <button id="viewToggleBtn" class="control-btn" title="Switch View">
-              <i class="fas fa-list"></i>
-            </button>
-            <div style="width: 1px; background: #333; height: 24px; margin: 0 var(--spacing-xs);"></div>
-            <button id="refreshBtn" class="control-btn" title="Refresh hosts">
-              <i class="fas fa-sync-alt"></i>
-            </button>
-          </div>
+        <div class="search-container">
+          <i class="fas fa-search search-icon"></i>
+          <input type="text" id="searchBox" class="search-input" placeholder="Search hosts by name or tags..." autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+          <button id="clearSearch" class="clear-search-btn" title="Clear search">
+            <i class="fas fa-times"></i>
+          </button>
         </div>
+
+        <div class="filter-container">
+          <i class="fas fa-tags filter-icon"></i>
+          <select id="tagFilter" class="tag-filter">
+            <option value="">All Tags</option>
+          </select>
+        </div>
+
+        <button id="viewToggleBtn" class="control-btn" title="Switch View">
+          <i class="fas fa-list"></i>
+        </button>
       </div>
     </div>
   </header>
@@ -2338,9 +2383,28 @@
     </div>
   </div>
 
-  <!-- Footer -->
+  <!-- Footer: the credit on the left, the actions centred, GitHub on the right -->
   <footer class="footer">
     <span class="footer-credit">Built with ❤️ by <strong>RB (Rahul Bhooteshwar)</strong></span>
+
+    <div class="footer-actions">
+      <button id="addHostBtn" class="footer-action action-add" title="Add New Host">
+        <i class="fas fa-plus"></i><span>Add Host</span>
+      </button>
+      <button id="importBtn" class="footer-action action-import" title="Import Hosts">
+        <i class="fas fa-file-import"></i><span>Import</span>
+      </button>
+      <button id="exportBtn" class="footer-action action-export" title="Export Hosts">
+        <i class="fas fa-file-export"></i><span>Export</span>
+      </button>
+      <button id="vaultBtn" class="footer-action action-vault" title="Credentials Vault">
+        <i class="fas fa-lock"></i><span>Vault</span>
+      </button>
+      <button id="refreshBtn" class="footer-action" title="Refresh hosts">
+        <i class="fas fa-sync-alt"></i><span>Refresh</span>
+      </button>
+    </div>
+
     <a class="footer-link" href="https://github.com/rahulbhooteshwar/connectify-iterm2"
        target="_blank" rel="noopener noreferrer" title="Connectify on GitHub">
       <i class="fab fa-github"></i> rahulbhooteshwar/connectify-iterm2
