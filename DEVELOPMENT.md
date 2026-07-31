@@ -142,7 +142,11 @@ Works with both the PyInstaller bundle and the source checkout.
 
 The SSH engine behind the web UI:
 - SSH host configuration (load/save/CRUD)
-- iTerm2 session launching, using a credential resolved from the vault
+- iTerm2 session launching, using a credential resolved from the vault. Launches
+  are serialized and spaced (`LAUNCH_SETTLE_SECONDS`), the AppleScript returns
+  the new session's id so a silent failure can't look like success, transient
+  AppleScript errors are retried once, and a failed launch cleans up its
+  session directory
 - Credential associations: which hosts use a credential and renaming
 - `clean_legacy_host_fields()` strips pre-vault auth fields from hosts.json on
   startup, materialising the SSH options they implied first
@@ -216,6 +220,9 @@ Single-page application with:
   dots in the add/edit form - `GET /api/groups` feeds the group picker
 - Real-time search and filtering (tags remain search/filter only)
 - The Vault page (toolbar lock icon): unlock, credential CRUD, host associations
+- One message style throughout: a slim pill at the bottom of the window
+- Launching shows a spinner on the tile for as long as the launch actually
+  takes - `POST /api/connect` only answers once iTerm2 has opened the tab
 - Responsive design
 
 ## Building and Packaging

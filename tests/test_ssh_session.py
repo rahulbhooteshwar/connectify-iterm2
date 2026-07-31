@@ -238,7 +238,8 @@ def test_launch_passes_a_command_to_iterm_and_never_types_the_secret(runtime, tm
 
     def fake_run(argv, **kwargs):
         scripts.append(argv[-1])
-        return subprocess.CompletedProcess(argv, 0, '', '')
+        # iTerm2 answers with the new session's id
+        return subprocess.CompletedProcess(argv, 0, 'w0t1p0:9C1D-session-id', '')
 
     monkeypatch.setattr(main.subprocess, "run", fake_run)
 
@@ -261,3 +262,103 @@ def test_launch_passes_a_command_to_iterm_and_never_types_the_secret(runtime, tm
     assert SECRET not in body
 
     shutil.rmtree(os.path.dirname(launcher), ignore_errors=True)
+
+
+def test_launch_fails_loudly_when_iterm_does_not_confirm_the_tab(runtime, tmp_path, monkeypatch):
+    """A silent AppleScript used to look like success; now it's an error."""
+    import main
+
+    config = tmp_path / "hosts.json"
+    config.write_text('{"hosts": []}')
+    manager = main.SSHManager(str(config))
+    monkeypatch.setattr(manager, "_ensure_iterm_running", lambda: True)
+    monkeypatch.setattr(main.SSHManager, "LAUNCH_SETTLE_SECONDS", 0)
+
+    # No session id back = iTerm2 never opened anything
+    monkeypatch.setattr(main.subprocess, "run",
+                        lambda argv, **kw: subprocess.CompletedProcess(argv, 0, '', ''))
+
+    with pytest.raises(RuntimeError, match="Could not open a session"):
+        manager.launch_iterm_session({**HOST, "iterm_profile": "Default"}, PASSWORD_CREDENTIAL)
+
+
+def test_launch_retries_a_transient_applescript_error(runtime, tmp_path, monkeypatch):
+    """iTerm2 busy mid-launch shouldn't lose the session."""
+    import main
+
+    config = tmp_path / "hosts.json"
+    config.write_text('{"hosts": []}')
+    manager = main.SSHManager(str(config))
+    monkeypatch.setattr(manager, "_ensure_iterm_running", lambda: True)
+    monkeypatch.setattr(main.SSHManager, "LAUNCH_SETTLE_SECONDS", 0)
+
+    calls = []
+
+    def flaky(argv, **kwargs):
+        calls.append(argv)
+        if len(calls) == 1:
+            raise subprocess.CalledProcessError(
+                1, argv, stderr="iTerm got an error: Can't get current window")
+        return subprocess.CompletedProcess(argv, 0, 'session-id', '')
+
+    monkeypatch.setattr(main.subprocess, "run", flaky)
+
+    assert manager.launch_iterm_session({**HOST, "iterm_profile": "Default"},
+                                        PASSWORD_CREDENTIAL) is True
+    assert len(calls) == 2, "the transient failure should have been retried"
+
+
+def test_a_failed_launch_cleans_up_its_session_directory(runtime, tmp_path, monkeypatch):
+    import main
+
+    config = tmp_path / "hosts.json"
+    config.write_text('{"hosts": []}')
+    manager = main.SSHManager(str(config))
+    monkeypatch.setattr(manager, "_ensure_iterm_running", lambda: False)
+    monkeypatch.setattr(main.SSHManager, "LAUNCH_SETTLE_SECONDS", 0)
+
+    with pytest.raises(RuntimeError):
+        manager.launch_iterm_session(HOST, PASSWORD_CREDENTIAL)
+
+    # No launcher, askpass helper or FIFO left behind
+    assert list(runtime.iterdir()) == []
+
+
+def test_rapid_launches_are_serialized_and_spaced(runtime, tmp_path, monkeypatch):
+    """Firing several connects at once must not have them race in iTerm2."""
+    import threading
+    import main
+
+    config = tmp_path / "hosts.json"
+    config.write_text('{"hosts": []}')
+    manager = main.SSHManager(str(config))
+    monkeypatch.setattr(manager, "_ensure_iterm_running", lambda: True)
+    monkeypatch.setattr(main.SSHManager, "LAUNCH_SETTLE_SECONDS", 0.05)
+    monkeypatch.setattr(main.SSHManager, "_last_launch_at", 0.0)
+
+    overlaps = []
+    in_flight = []
+    lock = threading.Lock()
+
+    def watch(argv, **kwargs):
+        with lock:
+            in_flight.append(1)
+            overlaps.append(len(in_flight))
+        time.sleep(0.02)
+        with lock:
+            in_flight.pop()
+        return subprocess.CompletedProcess(argv, 0, 'session-id', '')
+
+    monkeypatch.setattr(main.subprocess, "run", watch)
+
+    threads = [threading.Thread(
+        target=manager.launch_iterm_session,
+        args=({**HOST, "name": f"host-{i}", "iterm_profile": "Default"}, PASSWORD_CREDENTIAL))
+        for i in range(5)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=30)
+
+    assert max(overlaps) == 1, "iTerm2 was scripted by two launches at once"
+    assert len(overlaps) == 5

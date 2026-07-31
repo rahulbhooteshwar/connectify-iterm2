@@ -173,6 +173,11 @@ Connectify never types your password anywhere. When you connect:
 4. The launcher deletes its directory as soon as ssh exits; a sweep on startup
    clears anything left by a killed session.
 
+Connectify waits for iTerm2 to confirm the tab before reporting success, so the
+tile keeps its spinner until the session is really open and a failure is
+reported instead of being swallowed. Launches are serialized, so opening several
+sessions at once queues them rather than having them race inside iTerm2.
+
 The same mechanism answers **SSH key passphrase** prompts, so passphrase-protected
 keys work - store the passphrase alongside the key path in its credential.
 

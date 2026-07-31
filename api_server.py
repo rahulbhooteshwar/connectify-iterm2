@@ -16,6 +16,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, BackgroundTasks, Re
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, field_validator
 import uvicorn
 
@@ -188,25 +189,22 @@ class APISSHManager:
                 detail=f"'{host['name']}' has no credential yet. Edit the host and pick one from the vault."
             )
 
+        # Launch synchronously so the answer reflects what actually happened -
+        # the UI keeps its spinner up until iTerm2 has the tab open. Launches
+        # are serialized in SSHManager, so a burst of connects queues here.
         try:
-            # Launch the SSH session in a separate thread
-            def launch_session():
-                try:
-                    self.ssh_manager.launch_iterm_session(host, credential)
-                except Exception as e:
-                    logging.error(f"Error launching session for {host_name}: {e}")
-                    print(f"❌ Error launching session for {host_name}: {e}")
-
-            thread = threading.Thread(target=launch_session, daemon=True)
-            thread.start()
-
-            return {
-                "success": True,
-                "message": f"SSH session launched for {host['name']}",
-                "host": host
-            }
+            self.ssh_manager.launch_iterm_session(host, credential)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Connection error: {str(e)}")
+            logging.error(f"Error launching session for {host_name}: {e}")
+            raise HTTPException(status_code=502, detail=f"Could not open the session: {e}")
+
+        return {
+            "success": True,
+            "message": f"SSH session launched for {host['name']}",
+            "host": host
+        }
 
     def add_host(self, host_data: dict):
         """Add a new host"""
@@ -692,8 +690,12 @@ async def connect_host(request: ConnectRequest, background_tasks: BackgroundTask
                        x_vault_token: Optional[str] = Header(None)):
     """Connect to a specific host, using its credential from the unlocked vault"""
     try:
-        result = api_manager.connect_to_host(
-            request.host_name, vault_sessions.get_key(x_vault_token)
+        # Opening the tab talks to iTerm2 and can take a moment; keep it off the
+        # event loop so other requests (and other launches) aren't blocked
+        result = await run_in_threadpool(
+            api_manager.connect_to_host,
+            request.host_name,
+            vault_sessions.get_key(x_vault_token),
         )
         return result
     except HTTPException:

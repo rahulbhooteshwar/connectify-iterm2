@@ -980,62 +980,6 @@
     }
 
     /* Connection Toast */
-    .connection-toast {
-      position: fixed;
-      top: var(--spacing-lg);
-      right: var(--spacing-lg);
-      background: var(--bg-primary);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-lg);
-      box-shadow: var(--shadow-xl);
-      padding: var(--spacing-lg);
-      max-width: 400px;
-      width: 350px;
-      transform: translateX(calc(100% + var(--spacing-lg)));
-      transition: transform 0.3s ease;
-      z-index: 1000;
-      overflow: hidden;
-    }
-
-    .connection-toast.show {
-      transform: translateX(0);
-    }
-
-    .toast-content {
-      display: flex;
-      align-items: flex-start;
-      gap: var(--spacing-sm);
-    }
-
-    .toast-icon {
-      font-size: 1.25rem;
-      margin-top: var(--spacing-xs);
-    }
-
-    .toast-title {
-      font-weight: 600;
-      color: var(--text-primary);
-      margin-bottom: var(--spacing-xs);
-    }
-
-    .toast-message {
-      color: var(--text-secondary);
-      font-size: 0.875rem;
-    }
-
-    .toast-success .toast-icon {
-      color: var(--success-color);
-    }
-
-    .toast-error .toast-icon {
-      color: var(--error-color);
-    }
-
-    .toast-warning .toast-icon {
-      color: var(--warning-color);
-    }
-
-    /* Connection Overlay */
     .connection-overlay {
       position: fixed;
       top: 0;
@@ -1176,10 +1120,8 @@
       box-shadow: var(--shadow-lg);
       color: var(--text-primary);
       font-size: 0.85rem;
-      line-height: 1.2;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      line-height: 1.35;
+      text-align: center;
       transition: transform 0.25s ease, opacity 0.25s ease;
       opacity: 0;
       z-index: 1200;
@@ -1813,16 +1755,8 @@
         padding: var(--spacing-md);
       }
 
-      .connection-toast {
-        left: var(--spacing-sm);
-        right: var(--spacing-sm);
-        width: auto;
-        max-width: none;
-        transform: translateY(-100vh);
-      }
-
-      .connection-toast.show {
-        transform: translateY(0);
+      .mini-toast {
+        max-width: calc(100vw - 2 * var(--spacing-lg));
       }
     }
 
@@ -2316,17 +2250,6 @@
       <span id="miniToastText"></span>
     </div>
 
-    <!-- Connection Status Toast -->
-    <div id="connectionToast" class="connection-toast">
-      <div class="toast-content">
-        <i class="toast-icon"></i>
-        <div class="toast-text">
-          <div class="toast-title"></div>
-          <div class="toast-message"></div>
-        </div>
-      </div>
-    </div>
-
     <!-- Loading Overlay for Connections -->
     <div id="connectionOverlay" class="connection-overlay">
       <div class="connection-modal">
@@ -2413,7 +2336,6 @@
           emptyState: document.getElementById('emptyState'),
           hostsContainer: document.getElementById('hostsContainer'),
           clearFiltersBtn: document.getElementById('clearFiltersBtn'),
-          connectionToast: document.getElementById('connectionToast'),
           connectionOverlay: document.getElementById('connectionOverlay'),
 
           // Manage View Elements
@@ -4250,122 +4172,79 @@
       async connectToHost(hostName) {
         const tile = document.getElementById(`tile-${hostName}`);
         if (!tile) return;
+        if (tile.classList.contains('loading')) return;   // already launching
+
+        const stateText = tile.querySelector('.loading-state .state-text');
+        const setStatus = (text) => { if (stateText) stateText.textContent = text; };
+
+        // The spinner runs for as long as the launch really takes: the server
+        // only answers once iTerm2 has the tab open (or has failed to).
+        setStatus('Launching...');
+        tile.classList.add('loading');
+
+        // Several launches queue behind each other in the backend, so say so
+        // rather than looking stuck
+        const slowHint = setTimeout(() => setStatus('Still opening the tab...'), 4000);
+        const queueHint = setTimeout(() => setStatus('Waiting for iTerm2...'), 10000);
 
         try {
-          console.log(`Connecting to host: ${hostName}`);
-
-          // Set loading state
-          tile.classList.add('loading');
-
-          const minWait = new Promise(resolve => setTimeout(resolve, 4000));
-          // vaultFetch prompts for the passcode if the vault is locked
-          const request = this.vaultFetch('/api/connect', {
+          const response = await this.vaultFetch('/api/connect', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ host_name: hostName })
           });
 
-          // Wait for both the request and the minimum wait time
-          const [_, response] = await Promise.all([minWait, request]);
+          const data = await response.json().catch(() => ({}));
 
-          const data = await response.json();
+          if (!response.ok || !data.success) {
+            const detail = data.detail;
+            const message = (detail && (detail.message || detail)) || 'Connection failed';
 
-          if (response.ok && data.success) {
-            // Show success state
-            tile.classList.remove('loading');
-            tile.classList.add('success');
-            console.log('Connection successful:', data);
-
-            // Reset after delay
-            setTimeout(() => {
-              tile.classList.remove('success');
-            }, 2000);
-          } else {
-            // Remove loading state immediately on error
-            tile.classList.remove('loading');
-
-            // Check if it's a password required error
-            if (response.status === 400 && data.detail && data.detail.includes('Password required')) {
-              // Show error with instructions
-              this.showToast(`⚠️ ${data.detail}`, 'warning');
-
-              // Optionally open the manage view automatically
-              setTimeout(() => {
-                if (confirm('Would you like to edit this host and set the password now?')) {
-                  this.openHostModal(hostName);
-                }
-              }, 2000);
+            if (response.status === 400 && String(message).includes('credential')) {
+              this.showToast(message, 'warning');
               return;
             }
-            throw new Error(data.detail || 'Connection failed');
+            throw new Error(message);
           }
+
+          tile.classList.remove('loading');
+          tile.classList.add('success');
+          setTimeout(() => tile.classList.remove('success'), 1600);
 
         } catch (error) {
           console.error('Connection error:', error);
+          this.showToast(`${hostName}: ${error.message}`, 'error');
+        } finally {
+          clearTimeout(slowHint);
+          clearTimeout(queueHint);
           tile.classList.remove('loading');
-          this.showToast(`Connection failed: ${error.message}`, 'error');
+          setStatus('Launching...');
         }
-      }
-
-      // showConnectionOverlay and hideConnectionOverlay removed as they are replaced by in-tile feedback
-
-      showToast(message, type = 'info') {
-        const toast = this.elements.connectionToast;
-        const icon = toast.querySelector('.toast-icon');
-        const title = toast.querySelector('.toast-title');
-        const msg = toast.querySelector('.toast-message');
-
-        // Reset classes
-        toast.className = 'connection-toast';
-        toast.classList.add(`toast-${type}`);
-
-        // Set content
-        if (type === 'success') {
-          icon.className = 'toast-icon fas fa-check-circle';
-          title.textContent = 'Success';
-        } else if (type === 'error') {
-          icon.className = 'toast-icon fas fa-exclamation-circle';
-          title.textContent = 'Error';
-        } else if (type === 'warning') {
-          icon.className = 'toast-icon fas fa-exclamation-triangle';
-          title.textContent = 'Warning';
-        } else {
-          icon.className = 'toast-icon fas fa-info-circle';
-          title.textContent = 'Info';
-        }
-
-        msg.textContent = message;
-
-        // Show toast
-        requestAnimationFrame(() => {
-          toast.classList.add('show');
-        });
-
-        // Hide after longer for warnings (5 seconds) or normal for others (3 seconds)
-        const duration = type === 'warning' ? 5000 : 3000;
-        setTimeout(() => {
-          toast.classList.remove('show');
-        }, duration);
       }
 
       /**
-       * One-line status pill for small state changes (vault lock/unlock).
-       * Sits at the bottom centre, ignores pointer events and is short enough
-       * not to cover anything the user might be reading or clicking.
+       * Every message uses the same slim pill - one consistent, unobtrusive
+       * style instead of a large popup that covers the UI.
        */
-      showMiniToast(message, type = 'info', duration = 2200) {
+      showToast(message, type = 'info', duration = null) {
+        return this.showMiniToast(message, type, duration);
+      }
+
+      showMiniToast(message, type = 'info', duration = null) {
         const toast = this.elements.miniToast;
         if (!toast) return;
 
         const icons = {
           success: 'fas fa-check',
           error: 'fas fa-exclamation-circle',
+          warning: 'fas fa-exclamation-triangle',
           locked: 'fas fa-lock',
           unlocked: 'fas fa-lock-open',
           info: 'fas fa-info-circle'
         };
+
+        // Errors and warnings carry detail, so give them longer to be read
+        duration = duration || (['error', 'warning'].includes(type) ? 5000 : 2400);
 
         toast.className = `mini-toast mini-${type}`;
         toast.querySelector('i').className = icons[type] || icons.info;

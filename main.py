@@ -96,6 +96,11 @@ class SSHManager:
     # when multiple connections are launched simultaneously
     _iterm_launch_lock = threading.Lock()
 
+    # When several sessions are launched at once, give iTerm2 a beat between
+    # tabs - it drops requests that arrive while it is still creating one
+    _last_launch_at = 0.0
+    LAUNCH_SETTLE_SECONDS = 0.35
+
     def __init__(self, config_file="~/.connectify/hosts.json", debug=False):
         self.config_file = Path(config_file).expanduser()
         self.old_config_file = Path("~/.ssh_manager_config.json").expanduser()
@@ -321,79 +326,48 @@ class SSHManager:
 
         return filtered_hosts
 
-    def _ensure_iterm_running(self):
-        """Ensure iTerm2 is running, launch it if not"""
+    def _iterm_is_ready(self):
+        """True when iTerm2 is running and answering AppleScript."""
         try:
-            # Check if iTerm2 is running
-            check_script = '''
-            tell application "System Events"
-                if exists (processes where name is "iTerm") then
-                    return "running"
-                else
-                    return "not_running"
-                end if
-            end tell
-            '''
-
-            result = subprocess.run(['osascript', '-e', check_script],
-                                  capture_output=True, text=True, check=True)
-
-            if result.stdout.strip() == "not_running":
-                print("📱 iTerm2 not running, launching it now...")
-
-                # Try multiple methods to launch iTerm2
-                launch_success = False
-
-                # Method 1: AppleScript
-                try:
-                    launch_script = '''
-                    tell application "iTerm"
-                        activate
-                    end tell
-                    '''
-                    subprocess.run(['osascript', '-e', launch_script], check=True, capture_output=True, text=True)
-                    launch_success = True
-                    print("✅ iTerm2 launched via AppleScript")
-                except subprocess.CalledProcessError:
-                    pass
-
-                # Method 2: open command
-                if not launch_success:
-                    try:
-                        subprocess.run(['open', '-a', 'iTerm'], check=True, capture_output=True, text=True)
-                        launch_success = True
-                        print("✅ iTerm2 launched via 'open' command")
-                    except subprocess.CalledProcessError:
-                        pass
-
-                if not launch_success:
-                    print("⚠️  Warning: Could not launch iTerm2. Make sure it's installed.")
-                    print("   You can install it from: https://iterm2.com/downloads.html")
-                    return False
-
-                # Wait longer for iTerm2 to fully start
-                print("   Waiting for iTerm2 to initialize...")
-                time.sleep(3)
-                return True
-            else:
-                # iTerm2 is already running
-                return True
-
-        except subprocess.CalledProcessError as e:
-            error_msg = e.stderr if e.stderr else str(e)
-            print(f"⚠️  Error checking iTerm2 status: {error_msg}")
-            print("   Attempting to launch iTerm2 anyway...")
-            try:
-                subprocess.run(['open', '-a', 'iTerm'], check=True, capture_output=True, text=True)
-                time.sleep(3)
-                print("✅ iTerm2 launched")
-                return True
-            except subprocess.CalledProcessError:
-                print("❌ Could not launch iTerm2")
-                return False
-        except Exception as e:
-            print(f"⚠️  Unexpected error: {e}")
+            result = subprocess.run(
+                ['osascript', '-e', 'tell application "iTerm" to return (count of windows) as string'],
+                capture_output=True, text=True, timeout=10,
+            )
+            return result.returncode == 0
+        except (OSError, subprocess.SubprocessError):
             return False
+
+    def _ensure_iterm_running(self, timeout=20):
+        """Make sure iTerm2 is up and actually answering before we script it.
+
+        Waiting for a real answer (rather than sleeping a fixed few seconds)
+        is what stops the first launch after a cold start from failing.
+        """
+        if self._iterm_is_ready():
+            return True
+
+        print("📱 iTerm2 not responding yet, launching it...")
+        for launcher in (['open', '-a', 'iTerm'],
+                         ['osascript', '-e', 'tell application "iTerm" to activate']):
+            try:
+                subprocess.run(launcher, check=True, capture_output=True, text=True, timeout=15)
+                break
+            except (OSError, subprocess.SubprocessError):
+                continue
+        else:
+            print("⚠️  Could not launch iTerm2. Make sure it is installed:")
+            print("   https://iterm2.com/index.html")
+            return False
+
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if self._iterm_is_ready():
+                print("✅ iTerm2 is ready")
+                return True
+            time.sleep(0.4)
+
+        print("⚠️  iTerm2 did not become ready in time")
+        return False
 
     def launch_iterm_session(self, host, credential=None):
         """Launch an iTerm2 session for a host, using its vault credential.
@@ -432,86 +406,109 @@ class SSHManager:
 
             Explicit tab/window references avoid races when several sessions
             are launched at once, and passing the launcher as the session's
-            command means nothing is ever typed into a shell.
+            command means nothing is ever typed into a shell. The script
+            returns the new session's id so the caller can confirm the tab
+            really exists.
             """
+            with_profile = (f'with profile "{profile_name}"' if profile_name
+                            else 'with default profile')
             return f'''
             tell application "iTerm"
                 activate
                 if (count of windows) = 0 then
-                    set newWindow to (create window with profile "{profile_name}" command "{escaped_command}")
+                    set newWindow to (create window {with_profile} command "{escaped_command}")
                     set targetSession to current session of newWindow
                 else
                     tell current window
-                        set newTab to (create tab with profile "{profile_name}" command "{escaped_command}")
+                        set newTab to (create tab {with_profile} command "{escaped_command}")
                         set targetSession to current session of newTab
                     end tell
                 end if
                 tell targetSession
                     set name to "{escaped_host_name}"
+                    return id
                 end tell
             end tell
             '''
 
-        # Serialize launches so concurrent connections don't fight over the
-        # "current window"
+        # Serialize the whole launch. Two AppleScripts creating tabs at the
+        # same moment race over iTerm2's "current window", and a user switching
+        # tabs mid-launch used to be enough to lose a session.
         with SSHManager._iterm_launch_lock:
+            # Give iTerm2 a moment to settle after the previous tab, otherwise
+            # rapid-fire launches can outrun it
+            since_last = time.time() - SSHManager._last_launch_at
+            if since_last < self.LAUNCH_SETTLE_SECONDS:
+                time.sleep(self.LAUNCH_SETTLE_SECONDS - since_last)
+
+            if not self._ensure_iterm_running():
+                session.cleanup()
+                raise RuntimeError("iTerm2 is not running and could not be started")
+
             profiles_to_try = [iterm_profile]
             if iterm_profile != "Default":
                 profiles_to_try.append("Default")
+            profiles_to_try.append(None)   # let iTerm2 pick its default profile
 
+            last_error = None
             for profile_attempt in profiles_to_try:
-                try:
-                    subprocess.run(['osascript', '-e', create_applescript(profile_attempt)],
-                                   check=True, capture_output=True, text=True)
+                for attempt in range(2):   # one retry for transient AppleScript errors
+                    try:
+                        result = subprocess.run(
+                            ['osascript', '-e', create_applescript(profile_attempt)],
+                            check=True, capture_output=True, text=True, timeout=30,
+                        )
 
-                    if profile_attempt != iterm_profile:
-                        print(f"⚠️  Profile '{iterm_profile}' not found, using '{profile_attempt}' instead")
+                        # The script returns the new session's id: proof that the
+                        # tab exists rather than an assumption that it does
+                        session_id = result.stdout.strip()
+                        if not session_id:
+                            raise subprocess.CalledProcessError(
+                                1, 'osascript', stderr='iTerm2 did not report a session id')
 
-                    print(f"✅ Session launched successfully!")
-                    return True
+                        SSHManager._last_launch_at = time.time()
 
-                except subprocess.CalledProcessError as e:
-                    error_msg = e.stderr if e.stderr else str(e)
-                    print(f"⚠️  Profile '{profile_attempt}' failed: {error_msg}")
+                        if profile_attempt != iterm_profile:
+                            using = profile_attempt or "iTerm2's default profile"
+                            print(f"⚠️  Profile '{iterm_profile}' not usable, used {using} instead")
 
-            # Last resort: let iTerm2 pick the profile itself
-            try:
-                fallback_script = f'''
-                tell application "iTerm"
-                    activate
-                    if (count of windows) = 0 then
-                        set newWindow to (create window with default profile command "{escaped_command}")
-                        set targetSession to current session of newWindow
-                    else
-                        tell current window
-                            set newTab to (create tab with default profile command "{escaped_command}")
-                            set targetSession to current session of newTab
-                        end tell
-                    end if
-                    tell targetSession
-                        set name to "{escaped_host_name}"
-                    end tell
-                end tell
-                '''
-                subprocess.run(['osascript', '-e', fallback_script],
-                               check=True, capture_output=True, text=True)
-                print(f"✅ Session launched successfully (using default profile)!")
-                return True
+                        print(f"✅ Session launched ({session_id})")
+                        return True
 
-            except subprocess.CalledProcessError as e:
-                error_msg = e.stderr if e.stderr else str(e)
-                print(f"✗ Error launching iTerm2 (all methods failed)")
-                print(f"   Last error: {error_msg}")
-                print(f"")
-                print(f"💡 Troubleshooting tips:")
-                print(f"   1. Make sure iTerm2 is installed and can be launched")
-                print(f"   2. Check if iTerm2 has necessary permissions (System Settings > Privacy & Security)")
-                print(f"   3. Try running iTerm2 manually first")
-                print(f"   4. Check that you have a profile named 'Default' in iTerm2 preferences")
+                    except subprocess.TimeoutExpired as e:
+                        last_error = "iTerm2 did not respond in time"
+                        break
+                    except subprocess.CalledProcessError as e:
+                        last_error = (e.stderr or str(e)).strip()
+                        if attempt == 0 and self._is_transient_applescript_error(last_error):
+                            time.sleep(0.5)
+                            continue
+                        break
 
-                # Nothing was launched, so nothing will clean up after us
-                session.cleanup()
-                return False
+                if self.debug:
+                    print(f"DEBUG: profile '{profile_attempt}' failed: {last_error}")
+
+            SSHManager._last_launch_at = time.time()
+            session.cleanup()
+
+            print(f"✗ Could not open a session in iTerm2")
+            print(f"   Last error: {last_error}")
+            print(f"")
+            print(f"💡 Troubleshooting tips:")
+            print(f"   1. Make sure iTerm2 is installed and can be launched")
+            print(f"   2. Check iTerm2's automation permissions "
+                  f"(System Settings > Privacy & Security > Automation)")
+            print(f"   3. Try running iTerm2 manually first")
+            raise RuntimeError(f"Could not open a session in iTerm2: {last_error}")
+
+    @staticmethod
+    def _is_transient_applescript_error(message):
+        """Errors worth one retry: iTerm2 busy, starting up or mid-redraw."""
+        message = (message or '').lower()
+        return any(marker in message for marker in (
+            'timed out', 'not responding', "can't get current window",
+            'invalid index', '-1712', '-1728', '-600',
+        ))
 
     # Fields that predate the credentials vault. They described how to
     # authenticate; that now lives on the credential, so they are stripped on
