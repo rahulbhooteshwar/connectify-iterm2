@@ -171,6 +171,18 @@ class SSHSession:
         shutil.rmtree(self.directory, ignore_errors=True)
 
 
+def effective_username(host, credential=None):
+    """Who to log in as.
+
+    A credential can carry its own username, and when it does it wins: the
+    credential describes an account, so the hosts using it inherit that login.
+    A host's own username is the fallback for credentials that don't name one.
+    """
+    credential = credential or {}
+    return (str(credential.get('username') or '').strip()
+            or str((host or {}).get('username') or '').strip())
+
+
 def build_ssh_argv(host, credential=None, ssh_options=None):
     """The ssh command line for a host - never contains a secret."""
     credential = credential or {}
@@ -188,7 +200,8 @@ def build_ssh_argv(host, credential=None, ssh_options=None):
         if key_path:
             argv += ['-i', str(Path(key_path).expanduser())]
 
-    argv.append(f"{host['username']}@{host['hostname']}")
+    username = effective_username(host, credential)
+    argv.append(f"{username}@{host['hostname']}" if username else host['hostname'])
     return argv
 
 

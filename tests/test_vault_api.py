@@ -262,3 +262,63 @@ def test_connecting_a_host_without_a_credential_explains_itself(vault_env):
 
     assert response.status_code == 400
     assert "not in the vault" in response.json()["detail"]
+
+
+# --- the username a credential carries ---------------------------------------
+
+def test_a_credentials_username_overrides_the_hosts(vault_env, monkeypatch):
+    headers, _ = create_vault()
+    client.post("/api/vault/credentials", headers=headers, json={
+        "name": "prod-admin", "type": "password", "password": "s3cret", "username": "ubuntu",
+    })
+
+    # It travels with the listing, so the tiles can show the real login
+    listed = client.get("/api/vault/credentials", headers=headers).json()["credentials"]
+    assert listed[0]["username"] == "ubuntu"
+
+    launched = {}
+    monkeypatch.setattr(api_server.api_manager.ssh_manager, "launch_iterm_session",
+                        lambda host, credential=None: launched.update(host=host, credential=credential))
+
+    # prod-web says "admin", the credential says "ubuntu" - the credential wins
+    assert client.post("/api/connect", headers=headers,
+                       json={"host_name": "prod-web"}).status_code == 200
+    assert api_server.ssh_session.effective_username(
+        launched["host"], launched["credential"]) == "ubuntu"
+
+
+def test_a_host_can_leave_the_username_to_its_credential(vault_env, monkeypatch):
+    headers, _ = create_vault()
+    client.post("/api/vault/credentials", headers=headers, json={
+        "name": "prod-admin", "type": "password", "password": "s3cret", "username": "ubuntu",
+    })
+
+    created = client.post("/api/hosts", json={
+        "name": "no-user", "hostname": "srv.example.com", "credential": "prod-admin",
+    })
+    assert created.status_code == 200, created.text
+    assert created.json()["host"]["username"] == ""
+
+    launched = {}
+    monkeypatch.setattr(api_server.api_manager.ssh_manager, "launch_iterm_session",
+                        lambda host, credential=None: launched.update(host=host, credential=credential))
+
+    assert client.post("/api/connect", headers=headers,
+                       json={"host_name": "no-user"}).status_code == 200
+    assert api_server.ssh_session.effective_username(
+        launched["host"], launched["credential"]) == "ubuntu"
+
+
+def test_connecting_with_no_username_anywhere_is_refused(vault_env):
+    headers, _ = create_vault()
+    client.post("/api/vault/credentials", headers=headers, json={
+        "name": "prod-admin", "type": "password", "password": "s3cret",
+    })
+    client.post("/api/hosts", json={
+        "name": "no-user", "hostname": "srv.example.com", "credential": "prod-admin",
+    })
+
+    response = client.post("/api/connect", headers=headers, json={"host_name": "no-user"})
+
+    assert response.status_code == 400
+    assert "no username" in response.json()["detail"]

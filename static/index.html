@@ -838,6 +838,13 @@
       color: var(--error-color);
     }
 
+    /* The login is the credential's, and the vault is locked */
+    .login-unknown {
+      color: var(--text-muted);
+      border-bottom: 1px dotted var(--text-muted);
+      cursor: help;
+    }
+
     .launch-btn {
       width: 100%;
       padding: var(--spacing-sm);
@@ -1266,6 +1273,16 @@
     .credential-type.type-key {
       border-color: var(--theme-green);
       color: var(--theme-green);
+    }
+
+    /* The login a credential carries, when it has one */
+    .credential-user {
+      font-size: 0.72rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
     }
 
     .credential-meta {
@@ -2046,8 +2063,9 @@
           </div>
 
           <div class="form-group" style="margin-bottom: 1rem;">
-            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Username</label>
-            <input type="text" id="hostUser" required class="search-input" style="width: 100%;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Username <span style="color: var(--text-muted); font-weight: 400;">(optional)</span></label>
+            <input type="text" id="hostUser" class="search-input" style="width: 100%;" placeholder="Leave empty to use the credential's username">
+            <small id="hostUserHint" class="profile-hint"></small>
           </div>
 
           <div class="form-group" style="margin-bottom: 1rem;">
@@ -2136,6 +2154,14 @@
           <div class="form-group" style="margin-bottom: 1rem;">
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Name</label>
             <input type="text" id="credentialName" class="search-input" style="width: 100%;" placeholder="prod-admin" required>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Username <span style="color: var(--text-muted); font-weight: 400;">(optional)</span></label>
+            <input type="text" id="credentialUsername" class="search-input" style="width: 100%;" placeholder="ubuntu" autocomplete="off">
+            <small style="color: var(--text-muted); display: block; margin-top: 0.35rem;">
+              Overrides the username on every host that uses this credential.
+            </small>
           </div>
 
           <div class="form-group" style="margin-bottom: 1rem;">
@@ -2427,6 +2453,7 @@
           credentialModalTitle: document.getElementById('credentialModalTitle'),
           credentialOriginalName: document.getElementById('credentialOriginalName'),
           credentialName: document.getElementById('credentialName'),
+          credentialUsername: document.getElementById('credentialUsername'),
           credentialDescription: document.getElementById('credentialDescription'),
           credentialType: document.getElementById('credentialType'),
           credentialPasswordField: document.getElementById('credentialPasswordField'),
@@ -2587,6 +2614,10 @@
 
         if (this.elements.hostCredential) {
           this.elements.hostCredential.addEventListener('change', () => this.onCredentialChange());
+        }
+        const hostUserInput = document.getElementById('hostUser');
+        if (hostUserInput) {
+          hostUserInput.addEventListener('input', () => this.updateUsernameHint());
         }
         if (this.elements.addCredentialInlineBtn) {
           this.elements.addCredentialInlineBtn.addEventListener('click',
@@ -3116,6 +3147,9 @@
           const usage = usedBy.length
             ? `${usedBy.length} host(s): ${this.escapeHTML(usedBy.join(', '))}`
             : 'Not used by any host';
+          const login = (credential.username || '').trim()
+            ? `<span class="credential-user" title="Overrides the username on hosts using this credential"><i class="fas fa-user"></i> ${this.escapeHTML(credential.username)}</span>`
+            : '';
 
           return `
             <div class="credential-card">
@@ -3123,6 +3157,7 @@
                 <div class="credential-name">
                   ${this.escapeHTML(credential.name)}
                   <span class="credential-type type-${credential.type}">${credential.type === 'key' ? 'SSH Key' : 'Password'}</span>
+                  ${login}
                 </div>
                 <div class="credential-meta">${credential.description ? this.escapeHTML(credential.description) + ' - ' : ''}${detail}</div>
                 <div class="credential-meta">${usage}</div>
@@ -3175,6 +3210,7 @@
           this.elements.credentialModalTitle.textContent = 'Edit Credential';
           this.elements.credentialOriginalName.value = credential.name;
           this.elements.credentialName.value = credential.name;
+          this.elements.credentialUsername.value = credential.username || '';
           this.elements.credentialDescription.value = credential.description || '';
           this.elements.credentialType.value = credential.type;
           this.elements.credentialPassword.value = credential.password || '';
@@ -3201,6 +3237,7 @@
         const type = this.elements.credentialType.value;
         const payload = {
           name: this.elements.credentialName.value.trim(),
+          username: this.elements.credentialUsername.value.trim(),
           description: this.elements.credentialDescription.value.trim(),
           type
         };
@@ -3394,6 +3431,30 @@
         hint.textContent = credential.type === 'key'
           ? `SSH key: ${credential.ssh_key_path || '(no path)'}`
           : 'Password credential';
+      }
+
+      /**
+       * Say which login this host will end up using: the credential's when it
+       * carries one, otherwise whatever is typed here.
+       */
+      updateUsernameHint() {
+        const hint = document.getElementById('hostUserHint');
+        const field = document.getElementById('hostUser');
+        if (!hint || !field) return;
+
+        const credential = this.selectedCredential();
+        const fromCredential = ((credential && credential.username) || '').trim();
+        const typed = field.value.trim();
+
+        if (fromCredential) {
+          hint.textContent = typed
+            ? `'${credential.name}' connects as ${fromCredential} - that overrides ${typed}.`
+            : `'${credential.name}' connects as ${fromCredential}.`;
+        } else if (typed) {
+          hint.textContent = `Connects as ${typed}.`;
+        } else {
+          hint.textContent = 'Required unless the credential supplies a username.';
+        }
       }
 
       selectedCredential() {
@@ -3925,6 +3986,8 @@
               host.name,
               host.hostname,
               host.username,
+              // so searching for the credential's login finds the host too
+              this.effectiveUsername(host),
               host.group || '',
               ...(host.tags || [])
             ].join(' ').toLowerCase();
@@ -4120,6 +4183,7 @@
       generateHostTileHTML(host) {
         // How this host authenticates now comes from its vault credential
         const credential = this.credentialBadge(host);
+        const login = this.loginDisplay(host);
         // Tile colour comes from the theme picked on the host, not from its tags
         const hostTags = host.tags || [];
         const themeClass = this.getThemeClass(host);
@@ -4139,7 +4203,7 @@
                                     <div class="host-tags" style="background-color: ${tagColor}; color: white;">${tagsText}</div>
                                     <div class="host-connection-text">
                                         <i class="${credential.icon} credential-badge badge-${credential.kind}" title="${credential.title}"></i>
-                                        ${host.username}@${host.hostname}:${host.port}
+                                        ${login.html}${host.hostname}:${host.port}
                                     </div>
                                 </div>
 
@@ -4152,7 +4216,7 @@
                                 <button class="small-action-btn" onclick="event.stopPropagation(); app.copyToClipboard('${host.hostname}', 'Hostname')" title="Copy Hostname">
                                     <i class="far fa-copy"></i>
                                 </button>
-                                <button class="small-action-btn" onclick="event.stopPropagation(); app.copyToClipboard('${host.username}@${host.hostname}', 'Connection string')" title="Copy Connection String (user@host)">
+                                <button class="small-action-btn" onclick="event.stopPropagation(); app.copyToClipboard('${this.escapeAttr(login.user ? login.user + '@' + host.hostname : host.hostname)}', 'Connection string')" title="Copy Connection String (user@host)">
                                     <i class="fas fa-terminal"></i>
                                 </button>
                                 <button class="small-action-btn edit-btn" onclick="event.stopPropagation(); app.openHostModal('${host.name}')" title="Edit Host">
@@ -4175,6 +4239,39 @@
                         </div>
                     </div>
                 `;
+      }
+
+      /**
+       * The login this host actually connects with. A credential can carry a
+       * username, and when it does it wins - the host's own username is the
+       * fallback for credentials that don't name one. Mirrors
+       * ssh_session.effective_username on the server.
+       */
+      effectiveUsername(host) {
+        const name = (host.credential || '').trim();
+        const credential = name ? this.credentials.find(c => c.name === name) : null;
+        return ((credential && credential.username) || '').trim()
+            || (host.username || '').trim();
+      }
+
+      /**
+       * What to print before the hostname. With the vault locked we may not
+       * know the credential's username yet, so say so rather than showing a
+       * host username the credential would override.
+       */
+      loginDisplay(host) {
+        const name = (host.credential || '').trim();
+        const known = !name || this.credentials.some(c => c.name === name);
+        const user = this.effectiveUsername(host);
+
+        if (!known) {
+          return {
+            user: user,
+            html: `<span class="login-unknown" title="Unlock the vault to see which login this credential uses">${user ? this.escapeHTML(user) : '…'}</span>@`
+          };
+        }
+
+        return { user, html: user ? `${this.escapeHTML(user)}@` : '' };
       }
 
       /**
@@ -4353,7 +4450,7 @@
 
             document.getElementById('hostName').value = host.name;
             document.getElementById('hostAddress').value = host.hostname;
-            document.getElementById('hostUser').value = host.username;
+            document.getElementById('hostUser').value = host.username || '';
             document.getElementById('hostPort').value = host.port;
             document.getElementById('itermProfile').value = host.iterm_profile || 'Default';
             this.populateCredentialSelect(host.credential || '');
@@ -4394,6 +4491,7 @@
         }
 
         this.updateCredentialHint();
+        this.updateUsernameHint();
         modal.classList.add('show');
       }
 
@@ -4412,17 +4510,28 @@
           this.setSshOptions(this.defaultSshOptions[credential.type] || []);
         }
         this.updateCredentialHint();
+        this.updateUsernameHint();
       }
 
       async handleHostSubmit(e) {
         e.preventDefault();
 
         const credential = this.selectedCredential();
+        const username = document.getElementById('hostUser').value.trim();
+
+        // One of the two has to name a login. When the vault is locked we
+        // cannot tell, so leave that call to the server.
+        if (!username && credential && !((credential.username || '').trim())) {
+          this.showMiniToast(
+            `Add a username - '${credential.name}' does not supply one`, 'error');
+          document.getElementById('hostUser').focus();
+          return;
+        }
 
         const formData = {
           name: document.getElementById('hostName').value,
           hostname: document.getElementById('hostAddress').value,
-          username: document.getElementById('hostUser').value,
+          username,
           port: parseInt(document.getElementById('hostPort').value),
           credential: this.elements.hostCredential.value,
           iterm_profile: document.getElementById('itermProfile').value,
@@ -4647,7 +4756,7 @@
             <div style="flex: 1;">
               <strong>${host.name}</strong> ${passwordStatus}
               <br>
-              <small style="color: var(--text-secondary);">${host.username}@${host.hostname}:${host.port}</small>
+              <small style="color: var(--text-secondary);">${host.username ? this.escapeHTML(host.username) + '@' : ''}${host.hostname}:${host.port}</small>
             </div>
             <div style="color: var(--text-secondary); font-size: 0.875rem;">
               ${host.tags && host.tags.length > 0 ? host.tags.join(', ') : 'No tags'}

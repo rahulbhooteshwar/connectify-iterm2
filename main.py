@@ -379,7 +379,10 @@ class SSHManager:
         a command line, and sshpass is not involved.
         """
         iterm_profile = host.get('iterm_profile', 'Default')
-        host_name = host.get('name', f"{host['username']}@{host['hostname']}")
+        login = ssh_session.effective_username(host, credential)
+        host_name = host.get('name') or (
+            f"{login}@{host['hostname']}" if login else host['hostname']
+        )
         print(f"🚀 Launching {host_name} session...")
 
         self._ensure_iterm_running()

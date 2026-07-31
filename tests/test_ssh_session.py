@@ -61,6 +61,35 @@ def test_key_credential_adds_the_identity_file(tmp_path):
     assert '-i' in argv and str(key) in argv
 
 
+@pytest.mark.parametrize("host_username,credential_username,expected", [
+    ("admin", "ubuntu", "ubuntu"),   # the credential's login wins
+    ("admin", "", "admin"),          # ... and the host's is the fallback
+    ("", "ubuntu", "ubuntu"),        # a host can leave it to the credential
+    ("  ", "  ubuntu  ", "ubuntu"),  # whitespace is not a username
+    ("", "", ""),                    # neither: ssh would use the local account
+])
+def test_effective_username(host_username, credential_username, expected):
+    host = {**HOST, "username": host_username}
+    credential = {**PASSWORD_CREDENTIAL, "username": credential_username}
+
+    assert ssh_session.effective_username(host, credential) == expected
+
+
+def test_the_credentials_username_is_what_ssh_is_given():
+    argv = ssh_session.build_ssh_argv(HOST, {**PASSWORD_CREDENTIAL, "username": "ubuntu"})
+    assert argv[-1] == "ubuntu@web.example.com"
+
+    # And a host with no username of its own still gets one
+    argv = ssh_session.build_ssh_argv({**HOST, "username": ""},
+                                      {**PASSWORD_CREDENTIAL, "username": "ubuntu"})
+    assert argv[-1] == "ubuntu@web.example.com"
+
+
+def test_no_username_anywhere_leaves_ssh_to_its_own_default():
+    argv = ssh_session.build_ssh_argv({**HOST, "username": ""}, PASSWORD_CREDENTIAL)
+    assert argv[-1] == "web.example.com"
+
+
 @pytest.mark.parametrize("credential,expected", [
     (PASSWORD_CREDENTIAL, SECRET),
     (KEY_CREDENTIAL, SECRET),

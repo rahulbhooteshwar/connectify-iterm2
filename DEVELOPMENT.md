@@ -158,6 +158,9 @@ The SSH engine behind the web UI:
 `~/.connectify/vault.json`, AES-256-GCM with a scrypt-derived key:
 - `Vault` handles create/unlock/change-passcode and credential CRUD. Everything
   needs the derived key, so a locked vault simply can't be read.
+- A credential holds an optional `username`. It is not a secret, so it travels
+  with the public listing, and it overrides the host's own username - see
+  `ssh_session.effective_username()`.
 - `VaultSessions` keeps unlocked keys in server memory only, keyed by an opaque
   token handed to the browser tab. Nothing is persisted, so a page reload
   re-locks the vault; sessions also expire when idle. The UI asks for the
@@ -172,6 +175,8 @@ The SSH engine behind the web UI:
 Builds everything a session needs without ever putting a secret on disk or on a
 command line:
 - `build_ssh_argv()` - the ssh command line (no secrets, no sshpass)
+- `effective_username()` - the login to connect as: the credential's when it has
+  one, the host's otherwise. The UI mirrors this so tiles show the same thing.
 - `SecretChannel` - a FIFO in a private 0700 directory that hands the password
   or key passphrase to ssh's askpass helper, a bounded number of times and only
   for a limited window. The FIFO is replaced between hand-offs so a draining

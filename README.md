@@ -127,6 +127,7 @@ locked with a passcode you choose. It replaces the macOS Keychain entirely.
   at connect time). Each has an optional description.
 - Hosts reference a credential **by name**, so one credential can serve many
   hosts and rotating a password is a single edit.
+- A credential can also carry the **username** it logs in with - see below.
 
 Upgrading from a pre-vault install? Connectify drops the old `auth_method`,
 `ssh_key_path` and `password` fields from `hosts.json` on startup (keeping the
@@ -157,6 +158,21 @@ credential without leaving the host you're editing.
 - **Renaming** a credential updates every host that referenced it.
 - **Deleting** is blocked while any host uses the credential - the dialog lists
   those hosts by name. Unused credentials just ask for confirmation.
+
+### Usernames
+
+A credential describes an account, so it can carry the **username** to log in
+with as well as the secret to prove it. When a credential has one it **overrides
+the username on every host that uses it**, and hosts may leave their own
+username empty to inherit it - handy when a fleet shares one login. A host's
+username is the fallback for credentials that don't name one, so existing hosts
+keep working unchanged.
+
+The host tiles show the login that will actually be used. With the vault locked
+Connectify can't read the credential's username yet, so the tile shows a dotted
+placeholder until you unlock. One of the two has to supply a username - a
+connect with neither is refused rather than quietly falling back to your local
+account name.
 
 ### How a session is launched
 
@@ -238,7 +254,7 @@ Configuration is stored at `~/.connectify/hosts.json`. On first run, a sample co
 |--------|-------------|----------|
 | `name` | Display name for the host | Yes |
 | `hostname` | Server hostname or IP address | Yes |
-| `username` | SSH username | Yes |
+| `username` | SSH username | Unless the credential has one |
 | `port` | SSH port (default: 22) | No |
 | `credential` | Name of a credential in the vault | To connect |
 | `iterm_profile` | iTerm2 profile name | No |

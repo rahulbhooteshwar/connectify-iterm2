@@ -21,6 +21,7 @@ from pydantic import BaseModel, field_validator
 import uvicorn
 
 import iterm_profiles
+import ssh_session
 import vault as vault_module
 from main import (
     DEFAULT_HOST_THEME,
@@ -34,7 +35,9 @@ from main import (
 class HostModel(BaseModel):
     name: str
     hostname: str
-    username: str
+    # Optional: a credential can carry its own username, and when it does the
+    # credential's login wins. Leaving this empty means "use the credential's".
+    username: str = ""
     port: int = 22
     iterm_profile: str = "Default"
     # Name of the vault credential used to authenticate (empty = none yet)
@@ -86,6 +89,8 @@ class CredentialRequest(BaseModel):
     name: str
     type: str
     description: str = ""
+    # Login this credential belongs to; overrides the host's own username
+    username: str = ""
     # Only one of these applies, depending on `type`
     password: Optional[str] = None
     ssh_key_path: Optional[str] = None
@@ -184,6 +189,16 @@ class APISSHManager:
             raise HTTPException(
                 status_code=400,
                 detail=f"'{host['name']}' has no credential yet. Edit the host and pick one from the vault."
+            )
+
+        # One of the two has to name a login, or ssh would fall back to the
+        # local account - almost never what the user meant.
+        if not ssh_session.effective_username(host, credential):
+            raise HTTPException(
+                status_code=400,
+                detail=f"'{host['name']}' has no username, and the credential "
+                       f"'{credential_name}' does not supply one. Set a username on "
+                       f"either the host or the credential."
             )
 
         # Launch synchronously so the answer reflects what actually happened -

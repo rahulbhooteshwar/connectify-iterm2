@@ -113,6 +113,10 @@ def validate_credential(data, existing_names=(), original_name=None):
         'name': name,
         'type': cred_type,
         'description': str(data.get('description') or '').strip(),
+        # Optional login this credential belongs to. When set it wins over the
+        # host's own username, so one credential can carry "who am I" as well
+        # as "how do I prove it".
+        'username': str(data.get('username') or '').strip(),
     }
 
     if cred_type == 'password':
@@ -137,6 +141,8 @@ def public_credential(credential, used_by=None):
         'name': credential.get('name'),
         'type': credential.get('type'),
         'description': credential.get('description', ''),
+        # Not a secret, and the UI needs it to show what a host will connect as
+        'username': credential.get('username', ''),
         'created_at': credential.get('created_at'),
         'updated_at': credential.get('updated_at'),
     }
@@ -354,6 +360,8 @@ class Vault:
         merged = dict(data)
         merged.setdefault('name', previous['name'])
         merged.setdefault('type', previous['type'])
+        if merged.get('username') is None:
+            merged['username'] = previous.get('username', '')
 
         # Secrets are optional on update - an omitted value keeps the stored one
         if merged.get('type') == previous.get('type'):

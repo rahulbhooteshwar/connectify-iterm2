@@ -127,6 +127,35 @@ def test_public_credential_hides_secrets():
     assert key_public["ssh_key_path"] == "~/.ssh/id_rsa"
 
 
+def test_a_credential_can_carry_the_username_it_logs_in_with(unlocked):
+    vault, key = unlocked
+    credential = vault.add_credential(key, {
+        "name": "prod-admin", "type": "password", "password": "pw", "username": "  ubuntu ",
+    })
+
+    assert credential["username"] == "ubuntu"
+    # It is not a secret, so the listing carries it for the tiles to show
+    assert vault_module.public_credential(credential)["username"] == "ubuntu"
+
+    # Omitting it on an update keeps it, like the secrets do
+    updated, _ = vault.update_credential(key, "prod-admin", {
+        "name": "prod-admin", "type": "password",
+    })
+    assert updated["username"] == "ubuntu"
+
+    # Blanking it explicitly hands the choice back to the hosts
+    cleared, _ = vault.update_credential(key, "prod-admin", {
+        "name": "prod-admin", "type": "password", "username": "",
+    })
+    assert cleared["username"] == ""
+
+
+def test_username_is_optional(unlocked):
+    vault, key = unlocked
+    credential = vault.add_credential(key, {"name": "k", "type": "password", "password": "pw"})
+    assert credential["username"] == ""
+
+
 @pytest.mark.parametrize("payload,message", [
     ({"name": "", "type": "password", "password": "x"}, "name is required"),
     ({"name": "n", "type": "wat", "password": "x"}, "type must be"),
