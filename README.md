@@ -7,12 +7,21 @@ A powerful command-line utility to manage and launch SSH sessions with credentia
 - 🔐 **Secure credential storage** using macOS Keychain
 - 🎯 **Interactive host selection** with tag-based filtering
 - 🖥️ **iTerm2 integration** with custom profiles
-- 🎨 **Bundled iTerm2 profiles** (PERSONAL / NON-PROD / PROD) installed for you
+- 🎨 **Bundled iTerm2 profiles** (PERSONAL / NON-PROD / PROD / UI) installed for you
 - 🔍 **Smart search and filtering** by name or tags
 - ⚡ **Fast host management** - add, list, and connect
 - 🏷️ **Tag-based organization** for better host grouping
 - 🌐 **Web interface** - Modern tile-based UI for easy host management
 - 🚀 **Background UI server** - Always-on web interface
+
+## Requirements
+
+- macOS
+- **[iTerm2](https://iterm2.com/index.html)** - required. Connectify launches every
+  session in iTerm2, so the installer stops if it isn't installed.
+- **[iTerm2 browser plugin](https://iterm2.com/browser-plugin.html)** - optional.
+  Only needed for the shipped `connectify-UI` profile, which opens the Connectify
+  web UI inside iTerm2. The installer warns and continues if it's missing.
 
 ## Quick Installation
 
@@ -25,10 +34,12 @@ curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/connectify-iterm2/
 ```
 
 This will:
+- ✅ Check that iTerm2 (and the browser plugin) are installed
 - ✅ Download the latest pre-built binary
 - ✅ Install to `~/.local/bin/connectify` (no sudo required!)
 - ✅ Optionally setup auto-start
 - ✅ Setup PATH if needed
+- ✅ Install the bundled iTerm2 profiles
 - ✅ No Python or build tools required!
 
 ## Usage
@@ -67,13 +78,20 @@ The web interface provides:
 
 ## iTerm2 Profiles
 
-Connectify ships three ready-made iTerm2 profiles and installs them for you:
+Connectify ships four ready-made iTerm2 profiles and installs them for you:
 
 | Profile | Badge | Use for |
 |---------|-------|---------|
 | `connectify-PERSONAL` | PERSONAL | Personal / local machines |
 | `connectify-NONPROD` | NON-PROD | Dev, QA and staging boxes |
 | `connectify-PROD` | PRODUCTION | Production - hard to miss |
+| `connectify-UI` | Local | Opens the Connectify web UI inside iTerm2 (browser profile) |
+
+`connectify-UI` is an iTerm2 *browser* profile pointing at
+`http://localhost:7890/`, so it needs the
+[iTerm2 browser plugin](https://iterm2.com/browser-plugin.html). Browser
+profiles can't host an SSH session, so it is installed but never offered when
+configuring a host.
 
 They are installed as [iTerm2 Dynamic Profiles](https://iterm2.com/documentation-dynamic-profiles.html)
 into `~/Library/Application Support/iTerm2/DynamicProfiles/` during installation,

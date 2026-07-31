@@ -105,7 +105,8 @@ connectify/
 ├── profiles/                  # iTerm2 profiles shipped with Connectify
 │   ├── connectify-PERSONAL.json
 │   ├── connectify-NONPROD.json
-│   └── connectify-PROD.json
+│   ├── connectify-PROD.json
+│   └── connectify-UI.json     # Browser profile for the web UI
 ├── connectify.spec            # PyInstaller build configuration
 ├── pyproject.toml             # Python dependencies
 ├── Makefile                   # Build automation
@@ -145,7 +146,14 @@ Handles:
   `~/Library/Application Support/iTerm2/DynamicProfiles/` (idempotent, runs on
   install and once per version at startup)
 - Discovering every available profile from iTerm2's preferences and the
-  DynamicProfiles folder, which feeds `GET /api/profiles` and the UI dropdown
+  DynamicProfiles folder, which feeds `GET /api/profiles` and the UI dropdown.
+  Browser profiles (`"Custom Command": "Browser"` / an `Initial URL`) are
+  filtered out - they can't host an SSH session - so `connectify-UI` is
+  installed but never offered when configuring a host
+- Locating iTerm2 and its browser plugin by bundle id via AppleScript
+  (`com.googlecode.iterm2` / `com.googlecode.iterm2.iTermBrowserPlugin`),
+  falling back to `/Applications`. The installers use the same logic in bash:
+  a missing iTerm2 aborts installation, a missing plugin only warns.
 
 To add a new bundled profile: export it from iTerm2, save it as
 `profiles/connectify-<NAME>.json` in the Dynamic Profile format

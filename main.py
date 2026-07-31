@@ -1276,6 +1276,7 @@ Built with ❤️  by RB (Rahul Bhooteshwar)
     # Profile management doesn't need the host config
     if args.install_profiles:
         result = iterm_profiles.install_bundled_profiles(force=True)
+        iterm_profiles.warn_if_browser_plugin_missing()
         print()
         print("💡 Restart iTerm2 (or open a new window) if the profiles don't show up right away")
         sys.exit(1 if result['errors'] else 0)

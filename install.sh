@@ -10,6 +10,12 @@ INSTALL_DIR="$HOME/.local/bin"
 LIB_DIR="$HOME/.local/lib/connectify"
 TEMP_DIR="/tmp/connectify-install-$$"
 
+# iTerm2 requirements
+ITERM_BUNDLE_ID="com.googlecode.iterm2"
+BROWSER_PLUGIN_BUNDLE_ID="com.googlecode.iterm2.iTermBrowserPlugin"
+ITERM_DOWNLOAD_URL="https://iterm2.com/index.html"
+BROWSER_PLUGIN_DOWNLOAD_URL="https://iterm2.com/browser-plugin.html"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -46,6 +52,64 @@ check_not_root() {
         print_info "Connectify installs to your home directory and doesn't need sudo"
         exit 1
     fi
+}
+
+# Locate an app by bundle id via AppleScript, falling back to the usual app
+# folders (a freshly copied app may not be registered with LaunchServices yet).
+find_app() {
+    local bundle_id="$1"
+    local app_name="$2"
+    local path
+
+    path=$(osascript -e "tell application \"Finder\" to get POSIX path of (application file id \"${bundle_id}\" as alias)" 2>/dev/null || true)
+
+    if [[ -z "$path" ]]; then
+        for base in "/Applications" "$HOME/Applications"; do
+            if [[ -d "$base/$app_name" ]]; then
+                path="$base/$app_name"
+                break
+            fi
+        done
+    fi
+
+    echo "$path"
+}
+
+check_iterm2() {
+    print_info "Checking for iTerm2..."
+
+    ITERM_PATH=$(find_app "$ITERM_BUNDLE_ID" "iTerm.app")
+
+    if [[ -z "$ITERM_PATH" ]]; then
+        print_error "iTerm2 is not installed"
+        echo ""
+        print_info "Connectify launches every SSH session in iTerm2, so it cannot be installed without it."
+        print_info "Install iTerm2 first, then re-run this installer:"
+        echo ""
+        echo "    $ITERM_DOWNLOAD_URL"
+        echo ""
+        exit 1
+    fi
+
+    print_success "iTerm2 found: $ITERM_PATH"
+}
+
+check_browser_plugin() {
+    print_info "Checking for the iTerm2 browser plugin..."
+
+    BROWSER_PLUGIN_PATH=$(find_app "$BROWSER_PLUGIN_BUNDLE_ID" "iTermBrowserPlugin.app")
+
+    if [[ -z "$BROWSER_PLUGIN_PATH" ]]; then
+        print_warning "iTerm2 browser plugin is not installed"
+        print_info "Connectify ships a 'connectify-UI' profile that opens the Connectify web UI"
+        print_info "inside iTerm2 - it needs this plugin. Everything else works without it."
+        echo ""
+        echo "    $BROWSER_PLUGIN_DOWNLOAD_URL"
+        echo ""
+        return 0
+    fi
+
+    print_success "iTerm2 browser plugin found: $BROWSER_PLUGIN_PATH"
 }
 
 check_path() {
@@ -326,7 +390,11 @@ main() {
     
     check_macos
     check_not_root
-    
+
+    # iTerm2 is a hard requirement - stop before downloading anything
+    check_iterm2
+    check_browser_plugin
+
     ARCH=$(detect_architecture)
     print_info "Detected architecture: $ARCH"
     

@@ -31,6 +31,16 @@ PROFILE_PREFIX = "connectify-"
 DYNAMIC_PROFILES_DIR = "~/Library/Application Support/iTerm2/DynamicProfiles"
 
 ITERM_BUNDLE_ID = "com.googlecode.iterm2"
+BROWSER_PLUGIN_BUNDLE_ID = "com.googlecode.iterm2.iTermBrowserPlugin"
+
+# Where macOS apps normally live, used as a fallback when LaunchServices
+# doesn't know about a bundle yet (e.g. just copied into /Applications).
+APP_SEARCH_PATHS = ["/Applications", "~/Applications"]
+ITERM_APP_NAME = "iTerm.app"
+BROWSER_PLUGIN_APP_NAME = "iTermBrowserPlugin.app"
+
+ITERM_DOWNLOAD_URL = "https://iterm2.com/index.html"
+BROWSER_PLUGIN_DOWNLOAD_URL = "https://iterm2.com/browser-plugin.html"
 
 # Marker file recording the Connectify version whose profiles were last
 # installed, so startup can skip the work on subsequent runs.
@@ -83,6 +93,20 @@ def _load_profile_document(path):
     return []
 
 
+def is_browser_profile(profile):
+    """True for iTerm2 browser profiles (they open a web page, not a shell).
+
+    iTerm2 marks these with ``"Custom Command": "Browser"``; the initial page
+    lives in ``Initial URL``. They can't host an SSH session, so Connectify
+    installs them but never offers them when configuring a host.
+    """
+    if not isinstance(profile, dict):
+        return False
+    if str(profile.get("Custom Command", "")).strip().lower() == "browser":
+        return True
+    return bool(str(profile.get("Initial URL", "")).strip())
+
+
 def list_bundled_profiles():
     """Profiles shipped with Connectify, as ``{name, guid, badge, path}``."""
     profiles_dir = bundled_profiles_dir()
@@ -97,6 +121,7 @@ def list_bundled_profiles():
                     "name": profile.get("Name") or path.stem,
                     "guid": profile.get("Guid"),
                     "badge": profile.get("Badge Text"),
+                    "is_browser": is_browser_profile(profile),
                     "path": str(path),
                 })
         except (json.JSONDecodeError, OSError) as e:
@@ -166,6 +191,21 @@ def install_bundled_profiles(force=False, quiet=False):
     return result
 
 
+def warn_if_browser_plugin_missing():
+    """Point at the plugin download when a shipped browser profile needs it."""
+    if sys.platform != 'darwin':
+        return
+    if not any(p.get('is_browser') for p in list_bundled_profiles()):
+        return
+    if find_browser_plugin():
+        return
+
+    print()
+    print("⚠️  iTerm2 browser plugin is not installed")
+    print("   The connectify-UI profile opens the Connectify web UI inside iTerm2 and needs it")
+    print(f"   Get it from: {BROWSER_PLUGIN_DOWNLOAD_URL}")
+
+
 def ensure_profiles_installed(version="unknown", quiet=True):
     """Install shipped profiles once per Connectify version.
 
@@ -196,6 +236,82 @@ def ensure_profiles_installed(version="unknown", quiet=True):
             pass
 
     return result
+
+
+def _applescript_app_path(bundle_id):
+    """Ask Finder (via AppleScript) where an app bundle lives, or None."""
+    script = (
+        f'tell application "Finder" to get POSIX path of '
+        f'(application file id "{bundle_id}" as alias)'
+    )
+    try:
+        completed = subprocess.run(
+            ['osascript', '-e', script],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    if completed.returncode != 0:
+        return None
+
+    path = completed.stdout.strip()
+    return path or None
+
+
+def _find_app(bundle_id, app_name):
+    """Locate an app by bundle id, falling back to the usual app folders.
+
+    The fallback matters right after a download: an app copied into
+    /Applications may not be registered with LaunchServices yet, so the
+    AppleScript lookup fails even though the app is there.
+    """
+    path = _applescript_app_path(bundle_id)
+    if path:
+        return path
+
+    for base in APP_SEARCH_PATHS:
+        candidate = Path(base).expanduser() / app_name
+        if candidate.exists():
+            return str(candidate)
+
+    return None
+
+
+def find_iterm2():
+    """Path to iTerm2, or None if it isn't installed."""
+    return _find_app(ITERM_BUNDLE_ID, ITERM_APP_NAME)
+
+
+def find_browser_plugin():
+    """Path to the iTerm2 browser plugin, or None if it isn't installed."""
+    return _find_app(BROWSER_PLUGIN_BUNDLE_ID, BROWSER_PLUGIN_APP_NAME)
+
+
+def check_iterm2_requirements(quiet=False):
+    """Report whether iTerm2 and its browser plugin are installed."""
+    status = {
+        "iterm2": find_iterm2(),
+        "browser_plugin": find_browser_plugin(),
+    }
+
+    if quiet:
+        return status
+
+    if status["iterm2"]:
+        print(f"✅ iTerm2 found: {status['iterm2']}")
+    else:
+        print("❌ iTerm2 is not installed")
+        print(f"   Install it from: {ITERM_DOWNLOAD_URL}")
+
+    if status["browser_plugin"]:
+        print(f"✅ iTerm2 browser plugin found: {status['browser_plugin']}")
+    else:
+        print("⚠️  iTerm2 browser plugin is not installed")
+        print("   The connectify-UI profile opens the Connectify web UI inside iTerm2 and needs it")
+        print(f"   Get it from: {BROWSER_PLUGIN_DOWNLOAD_URL}")
+
+    return status
 
 
 def _read_plist(path):
@@ -256,7 +372,7 @@ def _profiles_from_preferences():
         if not isinstance(bookmark, dict):
             continue
         name = bookmark.get('Name')
-        if not name:
+        if not name or is_browser_profile(bookmark):
             continue
         profiles.append({
             "name": str(name),
@@ -279,7 +395,7 @@ def _profiles_from_dynamic_folder():
         try:
             for profile in _load_profile_document(path):
                 name = profile.get('Name')
-                if not name:
+                if not name or is_browser_profile(profile):
                     continue
                 profiles.append({
                     "name": str(name),
@@ -313,6 +429,8 @@ def list_available_profiles(extra_names=None):
 
     # The shipped profiles are known even if iTerm2 has not been asked yet.
     for bundled in list_bundled_profiles():
+        if bundled.get("is_browser"):
+            continue
         collected.append({
             "name": bundled["name"],
             "guid": bundled.get("guid"),
@@ -351,17 +469,21 @@ def print_profiles_status():
 
     print("🎨 Connectify iTerm2 Profiles")
     print("=" * 60)
+    check_iterm2_requirements()
+    print()
     print(f"Bundled with this install : {len(bundled)}")
     for profile in bundled:
         installed = (target_dir / f"{profile['name']}.json").exists()
         status = "✅ installed" if installed else "⬜ not installed"
         badge = f" (badge: {profile['badge']})" if profile.get('badge') else ""
-        print(f"   • {profile['name']}{badge} - {status}")
+        kind = " [browser profile]" if profile.get('is_browser') else ""
+        print(f"   • {profile['name']}{badge}{kind} - {status}")
 
     print(f"\nDynamic profiles folder   : {target_dir}")
 
     available = list_available_profiles()
-    print(f"\nProfiles available in iTerm2: {len(available)}")
+    print(f"\nProfiles selectable for hosts: {len(available)}")
+    print("(browser profiles are installed but never offered for SSH hosts)")
     for profile in available:
         marker = " (default)" if profile.get('is_default') else ""
         print(f"   • {profile['name']} [{profile['source']}]{marker}")

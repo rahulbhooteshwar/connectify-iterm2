@@ -400,7 +400,12 @@ async def get_profiles():
         return {
             "success": True,
             "profiles": profiles,
-            "bundled": [p["name"] for p in iterm_profiles.list_bundled_profiles()]
+            # Browser profiles are installed for the user but can't host an SSH
+            # session, so they never appear in the selector.
+            "bundled": [
+                p["name"] for p in iterm_profiles.list_bundled_profiles()
+                if not p.get("is_browser")
+            ]
         }
     except Exception as e:
         logging.error(f"Error listing iTerm2 profiles: {e}")

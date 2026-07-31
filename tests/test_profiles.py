@@ -11,7 +11,9 @@ import iterm_profiles
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SHIPPED_PROFILES = ["connectify-PERSONAL", "connectify-PROD", "connectify-NONPROD"]
+SHIPPED_TERMINAL_PROFILES = ["connectify-PERSONAL", "connectify-PROD", "connectify-NONPROD"]
+SHIPPED_BROWSER_PROFILES = ["connectify-UI"]
+SHIPPED_PROFILES = SHIPPED_TERMINAL_PROFILES + SHIPPED_BROWSER_PROFILES
 
 
 # --- shipped profile files ---------------------------------------------------
@@ -50,9 +52,23 @@ def test_shipped_profiles_keep_their_badges():
         assert data["Profiles"][0]["Badge Text"] == badge
 
 
+def test_shipped_browser_profile_points_at_the_connectify_ui():
+    data = json.loads((REPO_ROOT / "profiles" / "connectify-UI.json").read_text())
+    profile = data["Profiles"][0]
+
+    assert profile["Custom Command"] == "Browser"
+    assert profile["Initial URL"] == "http://localhost:7890/"
+    assert profile["Badge Text"] == "Local", "badge untouched, only the identifier renamed"
+
+
 def test_list_bundled_profiles():
-    bundled = iterm_profiles.list_bundled_profiles()
-    assert {p["name"] for p in bundled} == set(SHIPPED_PROFILES)
+    bundled = {p["name"]: p for p in iterm_profiles.list_bundled_profiles()}
+    assert set(bundled) == set(SHIPPED_PROFILES)
+
+    for name in SHIPPED_BROWSER_PROFILES:
+        assert bundled[name]["is_browser"] is True
+    for name in SHIPPED_TERMINAL_PROFILES:
+        assert bundled[name]["is_browser"] is False
 
 
 # --- installation ------------------------------------------------------------
@@ -154,7 +170,7 @@ def test_list_available_profiles_merges_sources(fake_home, monkeypatch):
     assert names == sorted(names, key=str.lower), "profiles are sorted by name"
     assert "Default" in names and "Hotkey Window" in names
     assert "Legacy Profile" in names, "profiles referenced by hosts stay selectable"
-    for shipped in SHIPPED_PROFILES:
+    for shipped in SHIPPED_TERMINAL_PROFILES:
         assert shipped in names
     assert names.count("Default") == 1, "duplicates are merged"
 
@@ -172,7 +188,7 @@ def test_list_available_profiles_without_iterm2(fake_home, monkeypatch):
     names = [p["name"] for p in iterm_profiles.list_available_profiles()]
 
     assert "Default" in names
-    for shipped in SHIPPED_PROFILES:
+    for shipped in SHIPPED_TERMINAL_PROFILES:
         assert shipped in names
 
 
@@ -190,4 +206,113 @@ def test_dynamic_folder_marks_third_party_profiles(fake_home):
 
     assert profiles["Team Ops"]["source"] == "dynamic"
     assert profiles["Solo"]["source"] == "dynamic"
+
     assert "broken" not in profiles, "malformed files are skipped, not fatal"
+
+
+# --- browser profiles --------------------------------------------------------
+
+def test_is_browser_profile():
+    assert iterm_profiles.is_browser_profile({"Custom Command": "Browser"}) is True
+    assert iterm_profiles.is_browser_profile({"Custom Command": "browser"}) is True
+    assert iterm_profiles.is_browser_profile({"Initial URL": "http://localhost:7890/"}) is True
+    assert iterm_profiles.is_browser_profile({"Custom Command": "No"}) is False
+    assert iterm_profiles.is_browser_profile({"Custom Command": "Yes", "Command": "ssh box"}) is False
+    assert iterm_profiles.is_browser_profile({}) is False
+
+
+def test_browser_profiles_are_installed_but_never_selectable(fake_home, monkeypatch):
+    monkeypatch.setattr(iterm_profiles, "_profiles_from_preferences", lambda: [])
+
+    iterm_profiles.install_bundled_profiles(quiet=True)
+
+    for name in SHIPPED_BROWSER_PROFILES:
+        assert (dynamic_dir(fake_home) / f"{name}.json").exists(), "browser profiles still get installed"
+
+    names = [p["name"] for p in iterm_profiles.list_available_profiles()]
+    for name in SHIPPED_BROWSER_PROFILES:
+        assert name not in names, "browser profiles must not be offered for SSH hosts"
+
+
+def test_browser_profiles_from_iterm2_are_excluded(fake_home, monkeypatch):
+    """A user's own browser profiles are filtered out too, not just ours."""
+    prefs = {
+        "New Bookmarks": [
+            {"Name": "Default", "Guid": "abc"},
+            {"Name": "My Dashboard", "Guid": "def", "Custom Command": "Browser",
+             "Initial URL": "https://example.com"},
+        ],
+        "Default Bookmark Guid": "abc",
+    }
+    monkeypatch.setattr(iterm_profiles, "_read_iterm_preferences", lambda: prefs)
+
+    names = [p["name"] for p in iterm_profiles._profiles_from_preferences()]
+
+    assert names == ["Default"]
+
+
+def test_browser_profiles_in_dynamic_folder_are_excluded(fake_home):
+    folder = dynamic_dir(fake_home)
+    folder.mkdir(parents=True)
+    (folder / "web.json").write_text(json.dumps({
+        "Profiles": [
+            {"Name": "Team Wiki", "Guid": "wiki", "Custom Command": "Browser",
+             "Initial URL": "https://wiki.example.com"},
+            {"Name": "Team Shell", "Guid": "shell"},
+        ]
+    }))
+
+    names = [p["name"] for p in iterm_profiles._profiles_from_dynamic_folder()]
+
+    assert names == ["Team Shell"]
+
+
+# --- iTerm2 / browser plugin detection ---------------------------------------
+
+@pytest.fixture
+def fake_apps(tmp_path, monkeypatch):
+    apps = tmp_path / "Applications"
+    apps.mkdir()
+    monkeypatch.setattr(iterm_profiles, "APP_SEARCH_PATHS", [str(apps)])
+    monkeypatch.setattr(iterm_profiles, "_applescript_app_path", lambda bundle_id: None)
+    return apps
+
+
+def test_find_iterm2_uses_applescript_first(monkeypatch):
+    monkeypatch.setattr(iterm_profiles, "_applescript_app_path",
+                        lambda bundle_id: "/Applications/iTerm.app/"
+                        if bundle_id == iterm_profiles.ITERM_BUNDLE_ID else None)
+
+    assert iterm_profiles.find_iterm2() == "/Applications/iTerm.app/"
+
+
+def test_find_apps_falls_back_to_applications_folder(fake_apps):
+    """LaunchServices may not know a freshly copied app yet."""
+    assert iterm_profiles.find_iterm2() is None
+    assert iterm_profiles.find_browser_plugin() is None
+
+    (fake_apps / "iTerm.app").mkdir()
+    (fake_apps / "iTermBrowserPlugin.app").mkdir()
+
+    assert iterm_profiles.find_iterm2() == str(fake_apps / "iTerm.app")
+    assert iterm_profiles.find_browser_plugin() == str(fake_apps / "iTermBrowserPlugin.app")
+
+
+def test_check_iterm2_requirements_reports_download_urls(fake_apps, capsys):
+    status = iterm_profiles.check_iterm2_requirements()
+    output = capsys.readouterr().out
+
+    assert status == {"iterm2": None, "browser_plugin": None}
+    assert iterm_profiles.ITERM_DOWNLOAD_URL in output
+    assert iterm_profiles.BROWSER_PLUGIN_DOWNLOAD_URL in output
+
+
+def test_warn_if_browser_plugin_missing(fake_apps, monkeypatch, capsys):
+    monkeypatch.setattr(sys, "platform", "darwin")
+
+    iterm_profiles.warn_if_browser_plugin_missing()
+    assert iterm_profiles.BROWSER_PLUGIN_DOWNLOAD_URL in capsys.readouterr().out
+
+    (fake_apps / "iTermBrowserPlugin.app").mkdir()
+    iterm_profiles.warn_if_browser_plugin_missing()
+    assert capsys.readouterr().out == "", "no nagging once the plugin is installed"
