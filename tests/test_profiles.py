@@ -184,12 +184,27 @@ def test_list_available_profiles_merges_sources(fake_home, monkeypatch):
 def test_list_available_profiles_without_iterm2(fake_home, monkeypatch):
     """No iTerm2 on the machine still yields the bundled profiles + Default."""
     monkeypatch.setattr(iterm_profiles, "_profiles_from_preferences", lambda: [])
+    iterm_profiles.install_bundled_profiles(quiet=True)
 
     names = [p["name"] for p in iterm_profiles.list_available_profiles()]
 
     assert "Default" in names
     for shipped in SHIPPED_TERMINAL_PROFILES:
         assert shipped in names
+
+
+def test_a_deleted_profile_stops_being_offered(fake_home, monkeypatch):
+    """Removing a profile from iTerm2 must remove it from the picker too."""
+    monkeypatch.setattr(iterm_profiles, "_profiles_from_preferences", lambda: [])
+    iterm_profiles.install_bundled_profiles(quiet=True)
+
+    removed = SHIPPED_TERMINAL_PROFILES[0]
+    (dynamic_dir(fake_home) / f"{removed}.json").unlink()
+
+    names = [p["name"] for p in iterm_profiles.list_available_profiles()]
+
+    assert removed not in names, "a shipped profile the user deleted is gone for good"
+    assert "Default" in names
 
 
 def test_dynamic_folder_marks_third_party_profiles(fake_home):

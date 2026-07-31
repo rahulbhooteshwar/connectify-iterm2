@@ -121,6 +121,68 @@ def test_no_file_written_for_a_session_contains_the_secret(runtime):
         session.cleanup()
 
 
+def test_the_askpass_environment_is_scoped_to_ssh(runtime):
+    """The tab's shell must not inherit SSH_ASKPASS.
+
+    The helper is deleted the moment ssh exits, and SSH_ASKPASS_REQUIRE=force
+    stops ssh falling back to the terminal - so an exported copy would leave
+    the user unable to run ssh by hand in that tab.
+    """
+    session = ssh_session.prepare_session(HOST, PASSWORD_CREDENTIAL)
+    try:
+        launcher = session.launcher.read_text()
+        assert 'export SSH_ASKPASS' not in launcher
+
+        # The assignments sit on the ssh command line itself
+        ssh_line = next(line for line in launcher.splitlines() if "'ssh'" in line)
+        assert ssh_line.startswith('SSH_ASKPASS=')
+        assert 'SSH_ASKPASS_REQUIRE=force' in ssh_line
+
+        # ... and nothing sets them for the shell that follows
+        after_ssh = launcher.split(ssh_line, 1)[1]
+        assert 'SSH_ASKPASS' not in after_ssh
+    finally:
+        session.cleanup()
+
+
+def test_running_the_launcher_hands_the_environment_to_ssh_only(runtime, tmp_path):
+    """Run the real launcher with a stand-in ssh and a stand-in shell.
+
+    ssh must see SSH_ASKPASS; the shell that takes over the tab afterwards
+    must not - it would only point at a helper that no longer exists.
+    """
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    seen = tmp_path / "seen.txt"
+
+    for name in ("ssh", "shell"):
+        script = bin_dir / name
+        script.write_text(
+            f'#!/bin/sh\nprintf "{name}:%s\\n" "${{SSH_ASKPASS:-unset}}" >> {seen}\n')
+        script.chmod(0o755)
+
+    session = ssh_session.prepare_session(HOST, PASSWORD_CREDENTIAL)
+    subprocess.run([str(session.launcher)], timeout=30, check=True, env={
+        **os.environ,
+        "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+        "SHELL": str(bin_dir / "shell"),
+    })
+
+    lines = seen.read_text().split()
+    assert lines[0] == f"ssh:{session.directory / 'askpass.sh'}"
+    assert lines[1] == "shell:unset"
+
+
+def test_the_launcher_is_valid_shell(runtime):
+    session = ssh_session.prepare_session(HOST, PASSWORD_CREDENTIAL)
+    try:
+        check = subprocess.run(['/bin/sh', '-n', str(session.launcher)],
+                               capture_output=True, text=True)
+        assert check.returncode == 0, check.stderr
+    finally:
+        session.cleanup()
+
+
 def test_session_files_are_private(runtime):
     session = ssh_session.prepare_session(HOST, PASSWORD_CREDENTIAL)
     try:

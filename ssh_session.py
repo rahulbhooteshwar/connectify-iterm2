@@ -270,12 +270,17 @@ def prepare_session(host, credential=None, ssh_options=None, keep_shell=True,
             "exit 1\n"
         ))
 
+        # Set on the ssh command itself rather than exported for the whole
+        # script: the variables then apply to ssh and nothing else. The helper
+        # is deleted as soon as ssh exits, and SSH_ASKPASS_REQUIRE=force stops
+        # ssh falling back to the terminal - so an exported copy would leave
+        # the tab's shell unable to run ssh by hand ("ssh_askpass: exec(...):
+        # No such file or directory", with no password prompt).
         askpass_setup = (
-            f"SSH_ASKPASS={_shell_quote(askpass_path)}\n"
-            "SSH_ASKPASS_REQUIRE=force\n"
+            f"SSH_ASKPASS={_shell_quote(askpass_path)} "
+            "SSH_ASKPASS_REQUIRE=force "
             # Pre-8.4 OpenSSH only consults SSH_ASKPASS when DISPLAY is set
-            "DISPLAY=${DISPLAY:-:0}\n"
-            "export SSH_ASKPASS SSH_ASKPASS_REQUIRE DISPLAY\n"
+            "DISPLAY=\"${DISPLAY:-:0}\" "
         )
 
     # iTerm2 runs this instead of a login shell, so nothing lands in the shell

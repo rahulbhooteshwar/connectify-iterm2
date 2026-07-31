@@ -141,13 +141,14 @@ class APISSHManager:
         return sorted(list(tags))
 
     def get_available_profiles(self):
-        """Get every iTerm2 profile that can be assigned to a host"""
-        host_profiles = [
-            host.get('iterm_profile')
-            for host in self.all_hosts
-            if host.get('iterm_profile')
-        ]
-        return iterm_profiles.list_available_profiles(extra_names=host_profiles)
+        """Get every iTerm2 profile that can be assigned to a host.
+
+        Only what iTerm2 actually has: a profile deleted there must disappear
+        from the picker even while hosts still name it. The host form keeps its
+        own value visible (flagged as missing) so editing a host never loses
+        it silently.
+        """
+        return iterm_profiles.list_available_profiles()
 
     def get_hosts_by_groups(self, search_term="", tag_filter=""):
         """Get hosts organized by their configured group.

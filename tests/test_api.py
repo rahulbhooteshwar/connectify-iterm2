@@ -117,8 +117,10 @@ def test_get_profiles(mock_ssh_manager):
     assert data['success'] is True
     assert [p['name'] for p in data['profiles']] == ["Default", "connectify-PROD"]
     assert "connectify-PROD" in data['bundled']
-    # Profiles already used by hosts are passed through so they stay selectable
-    assert mock_list.call_args.kwargs['extra_names'] == ['Legacy Profile']
+    # Only what iTerm2 has: a host still naming a deleted profile must not
+    # keep that profile alive in the picker
+    assert 'Legacy Profile' not in [p['name'] for p in data['profiles']]
+    assert not mock_list.call_args.kwargs.get('extra_names')
 
 
 def test_install_profiles(mock_ssh_manager):

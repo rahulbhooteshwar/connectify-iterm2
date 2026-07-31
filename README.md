@@ -114,6 +114,12 @@ Connectify ones and any other dynamic profiles - so you can use any theme you
 already have. The list is searchable, refreshable, and still accepts a manually
 typed profile name.
 
+It only ever shows what iTerm2 has right now: delete a profile there (including
+a shipped one) and it disappears from the picker on the next refresh, even if
+hosts still name it. Such a host keeps its saved value - the form flags it as
+*not in iTerm2 any more*, and the session falls back to the default profile
+until you pick another.
+
 ## Credentials Vault
 
 SSH passwords and keys live in a single encrypted file, `~/.connectify/vault.json`,
@@ -188,7 +194,15 @@ Connectify never types your password anywhere. When you connect:
    FIFO. The bytes go from Connectify straight into `ssh` - never to disk, never
    onto a command line.
 4. The launcher deletes its directory as soon as ssh exits; a sweep on startup
-   clears anything left by a killed session.
+   clears anything left by a killed session. The askpass variables are set on
+   the `ssh` command itself, not exported, so the shell you are left with in
+   that tab can still run `ssh` by hand and prompt normally.
+
+Password logins ask for `PreferredAuthentications=password,keyboard-interactive`.
+Both are needed: many servers (anything authenticating through PAM) only offer
+**keyboard-interactive**, and asking for `password` alone makes ssh fail with
+*"Permission denied (keyboard-interactive)"* without ever prompting. Hosts saved
+by an earlier version are updated on startup.
 
 Connectify waits for iTerm2 to confirm the tab before reporting success, so the
 tile keeps its spinner until the session is really open and a failure is
@@ -371,6 +385,14 @@ Run the diagnostics:
 ```bash
 connectify doctor
 ```
+
+### "Permission denied (keyboard-interactive)"
+
+The server refused the authentication methods ssh was allowed to try. Open the
+host's **Advanced SSH Options** and make sure *Prefer password authentication*
+is ticked - it asks for `password,keyboard-interactive`, and servers that
+authenticate through PAM accept only the latter. If the host was created by
+Connectify 2.0.x, restarting the UI server rewrites the old option for you.
 
 ### iTerm2 not opening
 

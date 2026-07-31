@@ -52,6 +52,33 @@ def test_group_hosts_with_no_groups_at_all():
 
 # --- pre-vault host fields ---------------------------------------------------
 
+def test_password_hosts_learn_to_offer_keyboard_interactive(tmp_path):
+    """Servers that only advertise keyboard-interactive used to be unreachable.
+
+    `PreferredAuthentications=password` on its own makes ssh give up with
+    "Permission denied (keyboard-interactive)" without ever prompting, so
+    hosts saved with it are rewritten on startup.
+    """
+    import json
+    from main import PASSWORD_AUTH_OPTION, SSHManager
+
+    config = tmp_path / "hosts.json"
+    config.write_text(json.dumps({"hosts": [
+        {"name": "pw-host", "hostname": "a", "username": "u", "port": 22, "credential": "c",
+         "ssh_options": ["PreferredAuthentications=password", "PubkeyAuthentication=no"]},
+        {"name": "key-host", "hostname": "b", "username": "u", "port": 22, "credential": "k",
+         "ssh_options": ["PreferredAuthentications=publickey"]},
+    ]}))
+
+    SSHManager(str(config))
+    hosts = {h["name"]: h for h in json.loads(config.read_text())["hosts"]}
+
+    assert hosts["pw-host"]["ssh_options"] == [PASSWORD_AUTH_OPTION, "PubkeyAuthentication=no"]
+    assert PASSWORD_AUTH_OPTION.endswith("password,keyboard-interactive")
+    # Key hosts are untouched
+    assert hosts["key-host"]["ssh_options"] == ["PreferredAuthentications=publickey"]
+
+
 def test_legacy_auth_fields_are_stripped_on_startup(tmp_path):
     """Secrets live in the vault, so hosts must not keep describing auth."""
     import json
@@ -78,7 +105,7 @@ def test_legacy_auth_fields_are_stripped_on_startup(tmp_path):
     # The options the auth method used to imply are kept, so connections
     # behave the same as before the fields were dropped
     assert hosts["pw-host"]["ssh_options"] == [
-        "PreferredAuthentications=password", "PubkeyAuthentication=no"]
+        "PreferredAuthentications=password,keyboard-interactive", "PubkeyAuthentication=no"]
     # An explicit list is left alone
     assert hosts["key-host"]["ssh_options"] == ["StrictHostKeyChecking=no"]
 

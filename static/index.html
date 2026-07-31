@@ -1093,11 +1093,22 @@
       border: 1px solid var(--border-color);
       border-radius: var(--radius-md);
       margin-top: 4px;
-      max-height: 40vh;
+      /* About four options; positionDropdown() shrinks this further when the
+         space below the field is tighter than that */
+      max-height: 11rem;
       overflow-y: auto;
+      overscroll-behavior: contain;
       z-index: 1000;
       display: none;
       box-shadow: var(--shadow-lg);
+    }
+
+    /* Opened upwards when there is more room above the field than below */
+    .tag-dropdown.drop-up {
+      top: auto;
+      bottom: 100%;
+      margin-top: 0;
+      margin-bottom: 4px;
     }
 
     .tag-option {
@@ -2146,7 +2157,7 @@
 
     <!-- Add/Edit Credential Modal -->
     <div id="credentialModal" class="connection-overlay">
-      <div class="connection-modal" style="max-width: 560px; text-align: left;">
+      <div class="connection-modal" style="max-width: 680px; width: min(680px, 92vw); text-align: left;">
         <h3 id="credentialModalTitle" style="margin-bottom: 1.5rem;">Add Credential</h3>
         <form id="credentialForm">
           <input type="hidden" id="credentialOriginalName">
@@ -2365,8 +2376,15 @@
         this.isLoading = false;
 
         // Available SSH "-o" options exposed in the "Advanced SSH Options" section.
+        // Password logins must allow keyboard-interactive too: many servers
+        // only advertise that method, and asking for `password` alone makes
+        // ssh fail with "Permission denied (keyboard-interactive)" without
+        // ever prompting.
+        this.passwordAuthFlag = 'PreferredAuthentications=password,keyboard-interactive';
+        this.legacyPasswordAuthFlag = 'PreferredAuthentications=password';
+
         this.sshOptionDefs = [
-          { flag: 'PreferredAuthentications=password', label: 'Prefer password authentication' },
+          { flag: this.passwordAuthFlag, label: 'Prefer password authentication' },
           { flag: 'PubkeyAuthentication=no', label: 'Disable public key authentication' },
           { flag: 'PreferredAuthentications=publickey', label: 'Prefer public key authentication' },
           { flag: 'PasswordAuthentication=no', label: 'Disable password authentication' },
@@ -2376,7 +2394,7 @@
         // Sensible defaults applied per auth method for new hosts (mirrors the
         // previous hardcoded backend behaviour).
         this.defaultSshOptions = {
-          password: ['PreferredAuthentications=password', 'PubkeyAuthentication=no'],
+          password: [this.passwordAuthFlag, 'PubkeyAuthentication=no'],
           key: ['PreferredAuthentications=publickey', 'PasswordAuthentication=no']
         };
 
@@ -2864,6 +2882,7 @@
         });
 
         dropdown.style.display = 'block';
+        this.positionDropdown(dropdown);
       }
 
       // ---- credentials vault -----------------------------------------------
@@ -3569,6 +3588,7 @@
           empty.textContent = 'No groups yet - type a name to create one';
           dropdown.appendChild(empty);
           dropdown.style.display = 'block';
+          this.positionDropdown(dropdown);
           return;
         }
 
@@ -3608,6 +3628,7 @@
         });
 
         dropdown.style.display = 'block';
+        this.positionDropdown(dropdown);
         this.highlightGroupOption();
       }
 
@@ -3696,6 +3717,16 @@
           return;
         }
 
+        // A host can name a profile iTerm2 no longer has (deleted or renamed).
+        // The value is kept as typed, but say so rather than looking fine.
+        const current = ((this.elements.itermProfile || {}).value || '').trim();
+        if (current && !this.availableProfiles.some(
+              p => p.name.toLowerCase() === current.toLowerCase())) {
+          hint.textContent = `'${current}' is not in iTerm2 any more - `
+            + `the session will fall back to the default profile.`;
+          return;
+        }
+
         const total = this.availableProfiles.length;
         const shipped = this.availableProfiles.filter(p => p.source === 'connectify').length;
         hint.textContent = shipped
@@ -3708,7 +3739,10 @@
         const dropdown = this.elements.profileDropdown;
         if (!input || !dropdown) return;
 
-        input.addEventListener('input', () => this.showProfileDropdown(input.value));
+        input.addEventListener('input', () => {
+          this.showProfileDropdown(input.value);
+          this.updateProfileHint();
+        });
         input.addEventListener('focus', () => this.showProfileDropdown(''));
 
         input.addEventListener('keydown', (e) => {
@@ -3805,6 +3839,7 @@
           empty.textContent = 'No matching profiles - the typed name will be used as-is';
           dropdown.appendChild(empty);
           dropdown.style.display = 'block';
+          this.positionDropdown(dropdown);
           return;
         }
 
@@ -3823,7 +3858,7 @@
             dynamic: 'Dynamic',
             iterm2: 'iTerm2',
             host: 'In use',
-            custom: 'Custom'
+            custom: 'Not in iTerm2'
           };
           const source = document.createElement('span');
           source.className = `profile-source source-${profile.source || 'iterm2'}`;
@@ -3845,7 +3880,33 @@
         });
 
         dropdown.style.display = 'block';
+        this.positionDropdown(dropdown);
         this.highlightProfileOption();
+      }
+
+      /**
+       * Keep a dropdown inside the window.
+       *
+       * These hang below a field that can sit anywhere in a modal, so a long
+       * list used to run off the bottom of the screen with its last options
+       * unreachable. Cap the height at the space actually available (four
+       * options at most), and open upwards when there is more room above.
+       */
+      positionDropdown(dropdown) {
+        const anchor = dropdown.offsetParent || dropdown.parentElement;
+        if (!anchor) return;
+
+        const MAX = 176;   // ~4 options, matching the stylesheet
+        const MIN = 84;    // never so short it can't be scrolled
+        const GAP = 12;    // breathing room against the window edge
+
+        const rect = anchor.getBoundingClientRect();
+        const below = window.innerHeight - rect.bottom - GAP;
+        const above = rect.top - GAP;
+        const dropUp = below < Math.min(MAX, above);
+
+        dropdown.classList.toggle('drop-up', dropUp);
+        dropdown.style.maxHeight = Math.max(MIN, Math.min(MAX, dropUp ? above : below)) + 'px';
       }
 
       highlightProfileOption() {
@@ -3867,6 +3928,7 @@
         if (!name) return;
         this.elements.itermProfile.value = name;
         this.hideProfileDropdown();
+        this.updateProfileHint();
       }
 
       renderSshOptionCheckboxes() {
@@ -3892,7 +3954,10 @@
 
       setSshOptions(options) {
         this.renderSshOptionCheckboxes();
-        const selected = new Set(options || []);
+        // A host saved before keyboard-interactive was allowed still carries
+        // the old flag; show it ticked against the current one
+        const selected = new Set((options || []).map(
+          option => option === this.legacyPasswordAuthFlag ? this.passwordAuthFlag : option));
         this.elements.sshOptionsBody.querySelectorAll('.ssh-option-checkbox').forEach(cb => {
           cb.checked = selected.has(cb.value);
         });
@@ -4492,6 +4557,7 @@
 
         this.updateCredentialHint();
         this.updateUsernameHint();
+        this.updateProfileHint();
         modal.classList.add('show');
       }
 

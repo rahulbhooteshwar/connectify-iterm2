@@ -412,10 +412,13 @@ def _profiles_from_dynamic_folder():
 def list_available_profiles(extra_names=None):
     """Every iTerm2 profile Connectify can offer, sorted by name.
 
-    Merges iTerm2's own profiles, dynamic profiles on disk (including the ones
-    shipped by Connectify) and any ``extra_names`` (e.g. profiles already
-    referenced by configured hosts, so an existing value never disappears from
-    the dropdown). "Default" is always present.
+    Merges iTerm2's own profiles with the dynamic profiles on disk (including
+    the ones shipped by Connectify, while they are still installed).
+    "Default" is always present.
+
+    ``extra_names`` forces additional names into the list. It is deliberately
+    not fed from the configured hosts: a profile deleted in iTerm2 has to
+    disappear from the picker even if hosts still reference it.
     """
     collected = []
     try:
@@ -427,9 +430,14 @@ def list_available_profiles(extra_names=None):
     except Exception:  # pragma: no cover - defensive, discovery must never fail
         pass
 
-    # The shipped profiles are known even if iTerm2 has not been asked yet.
+    # The shipped profiles, but only the ones still installed: deleting one
+    # from the DynamicProfiles folder has to take it out of the picker too,
+    # otherwise Connectify keeps offering a profile iTerm2 no longer has.
+    installed_dir = dynamic_profiles_dir()
     for bundled in list_bundled_profiles():
         if bundled.get("is_browser"):
+            continue
+        if not (installed_dir / Path(bundled["path"]).name).exists():
             continue
         collected.append({
             "name": bundled["name"],

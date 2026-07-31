@@ -26,12 +26,21 @@ except ImportError:
     VERSION = "unknown"
     BUILD_DATE = "unknown"
 
+# Password logins have to allow keyboard-interactive as well as the "password"
+# method: plenty of servers (anything with PAM in the path) only advertise
+# keyboard-interactive, and asking for `password` alone makes ssh give up with
+# "Permission denied (keyboard-interactive)" without ever prompting.
+PASSWORD_AUTH_OPTION = "PreferredAuthentications=password,keyboard-interactive"
+
+# The option Connectify used to write, before that was understood
+LEGACY_PASSWORD_AUTH_OPTION = "PreferredAuthentications=password"
+
 # Default SSH "-o" options applied per authentication method when a host does
 # not explicitly define its own `ssh_options` (kept for backward compatibility
 # with hosts created before options were configurable from the UI).
 DEFAULT_SSH_OPTIONS = {
     'password': [
-        "PreferredAuthentications=password",
+        PASSWORD_AUTH_OPTION,
         "PubkeyAuthentication=no",
     ],
     'key': [
@@ -114,6 +123,7 @@ class SSHManager:
 
         # Drop pre-vault fields from the host list (see the method for why)
         self.clean_legacy_host_fields()
+        self.modernize_ssh_options()
 
         # Make sure the iTerm2 profiles shipped with Connectify are present.
         # Runs once per version (tracked by a marker file), so upgrades pick up
@@ -552,6 +562,33 @@ class SSHManager:
             self.save_config()
             print(f"🧹 Cleaned pre-vault fields from {changed} host(s) - "
                   f"assign credentials in the Vault")
+
+        return changed
+
+    def modernize_ssh_options(self):
+        """Let password logins use keyboard-interactive too.
+
+        Hosts saved by an earlier version carry a bare
+        `PreferredAuthentications=password`, which servers that only offer
+        keyboard-interactive reject outright - ssh never even asks for the
+        password. Rewriting it on startup fixes those hosts without the user
+        having to know why they broke.
+        """
+        changed = 0
+
+        for host in self.config.get('hosts', []):
+            options = host.get('ssh_options')
+            if not options or LEGACY_PASSWORD_AUTH_OPTION not in options:
+                continue
+            host['ssh_options'] = [
+                PASSWORD_AUTH_OPTION if option == LEGACY_PASSWORD_AUTH_OPTION else option
+                for option in options
+            ]
+            changed += 1
+
+        if changed:
+            self.save_config()
+            print(f"🔑 Allowed keyboard-interactive password auth on {changed} host(s)")
 
         return changed
 
