@@ -73,6 +73,7 @@ def test_doctor_reports_the_essentials(tmp_path):
     assert 'Web UI server' in result.stdout
     assert 'iTerm2' in result.stdout
     assert 'Configuration' in result.stdout
+    assert 'Credentials vault' in result.stdout
 
 
 @pytest.mark.parametrize("removed", [
@@ -85,8 +86,8 @@ def test_interactive_manager_methods_are_gone(removed):
 
 def test_manager_keeps_what_the_web_ui_needs():
     for kept in ['launch_iterm_session', 'filter_hosts', 'get_host', 'add_host_programmatic',
-                 'update_host', 'delete_host', 'store_password', 'get_password',
-                 'debug_keychain']:
+                 'update_host', 'delete_host', 'hosts_using_credential',
+                 'rename_credential_references', 'build_legacy_credentials']:
         assert hasattr(main_module.SSHManager, kept), f"{kept} is still used by the API"
 
 

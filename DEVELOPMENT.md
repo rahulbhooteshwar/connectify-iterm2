@@ -99,6 +99,7 @@ connectify/
 ├── main.py                    # Core SSH manager functionality
 ├── api_server.py              # FastAPI web server
 ├── iterm_profiles.py          # Bundled profile install + iTerm2 discovery
+├── vault.py                   # Encrypted credentials vault (AES-256-GCM + scrypt)
 ├── profiles/                  # iTerm2 profiles shipped with Connectify
 │   ├── connectify-PERSONAL.json
 │   ├── connectify-NONPROD.json
@@ -140,9 +141,22 @@ Works with both the PyInstaller bundle and the source checkout.
 
 The SSH engine behind the web UI:
 - SSH host configuration (load/save/CRUD)
-- Keychain integration
-- iTerm2 session launching and profile support
+- iTerm2 session launching, using a credential resolved from the vault
+- Credential associations: which hosts use a credential, renaming, and the
+  one-time migration of legacy Keychain passwords / key paths
 - `main()` starts the web server (no interactive terminal UI)
+
+### 2b. vault.py - Credentials Vault
+
+`~/.connectify/vault.json`, AES-256-GCM with a scrypt-derived key:
+- `Vault` handles create/unlock/change-passcode and credential CRUD. Everything
+  needs the derived key, so a locked vault simply can't be read.
+- `VaultSessions` keeps unlocked keys in server memory only, keyed by an opaque
+  token handed to the browser tab. Nothing is persisted, so a page reload
+  re-locks the vault; sessions also expire when idle.
+- The API layer passes the token in the `X-Vault-Token` header and answers a
+  locked vault with `401 {"code": "vault_locked"}`, which the UI turns into the
+  unlock dialog (and retries the original request afterwards).
 
 ### 3. iterm_profiles.py - iTerm2 Profiles
 
@@ -181,6 +195,7 @@ Single-page application with:
 - Per-host tile theme (`default`/`red`/`green`/`orange`), picked with the colour
   dots in the add/edit form - `GET /api/groups` feeds the group picker
 - Real-time search and filtering (tags remain search/filter only)
+- The Vault page (toolbar lock icon): unlock, credential CRUD, host associations
 - Responsive design
 
 ## Building and Packaging

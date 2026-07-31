@@ -1,10 +1,10 @@
 # Connectify - SSH Session Manager for iTerm2
 
-A web-based manager for your SSH sessions, with credential storage in the macOS Keychain and iTerm2 profile support.
+A web-based manager for your SSH sessions, with credentials in an encrypted local vault and iTerm2 profile support.
 
 ## Features
 
-- 🔐 **Secure credential storage** using macOS Keychain
+- 🔐 **Encrypted credentials vault** - one passcode, no macOS Keychain
 - 🎯 **Web-based host management** - add, edit, group and connect
 - 🖥️ **iTerm2 integration** with custom profiles
 - 🎨 **Bundled iTerm2 profiles** (PERSONAL / NON-PROD / PROD / UI) installed for you
@@ -64,7 +64,7 @@ Once started, access the UI at: **http://localhost:7890**
 ```bash
 connectify profiles list      # Bundled + available iTerm2 profiles
 connectify profiles install   # (Re)install the bundled iTerm2 profiles
-connectify doctor             # Diagnostics: server, iTerm2, config, keychain
+connectify doctor             # Diagnostics: server, iTerm2, config, vault
 connectify version            # Version information
 connectify --help             # Show all commands
 ```
@@ -113,6 +113,50 @@ Connectify ones and any other dynamic profiles - so you can use any theme you
 already have. The list is searchable, refreshable, and still accepts a manually
 typed profile name.
 
+## Credentials Vault
+
+SSH passwords and keys live in a single encrypted file, `~/.connectify/vault.json`,
+locked with a passcode you choose. It replaces the macOS Keychain entirely.
+
+- **AES-256-GCM**, with the key derived from your passcode via **scrypt**. The
+  passcode is never stored - a wrong one simply fails to decrypt. The file is
+  written atomically and is owner-readable only (`0600`).
+- Credentials are **named** (`prod-admin`, `laptop-key`) and typed: a *password*,
+  or an *SSH key* with an optional passphrase. Each has an optional description.
+- Hosts reference a credential **by name**, so one credential can serve many
+  hosts and rotating a password is a single edit.
+
+Open the vault from the 🔒 icon in the toolbar, next to import/export.
+
+### Locking
+
+The vault is **locked every time you open the page**. Unlocking asks for the
+passcode once; the derived key stays in the server's memory for that tab only
+and is never written to disk or to the browser. Reload the page - or press
+**Lock** - and it's locked again. Reading, editing and connecting all require it
+to be unlocked.
+
+### Managing credentials
+
+The Vault page lists every credential with its type and which hosts use it, and
+lets you add, edit and delete them. The same dialog is available from the host
+form (the **New** button next to the credential picker), so you can create a
+credential without leaving the host you're editing.
+
+- **Duplicate names** are refused. Connectify tells you which credential clashes
+  and offers to rename yours, edit the existing one, or delete it.
+- **Renaming** a credential updates every host that referenced it.
+- **Deleting** is blocked while any host uses the credential - the dialog lists
+  those hosts by name. Unused credentials just ask for confirmation.
+
+### Migrating from the Keychain
+
+The first time you create the vault, Connectify imports what it can from the old
+setup: passwords out of the macOS Keychain (one credential per host) and SSH key
+paths (one credential per key file, shared by the hosts using it). Your hosts are
+re-pointed at the imported credentials automatically. Anything it couldn't import
+is reported so you can fill in the gaps.
+
 ## Groups and Tile Themes
 
 Hosts are organized by an optional **Group** (e.g. `Production`, `Team A`). The
@@ -139,7 +183,7 @@ Configuration is stored at `~/.connectify/hosts.json`. On first run, a sample co
       "hostname": "prod.example.com",
       "username": "admin",
       "port": 22,
-      "auth_method": "password",
+      "credential": "prod-admin",
       "iterm_profile": "connectify-PROD",
       "group": "Production",
       "theme": "red",
@@ -150,8 +194,7 @@ Configuration is stored at `~/.connectify/hosts.json`. On first run, a sample co
       "hostname": "dev.example.com",
       "username": "developer",
       "port": 2222,
-      "auth_method": "key",
-      "ssh_key_path": "~/.ssh/dev_server_key",
+      "credential": "dev-server-key",
       "iterm_profile": "connectify-NONPROD",
       "group": "Development",
       "theme": "green",
@@ -169,8 +212,7 @@ Configuration is stored at `~/.connectify/hosts.json`. On first run, a sample co
 | `hostname` | Server hostname or IP address | Yes |
 | `username` | SSH username | Yes |
 | `port` | SSH port (default: 22) | No |
-| `auth_method` | `"password"` or `"key"` | Yes |
-| `ssh_key_path` | Path to private key (for key auth) | If using key auth |
+| `credential` | Name of a credential in the vault | To connect |
 | `iterm_profile` | iTerm2 profile name | No |
 | `group` | Group used to organize the host list | No |
 | `theme` | Tile theme: `default`, `red`, `green` or `orange` | No |
@@ -218,7 +260,7 @@ The uninstaller will:
 - Stop any running UI server
 - Remove installed files
 - Optionally remove configuration files
-- Guide you through keychain cleanup
+- Guide you through keychain cleanup (for pre-vault installs)
 
 ## Advanced Usage
 
@@ -236,7 +278,7 @@ to run it in the background on port 7890.
 ### Debugging
 
 ```bash
-connectify doctor             # Server, iTerm2, profiles, config and keychain checks
+connectify doctor             # Server, iTerm2, profiles, config and vault checks
 connectify ui logs            # View UI server logs
 ```
 
@@ -278,7 +320,7 @@ Make sure port 7890 is not in use:
 lsof -i :7890
 ```
 
-### Keychain access issues
+### Credential issues
 
 Run the diagnostics:
 
@@ -292,7 +334,8 @@ Verify iTerm2 is installed and set as default terminal.
 
 ## Security
 
-- Passwords are stored securely in macOS Keychain
+- Passwords and key passphrases are stored in an AES-256-GCM encrypted vault at
+  `~/.connectify/vault.json`, unlocked by your passcode (scrypt-derived key)
 - SSH keys use standard SSH key authentication
 - Temporary password files are created with secure permissions and automatically cleaned up
 - UI server runs locally on 127.0.0.1 (not exposed to network by default)

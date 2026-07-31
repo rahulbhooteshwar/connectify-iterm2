@@ -12,7 +12,7 @@ import threading
 import time
 import logging
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import Depends, FastAPI, Header, HTTPException, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,6 +20,7 @@ from pydantic import BaseModel, field_validator
 import uvicorn
 
 import iterm_profiles
+import vault as vault_module
 from main import (
     DEFAULT_HOST_THEME,
     SSHManager,
@@ -37,6 +38,8 @@ class HostModel(BaseModel):
     auth_method: str = "password"
     ssh_key_path: Optional[str] = None
     iterm_profile: str = "Default"
+    # Name of the vault credential used to authenticate (empty = none yet)
+    credential: str = ""
     # Optional grouping label used to organize the host list. Empty means the
     # host is rendered ungrouped.
     group: str = ""
@@ -60,15 +63,34 @@ class HostModel(BaseModel):
 
 
 class HostCreate(HostModel):
-    password: Optional[str] = None
+    pass
 
 
 class HostUpdate(HostModel):
-    password: Optional[str] = None
+    pass
 
 
 class ConnectRequest(BaseModel):
     host_name: str
+
+
+class VaultPasscodeRequest(BaseModel):
+    passcode: str
+
+
+class VaultChangePasscodeRequest(BaseModel):
+    current_passcode: str
+    new_passcode: str
+
+
+class CredentialRequest(BaseModel):
+    name: str
+    type: str
+    description: str = ""
+    # Only one of these applies, depending on `type`
+    password: Optional[str] = None
+    ssh_key_path: Optional[str] = None
+    passphrase: Optional[str] = None
 
 
 class SearchRequest(BaseModel):
@@ -138,36 +160,39 @@ class APISSHManager:
             "total_hosts": len(hosts)
         }
 
-    def connect_to_host(self, host_name: str):
-        """Connect to host by name"""
-        # Find the host
-        host = None
-        for h in self.all_hosts:
-            if h['name'] == host_name:
-                host = h
-                break
+    def connect_to_host(self, host_name: str, vault_key=None):
+        """Launch a session, resolving the host's credential from the vault"""
+        host = next((h for h in self.all_hosts if h['name'] == host_name), None)
 
         if not host:
             raise HTTPException(status_code=404, detail=f"Host '{host_name}' not found")
 
-        # Check if password is required but not stored
-        if host.get('auth_method') == 'password':
-            service_name = f"ssh-{host['hostname']}"
-            username = host['username']
-            password = self.ssh_manager.get_password(service_name, username)
-            
-            if not password:
-                # Return a special error that the frontend can handle
+        credential_name = (host.get('credential') or '').strip()
+        credential = None
+
+        if credential_name:
+            if vault_key is None:
+                raise vault_locked_error()
+            try:
+                credential = vault.get_credential(vault_key, credential_name)
+            except vault_module.CredentialNotFound:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Password required for '{host['name']}'. Please edit the host and set a password first."
+                    detail=f"Credential '{credential_name}' for '{host['name']}' is not in the vault. "
+                           f"Assign a credential to this host."
                 )
+        elif host.get('auth_method') == 'password' or host.get('ssh_key_path'):
+            # Pre-vault host that was never migrated
+            raise HTTPException(
+                status_code=400,
+                detail=f"'{host['name']}' has no credential yet. Edit the host and pick one from the vault."
+            )
 
         try:
             # Launch the SSH session in a separate thread
             def launch_session():
                 try:
-                    self.ssh_manager.launch_iterm_session(host)
+                    self.ssh_manager.launch_iterm_session(host, credential)
                 except Exception as e:
                     logging.error(f"Error launching session for {host_name}: {e}")
                     print(f"❌ Error launching session for {host_name}: {e}")
@@ -183,25 +208,15 @@ class APISSHManager:
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Connection error: {str(e)}")
 
-    def add_host(self, host_data: dict, password: str = None):
+    def add_host(self, host_data: dict):
         """Add a new host"""
         self.ssh_manager.add_host_programmatic(host_data)
-        
-        if password and host_data.get('auth_method') == 'password':
-            service_name = f"ssh-{host_data['hostname']}"
-            self.ssh_manager.store_password(service_name, host_data['username'], password)
-            
         self.refresh_hosts_data()
         return self.ssh_manager.get_host(host_data['name'])
 
-    def update_host(self, original_name: str, host_data: dict, password: str = None):
+    def update_host(self, original_name: str, host_data: dict):
         """Update an existing host"""
         self.ssh_manager.update_host(original_name, host_data)
-        
-        if password and host_data.get('auth_method') == 'password':
-            service_name = f"ssh-{host_data['hostname']}"
-            self.ssh_manager.store_password(service_name, host_data['username'], password)
-            
         self.refresh_hosts_data()
         return self.ssh_manager.get_host(host_data['name'])
 
@@ -211,17 +226,38 @@ class APISSHManager:
         self.refresh_hosts_data()
         return True
 
-    def get_host_password(self, host_name: str):
-        """Get password for a host"""
-        host = self.ssh_manager.get_host(host_name)
-        if not host:
-            raise HTTPException(status_code=404, detail=f"Host '{host_name}' not found")
-            
-        if host.get('auth_method') != 'password':
-            return None
-            
-        service_name = f"ssh-{host['hostname']}"
-        return self.ssh_manager.get_password(service_name, host['username'])
+# The encrypted credentials vault and the in-memory unlocked sessions.
+# Sessions live only in this process, so reloading the page re-locks the vault.
+vault = vault_module.Vault()
+vault_sessions = vault_module.VaultSessions()
+
+
+def vault_locked_error():
+    """401 that the UI recognises and answers with the unlock dialog"""
+    return HTTPException(
+        status_code=401,
+        detail={"code": "vault_locked", "message": "The vault is locked"},
+    )
+
+
+def get_vault_key(x_vault_token: Optional[str] = Header(None)):
+    """Resolve an unlock token to its derived key, or fail with 401"""
+    if not vault.exists():
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "vault_missing", "message": "The vault has not been created yet"},
+        )
+    key = vault_sessions.get_key(x_vault_token)
+    if key is None:
+        raise vault_locked_error()
+    return key
+
+
+def optional_vault_key(x_vault_token: Optional[str] = Header(None)):
+    """Same, but returns None instead of failing (for endpoints that adapt)"""
+    return vault_sessions.get_key(x_vault_token)
+
+
 # Initialize the API manager
 api_manager = APISSHManager()
 
@@ -409,6 +445,192 @@ async def get_tags():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/vault/status")
+async def vault_status(x_vault_token: Optional[str] = Header(None)):
+    """Whether the vault exists and whether this page has it unlocked"""
+    unlocked = vault_sessions.get_key(x_vault_token) is not None
+    return {
+        "success": True,
+        "exists": vault.exists(),
+        "unlocked": unlocked,
+        "path": str(vault.path),
+    }
+
+
+@app.post("/api/vault/create")
+async def vault_create(request: VaultPasscodeRequest):
+    """Create the vault, migrating any pre-vault credentials into it"""
+    try:
+        credentials, assignments, summary = api_manager.ssh_manager.build_legacy_credentials()
+        key = vault.create(request.passcode, credentials)
+        migrated_hosts = api_manager.ssh_manager.apply_credential_assignments(assignments)
+        api_manager.refresh_hosts_data()
+
+        return {
+            "success": True,
+            "token": vault_sessions.create(key),
+            "migration": {
+                "credentials": len(credentials),
+                "hosts": migrated_hosts,
+                "passwords": summary['passwords'],
+                "keys": summary['keys'],
+                "skipped": summary['skipped'],
+            },
+        }
+    except vault_module.VaultError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/vault/unlock")
+async def vault_unlock(request: VaultPasscodeRequest):
+    """Unlock the vault for this page; the key never leaves the server"""
+    try:
+        key = vault.unlock(request.passcode)
+    except vault_module.VaultNotInitialized:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "vault_missing", "message": "The vault has not been created yet"},
+        )
+    except vault_module.InvalidPasscode:
+        raise HTTPException(status_code=401, detail={"code": "bad_passcode", "message": "Incorrect passcode"})
+    except vault_module.VaultError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {"success": True, "token": vault_sessions.create(key)}
+
+
+@app.post("/api/vault/lock")
+async def vault_lock(x_vault_token: Optional[str] = Header(None)):
+    """Forget this page's unlocked session"""
+    vault_sessions.revoke(x_vault_token)
+    return {"success": True, "message": "Vault locked"}
+
+
+@app.post("/api/vault/passcode")
+async def vault_change_passcode(request: VaultChangePasscodeRequest):
+    """Re-encrypt the vault under a new passcode"""
+    try:
+        key = vault.change_passcode(request.current_passcode, request.new_passcode)
+    except vault_module.InvalidPasscode:
+        raise HTTPException(status_code=401, detail={"code": "bad_passcode", "message": "Incorrect passcode"})
+    except vault_module.VaultError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Every existing session was derived from the old passcode
+    vault_sessions.revoke_all()
+    return {"success": True, "token": vault_sessions.create(key)}
+
+
+@app.get("/api/vault/credentials")
+async def list_credentials(key=Depends(get_vault_key)):
+    """Credential list, without any secrets, plus their host associations"""
+    try:
+        api_manager.refresh_hosts_data()
+        credentials = [
+            vault_module.public_credential(
+                credential,
+                used_by=api_manager.ssh_manager.hosts_using_credential(credential['name']),
+            )
+            for credential in vault.list_credentials(key)
+        ]
+        credentials.sort(key=lambda c: c['name'].lower())
+        return {"success": True, "credentials": credentials}
+    except vault_module.VaultError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/vault/credentials/{name}")
+async def get_credential(name: str, key=Depends(get_vault_key)):
+    """Full credential including its secret, for the edit form"""
+    try:
+        return {"success": True, "credential": vault.get_credential(key, name)}
+    except vault_module.CredentialNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except vault_module.VaultError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/vault/credentials")
+async def create_credential(request: CredentialRequest, key=Depends(get_vault_key)):
+    """Add a credential, refusing duplicate names"""
+    try:
+        credential = vault.add_credential(key, request.dict())
+        return {
+            "success": True,
+            "message": f"Credential '{credential['name']}' created",
+            "credential": vault_module.public_credential(credential, used_by=[]),
+        }
+    except vault_module.DuplicateCredentialName as e:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "duplicate_name", "name": e.name, "message": str(e)},
+        )
+    except vault_module.VaultError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.put("/api/vault/credentials/{name}")
+async def update_credential(name: str, request: CredentialRequest, key=Depends(get_vault_key)):
+    """Update a credential; renaming follows through to every host using it"""
+    try:
+        credential, previous_name = vault.update_credential(key, name, request.dict())
+    except vault_module.CredentialNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except vault_module.DuplicateCredentialName as e:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "duplicate_name", "name": e.name, "message": str(e)},
+        )
+    except vault_module.VaultError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    renamed_hosts = api_manager.ssh_manager.rename_credential_references(
+        previous_name, credential['name']
+    )
+    api_manager.refresh_hosts_data()
+
+    message = f"Credential '{credential['name']}' updated"
+    if renamed_hosts:
+        message += f" ({renamed_hosts} host(s) updated)"
+
+    return {
+        "success": True,
+        "message": message,
+        "renamed_hosts": renamed_hosts,
+        "credential": vault_module.public_credential(
+            credential, used_by=api_manager.ssh_manager.hosts_using_credential(credential['name'])
+        ),
+    }
+
+
+@app.delete("/api/vault/credentials/{name}")
+async def delete_credential(name: str, key=Depends(get_vault_key)):
+    """Delete a credential - refused while any host still uses it"""
+    api_manager.refresh_hosts_data()
+    used_by = api_manager.ssh_manager.hosts_using_credential(name)
+
+    if used_by:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "credential_in_use",
+                "name": name,
+                "hosts": used_by,
+                "count": len(used_by),
+                "message": f"{len(used_by)} host(s) still use '{name}'",
+            },
+        )
+
+    try:
+        vault.delete_credential(key, name)
+    except vault_module.CredentialNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except vault_module.VaultError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return {"success": True, "message": f"Credential '{name}' deleted"}
+
+
 @app.get("/api/groups")
 async def get_groups():
     """Get all group names in use, so the form can offer them"""
@@ -463,10 +685,13 @@ async def install_profiles():
 
 
 @app.post("/api/connect")
-async def connect_host(request: ConnectRequest, background_tasks: BackgroundTasks):
-    """Connect to a specific host"""
+async def connect_host(request: ConnectRequest, background_tasks: BackgroundTasks,
+                       x_vault_token: Optional[str] = Header(None)):
+    """Connect to a specific host, using its credential from the unlocked vault"""
     try:
-        result = api_manager.connect_to_host(request.host_name)
+        result = api_manager.connect_to_host(
+            request.host_name, vault_sessions.get_key(x_vault_token)
+        )
         return result
     except HTTPException:
         raise
@@ -480,10 +705,7 @@ async def connect_host(request: ConnectRequest, background_tasks: BackgroundTask
 async def create_host(host: HostCreate):
     """Create a new host"""
     try:
-        host_dict = host.dict(exclude={'password'})
-        password = host.password
-        
-        result = api_manager.add_host(host_dict, password)
+        result = api_manager.add_host(host.dict())
         return {
             "success": True,
             "message": f"Host '{host.name}' created successfully",
@@ -499,10 +721,7 @@ async def create_host(host: HostCreate):
 async def update_host(host_name: str, host: HostUpdate):
     """Update an existing host"""
     try:
-        host_dict = host.dict(exclude={'password'})
-        password = host.password
-        
-        result = api_manager.update_host(host_name, host_dict, password)
+        result = api_manager.update_host(host_name, host.dict())
         return {
             "success": True,
             "message": f"Host '{host.name}' updated successfully",
@@ -529,60 +748,17 @@ async def delete_host(host_name: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/hosts/{host_name}/password")
-async def get_host_password(host_name: str):
-    """Get password for a host"""
-    try:
-        password = api_manager.get_host_password(host_name)
-        return {
-            "success": True,
-            "password": password
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-class SetPasswordRequest(BaseModel):
-    password: str
-
-
-@app.post("/api/hosts/{host_name}/password")
-async def set_host_password(host_name: str, request: SetPasswordRequest):
-    """Set or update password for a host"""
-    try:
-        host = api_manager.ssh_manager.get_host(host_name)
-        if not host:
-            raise HTTPException(status_code=404, detail=f"Host '{host_name}' not found")
-        
-        if host.get('auth_method') != 'password':
-            raise HTTPException(status_code=400, detail=f"Host '{host_name}' does not use password authentication")
-        
-        # Store the password in keychain
-        service_name = f"ssh-{host['hostname']}"
-        api_manager.ssh_manager.store_password(service_name, host['username'], request.password)
-        
-        return {
-            "success": True,
-            "message": f"Password set successfully for '{host_name}'"
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.get("/api/export/hosts")
 async def export_hosts():
     """Export current host configurations"""
     try:
         hosts = api_manager.all_hosts
-        # Remove passwords from export for security
-        export_data = []
-        for host in hosts:
-            host_data = {k: v for k, v in host.items() if k != 'password'}
-            export_data.append(host_data)
+        # Secrets live in the vault, never in an export - hosts only carry the
+        # credential name
+        export_data = [
+            {k: v for k, v in host.items() if k != 'password'}
+            for host in hosts
+        ]
         
         return JSONResponse(
             content={"hosts": export_data},
@@ -604,9 +780,7 @@ async def export_template():
                 "hostname": "example.com",
                 "username": "user",
                 "port": 22,
-                "auth_method": "password",
-                "password": "your_password_here",
-                "ssh_key_path": None,
+                "credential": "prod-admin",
                 "iterm_profile": "connectify-PROD",
                 "group": "Production",
                 "theme": "red",
@@ -618,9 +792,7 @@ async def export_template():
                 "hostname": "dev.example.com",
                 "username": "developer",
                 "port": 2222,
-                "auth_method": "key",
-                "password": None,
-                "ssh_key_path": "~/.ssh/id_rsa",
+                "credential": "my-ssh-key",
                 "iterm_profile": "connectify-NONPROD",
                 "group": "Development",
                 "theme": "green",
@@ -628,9 +800,12 @@ async def export_template():
                 "ssh_options": ["PreferredAuthentications=publickey", "PasswordAuthentication=no"]
             }
         ],
-        "_note": "group is optional (hosts without one are listed ungrouped) and theme is one of default, red, green, orange. For password authentication hosts, provide the password in the 'password' field. Passwords will be securely stored in keychain. For key-based auth, set password to null and provide ssh_key_path."
+        "_note": "'credential' is the name of a credential in the Connectify vault - "
+                 "create it on the Vault page (secrets are never part of an import or "
+                 "export). 'group' is optional; hosts without one are listed ungrouped. "
+                 "'theme' is one of default, red, green, orange."
     }
-    
+
     return JSONResponse(
         content=template,
         headers={
@@ -641,37 +816,39 @@ async def export_template():
 
 @app.post("/api/import/hosts")
 async def import_hosts(import_data: ImportRequest):
-    """Import host configurations with password handling"""
+    """Import host configurations.
+
+    Secrets are never imported - hosts reference a credential by name, and the
+    credential itself is created on the Vault page.
+    """
     try:
         imported_count = 0
         errors = []
         warnings = []
-        
+
+        known_credentials = set()
+        for host in api_manager.all_hosts:
+            if host.get('credential'):
+                known_credentials.add(host['credential'].lower())
+
         for host_data in import_data.hosts:
             try:
-                # Extract password if present
-                password = host_data.password if hasattr(host_data, 'password') else None
-                host_dict = host_data.dict(exclude={'password'})
-                
-                # Validate password requirement
-                if host_dict.get('auth_method') == 'password':
-                    if password:
-                        # Password provided, will be stored in keychain
-                        api_manager.add_host(host_dict, password)
-                        imported_count += 1
-                    else:
-                        # No password provided, add warning
-                        api_manager.add_host(host_dict, None)
-                        warnings.append(f"Host '{host_data.name}' imported without password. You'll need to set the password before connecting.")
-                        imported_count += 1
-                else:
-                    # Key-based authentication, no password needed
-                    api_manager.add_host(host_dict, None)
-                    imported_count += 1
-                    
+                api_manager.add_host(host_data.dict())
+                imported_count += 1
+
+                credential = (host_data.credential or '').strip()
+                if not credential:
+                    warnings.append(
+                        f"Host '{host_data.name}' has no credential - assign one before connecting."
+                    )
+                elif credential.lower() not in known_credentials:
+                    warnings.append(
+                        f"Host '{host_data.name}' references credential '{credential}'. "
+                        f"Create it on the Vault page if it doesn't exist yet."
+                    )
             except Exception as e:
                 errors.append(f"Failed to import '{host_data.name}': {str(e)}")
-        
+
         return {
             "success": True,
             "message": f"Imported {imported_count} host(s)" + (f" with {len(warnings)} warning(s)" if warnings else ""),
@@ -681,6 +858,7 @@ async def import_hosts(import_data: ImportRequest):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/health")
 async def health_check():

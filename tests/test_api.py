@@ -58,7 +58,7 @@ def test_create_host(mock_ssh_manager):
         "username": "user",
         "port": 22,
         "auth_method": "password",
-        "password": "secret_password",
+        "credential": "prod-admin",
         "group": " Production ",
         "theme": "RED",
         "tags": ["new"]
@@ -75,7 +75,10 @@ def test_create_host(mock_ssh_manager):
     stored = mock_ssh_manager.add_host_programmatic.call_args[0][0]
     assert stored['group'] == 'Production'
     assert stored['theme'] == 'red'
-    mock_ssh_manager.store_password.assert_called_once_with("ssh-192.168.1.1", "user", "secret_password")
+    # Secrets live in the vault now - creating a host never touches them
+    assert stored['credential'] == 'prod-admin'
+    assert 'password' not in stored
+    mock_ssh_manager.store_password.assert_not_called()
 
 def test_update_host(mock_ssh_manager):
     update_data = {

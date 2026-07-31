@@ -187,7 +187,7 @@ class SSHManager:
                     "hostname": "prod.example.com",
                     "username": "admin",
                     "port": 22,
-                    "auth_method": "password",
+                    "credential": "",
                     "iterm_profile": "connectify-PROD",
                     "group": "Production",
                     "theme": "red",
@@ -198,8 +198,7 @@ class SSHManager:
                     "hostname": "dev.example.com",
                     "username": "developer",
                     "port": 2222,
-                    "auth_method": "key",
-                    "ssh_key_path": "~/.ssh/dev_server_key",
+                    "credential": "",
                     "iterm_profile": "connectify-NONPROD",
                     "group": "Development",
                     "theme": "green",
@@ -268,34 +267,11 @@ class SSHManager:
             return True
         raise ValueError(f"Host '{host_name}' not found")
 
-    def store_password(self, service_name, username, password):
-        """Store password in macOS Keychain using consolidated storage"""
-        try:
-            # Use a single service name for all SSH passwords
-            ssh_service = "connectify-iterm2"
-
-            # Get existing passwords or create new storage
-            existing_passwords = self.get_all_passwords()
-
-            # Update the password for this host
-            host_key = f"{username}@{service_name.replace('ssh-', '')}"
-            existing_passwords[host_key] = password
-
-            # Store the consolidated password data as JSON
-            passwords_json = json.dumps(existing_passwords, ensure_ascii=False)
-            keyring.set_password(ssh_service, "all_hosts", passwords_json)
-
-            print(f"✓ Password stored securely")
-
-            # Verify storage by trying to retrieve immediately
-            retrieved_passwords = self.get_all_passwords()
-            if host_key not in retrieved_passwords or retrieved_passwords[host_key] != password:
-                print(f"⚠ Warning: Password verification failed")
-        except Exception as e:
-            print(f"✗ Error storing password: {e}")
-
     def get_password(self, service_name, username):
-        """Retrieve password from consolidated keyring storage"""
+        """Read a password from the legacy macOS Keychain storage.
+
+        Only used to migrate old installs into the encrypted vault.
+        """
         try:
             all_passwords = self.get_all_passwords()
             host_key = f"{username}@{service_name.replace('ssh-', '')}"
@@ -305,7 +281,7 @@ class SSHManager:
             return None
 
     def get_all_passwords(self):
-        """Retrieve all stored SSH passwords from keyring"""
+        """Read every password from the legacy macOS Keychain storage."""
         try:
             ssh_service = "connectify-iterm2"
             passwords_json = keyring.get_password(ssh_service, "all_hosts")
@@ -315,7 +291,10 @@ class SSHManager:
             else:
                 return {}
         except Exception as e:
-            print(f"Error retrieving passwords: {e}")
+            # The legacy keychain is only consulted for migration; on a machine
+            # without a keyring backend this is simply "nothing to migrate".
+            if self.debug:
+                print(f"DEBUG: Could not read legacy keychain: {e}")
             # Return empty dict if no passwords stored yet or error occurred
             return {}
 
@@ -400,12 +379,14 @@ class SSHManager:
 
         return filtered_hosts
 
-    def build_ssh_command(self, host, password=None, temp_file=None):
-        """Build SSH command for the selected host"""
+    def build_ssh_command(self, host, credential=None, temp_file=None):
+        """Build the SSH command for a host using its vault credential."""
         hostname = host['hostname']
         username = host['username']
         port = host.get('port', 22)
-        auth_method = host.get('auth_method', 'password')
+        credential = credential or {}
+        auth_method = credential.get('type') or host.get('auth_method', 'password')
+        password = credential.get('password')
 
         # SSH keep-alive options disabled - no automatic disconnection
         keepalive_opts = ""
@@ -447,7 +428,7 @@ class SSHManager:
         ssh_cmd = f"ssh -p {port} {keepalive_opts} {auth_opts}"
 
         if auth_method == 'key':
-            ssh_key_path = host.get('ssh_key_path')
+            ssh_key_path = credential.get('ssh_key_path') or host.get('ssh_key_path')
             if ssh_key_path:
                 key_path = Path(ssh_key_path).expanduser()
                 if key_path.exists():
@@ -532,8 +513,13 @@ class SSHManager:
             print(f"⚠️  Unexpected error: {e}")
             return False
 
-    def launch_iterm_session(self, host):
-        """Launch iTerm2 session with the specified host"""
+    def launch_iterm_session(self, host, credential=None):
+        """Launch an iTerm2 session for a host, using its vault credential.
+
+        ``credential`` is the decrypted record from the vault (resolved by the
+        caller, which holds the unlocked key); ``None`` means the host has no
+        credential and only key-less SSH is possible.
+        """
         iterm_profile = host.get('iterm_profile', 'Default')
 
         # Show launching message
@@ -543,32 +529,19 @@ class SSHManager:
         # Check if iTerm2 is running and launch it if not
         self._ensure_iterm_running()
 
-        # Handle password authentication
-        password = None
-        if host.get('auth_method') == 'password':
-            service_name = f"ssh-{host['hostname']}"
+        # The password (if any) comes from the vault credential
+        credential = credential or {}
+        password = credential.get('password')
+
+        if credential.get('type') == 'password' and not password:
             username = host['username']
-            
-            if self.debug:
-                print(f"DEBUG: Retrieving password for service_name={service_name}, username={username}")
-
-            password = self.get_password(service_name, username)
-            
-            if self.debug:
-                print(f"DEBUG: Retrieved password: {'[PRESENT]' if password else '[NOT FOUND]'}")
-
-            if not password:
-                # Sessions are always launched from the web UI, which checks for
-                # a stored password before getting here - there is nobody to
-                # prompt at this point.
-                print(f"⚠️  Password required for {username}@{host['hostname']}")
-                print(f"⚠️  Set it in the web UI (edit the host) and try again")
-                raise ValueError(f"Password required for {host_name} but not stored in keychain")
+            print(f"⚠️  Credential '{credential.get('name')}' has no password stored")
+            print(f"⚠️  Fix it in the Vault and try again")
+            raise ValueError(f"Password required for {host_name} but missing from the vault")
 
         # Generate unique temporary file name for password with timestamp
         temp_pass_file = None
-        if host.get('auth_method') == 'password' and password:
-            import time
+        if password:
             timestamp = int(time.time())  # Unix timestamp
             temp_filename = f".ssh_pass_{timestamp}_{uuid.uuid4().hex[:8]}"
             temp_pass_file = Path.home() / temp_filename
@@ -581,7 +554,7 @@ class SSHManager:
             print(f"DEBUG: temp_pass_file: {temp_pass_file}")
 
         # Build SSH command
-        ssh_command, uses_sshpass = self.build_ssh_command(host, password, temp_pass_file)
+        ssh_command, uses_sshpass = self.build_ssh_command(host, credential, temp_pass_file)
 
         # Handle secure password file for sshpass with proper cleanup
         temp_file_created = False
@@ -736,75 +709,119 @@ class SSHManager:
                         except Exception as cleanup_error:
                             print(f"⚠ Warning: Could not remove temporary file {temp_pass_file}: {cleanup_error}")
 
-    def debug_keychain(self):
-        """Debug keychain storage and retrieval"""
-        print("\n=== Keychain Debug Information ===")
-
-        # Show keyring backend
-        print(f"Keyring backend: {keyring.get_keyring()}")
-
-        # Test basic functionality
-        test_service = "ssh-manager-test"
-        test_user = "testuser"
-        test_password = "testpass123"
-
-        print(f"\nTesting keychain with service '{test_service}' and user '{test_user}'...")
-
-        # Store test password
+    def legacy_keychain_passwords(self):
+        """Passwords still sitting in the old macOS Keychain storage."""
         try:
-            keyring.set_password(test_service, test_user, test_password)
-            print("✓ Test password stored")
-        except Exception as e:
-            print(f"✗ Failed to store test password: {e}")
-            return
+            return self.get_all_passwords()
+        except Exception:
+            return {}
 
-        # Retrieve test password
-        try:
-            retrieved = keyring.get_password(test_service, test_user)
-            if retrieved == test_password:
-                print("✓ Test password retrieved successfully")
+    def build_legacy_credentials(self):
+        """Turn pre-vault host settings into vault credentials.
+
+        Password hosts bring their keychain password across (one credential per
+        host); key hosts share a credential per key file, since that's how keys
+        are actually used. Returns ``(credentials, assignments, summary)`` where
+        assignments maps host name -> credential name.
+        """
+        legacy_passwords = self.legacy_keychain_passwords()
+        credentials = []
+        assignments = {}
+        summary = {'passwords': 0, 'keys': 0, 'skipped': []}
+        used_names = set()
+
+        def unique_name(base):
+            candidate = base
+            suffix = 2
+            while candidate.lower() in used_names:
+                candidate = f"{base}-{suffix}"
+                suffix += 1
+            used_names.add(candidate.lower())
+            return candidate
+
+        keys_by_path = {}
+
+        for host in self.config.get('hosts', []):
+            if host.get('credential'):
+                continue
+
+            auth_method = host.get('auth_method', 'password')
+            host_name = host.get('name', '')
+
+            if auth_method == 'key':
+                key_path = (host.get('ssh_key_path') or '').strip()
+                if not key_path:
+                    summary['skipped'].append(host_name)
+                    continue
+
+                if key_path not in keys_by_path:
+                    name = unique_name(Path(key_path).name or 'ssh-key')
+                    keys_by_path[key_path] = name
+                    credentials.append({
+                        'name': name,
+                        'type': 'key',
+                        'description': f'Imported from {host_name}',
+                        'ssh_key_path': key_path,
+                        'passphrase': '',
+                    })
+                    summary['keys'] += 1
+
+                assignments[host_name] = keys_by_path[key_path]
             else:
-                print(f"✗ Test password mismatch. Expected: {test_password}, Got: {retrieved}")
-        except Exception as e:
-            print(f"✗ Failed to retrieve test password: {e}")
+                host_key = f"{host.get('username')}@{host.get('hostname')}"
+                password = legacy_passwords.get(host_key)
+                if not password:
+                    summary['skipped'].append(host_name)
+                    continue
 
-        # Clean up test
-        try:
-            keyring.delete_password(test_service, test_user)
-            print("✓ Test password cleaned up")
-        except Exception as e:
-            print(f"⚠ Failed to clean up test password: {e}")
+                name = unique_name(host_name or host_key)
+                credentials.append({
+                    'name': name,
+                    'type': 'password',
+                    'description': f'Imported from {host_name}',
+                    'password': password,
+                })
+                assignments[host_name] = name
+                summary['passwords'] += 1
 
-        # Show stored SSH passwords
-        print(f"\nConsolidated Password Storage Status:")
-        all_passwords = self.get_all_passwords()
+        return credentials, assignments, summary
 
-        if all_passwords:
-            print(f"✓ Found {len(all_passwords)} passwords in consolidated storage:")
-            for host_key in all_passwords.keys():
-                print(f"  - {host_key}")
-        else:
-            print(f"ℹ No passwords stored yet")
+    def apply_credential_assignments(self, assignments):
+        """Point hosts at their migrated credentials."""
+        changed = 0
+        for host in self.config.get('hosts', []):
+            credential = assignments.get(host.get('name'))
+            if credential and not host.get('credential'):
+                host['credential'] = credential
+                changed += 1
+        if changed:
+            self.save_config()
+        return changed
 
-        # Verify each configured host can access its password
-        print(f"\nHost Password Access Check:")
-        hosts = self.config.get('hosts', [])
-        password_hosts = [h for h in hosts if h.get('auth_method') == 'password']
+    def hosts_using_credential(self, credential_name):
+        """Names of hosts referencing a credential (case-insensitive)."""
+        wanted = str(credential_name or '').strip().lower()
+        return [
+            host.get('name')
+            for host in self.config.get('hosts', [])
+            if str(host.get('credential') or '').strip().lower() == wanted
+        ]
 
-        if password_hosts:
-            for host in password_hosts:
-                service_name = f"ssh-{host['hostname']}"
-                username = host['username']
-                try:
-                    stored_pwd = self.get_password(service_name, username)
-                    if stored_pwd:
-                        print(f"✓ {username}@{host['hostname']} - password accessible")
-                    else:
-                        print(f"ℹ {username}@{host['hostname']} - no password stored")
-                except Exception as e:
-                    print(f"✗ {username}@{host['hostname']} - error: {e}")
-        else:
-            print("  No hosts configured for password authentication")
+    def rename_credential_references(self, old_name, new_name):
+        """Keep host associations pointing at a renamed credential."""
+        if old_name == new_name:
+            return 0
+
+        wanted = str(old_name or '').strip().lower()
+        changed = 0
+        for host in self.config.get('hosts', []):
+            if str(host.get('credential') or '').strip().lower() == wanted:
+                host['credential'] = new_name
+                changed += 1
+        if changed:
+            self.save_config()
+        return changed
+
 
 def main():
     """Entry point for running the web UI server directly.

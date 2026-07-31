@@ -1156,6 +1156,154 @@
       color: white;
     }
 
+    /* Credentials Vault page */
+    .vault-view {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .vault-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: var(--spacing-lg);
+      flex-wrap: wrap;
+      margin-bottom: var(--spacing-xl);
+    }
+
+    .vault-title {
+      margin: 0;
+      font-size: 1.5rem;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+    }
+
+    .vault-subtitle {
+      margin: 0.35rem 0 0;
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+    }
+
+    .vault-header-actions {
+      display: flex;
+      gap: var(--spacing-sm);
+      flex-wrap: wrap;
+    }
+
+    .vault-locked-state,
+    .vault-empty {
+      text-align: center;
+      padding: var(--spacing-xl) var(--spacing-lg);
+      border: 1px dashed var(--border-color);
+      border-radius: var(--radius-xl);
+      color: var(--text-secondary);
+    }
+
+    .vault-locked-state h3,
+    .vault-empty h3 {
+      color: var(--text-primary);
+      margin: var(--spacing-md) 0 var(--spacing-xs);
+    }
+
+    .vault-lock-icon,
+    .vault-empty i {
+      font-size: 2.5rem;
+      color: var(--warning-color);
+    }
+
+    .vault-locked-state p,
+    .vault-empty p {
+      margin-bottom: var(--spacing-lg);
+    }
+
+    .credentials-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-md);
+    }
+
+    .credential-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--spacing-md);
+      padding: var(--spacing-md) var(--spacing-lg);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      background: var(--bg-secondary);
+    }
+
+    .credential-card:hover {
+      border-color: var(--primary-color);
+    }
+
+    .credential-main {
+      min-width: 0;
+    }
+
+    .credential-name {
+      font-weight: 600;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-sm);
+      flex-wrap: wrap;
+    }
+
+    .credential-type {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 0.1rem 0.5rem;
+      border-radius: 999px;
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+    }
+
+    .credential-type.type-password {
+      border-color: var(--theme-orange);
+      color: var(--theme-orange);
+    }
+
+    .credential-type.type-key {
+      border-color: var(--theme-green);
+      color: var(--theme-green);
+    }
+
+    .credential-meta {
+      color: var(--text-secondary);
+      font-size: 0.8rem;
+      margin-top: 0.25rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .credential-actions {
+      display: flex;
+      gap: var(--spacing-xs);
+      flex-shrink: 0;
+    }
+
+    .credential-host-list {
+      margin: 0;
+      padding-left: 1.25rem;
+      color: var(--text-primary);
+      max-height: 30vh;
+      overflow-y: auto;
+    }
+
+    .vault-error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid var(--error-color);
+      color: var(--error-color);
+      border-radius: var(--radius-md);
+      padding: 0.6rem 0.85rem;
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+    }
+
     /* Tile Theme Picker (dots in the add/edit form) */
     .theme-dots {
       display: flex;
@@ -1732,6 +1880,9 @@
             <button id="exportBtn" class="control-btn" title="Export Hosts" style="color: var(--primary-color); border-color: var(--primary-color);">
               <i class="fas fa-file-export"></i>
             </button>
+            <button id="vaultBtn" class="control-btn" title="Credentials Vault" style="color: var(--warning-color); border-color: var(--warning-color);">
+              <i class="fas fa-lock"></i>
+            </button>
             <button id="viewToggleBtn" class="control-btn" title="Switch View">
               <i class="fas fa-list"></i>
             </button>
@@ -1774,6 +1925,47 @@
       <div id="hostsContainer" class="hosts-container" style="display: none;">
         <!-- Host groups will be dynamically inserted here -->
       </div>
+
+      <!-- Credentials Vault Page -->
+      <section id="vaultView" class="vault-view" style="display: none;">
+        <div class="vault-header">
+          <div>
+            <h2 class="vault-title"><i class="fas fa-vault"></i> Credentials Vault</h2>
+            <p class="vault-subtitle" id="vaultSubtitle">Encrypted credentials stored in ~/.connectify</p>
+          </div>
+          <div class="vault-header-actions">
+            <button id="vaultLockBtn" class="control-btn" style="width: auto; padding: 0.5rem 1rem; display: none;">
+              <i class="fas fa-lock"></i> Lock
+            </button>
+            <button id="addCredentialBtn" class="control-btn" style="width: auto; padding: 0.5rem 1rem; background: var(--primary-color); color: white; border-color: var(--primary-color); display: none;">
+              <i class="fas fa-plus"></i> Add Credential
+            </button>
+            <button id="backFromVaultBtn" class="control-btn" style="width: auto; padding: 0.5rem 1rem;">
+              <i class="fas fa-arrow-left"></i> Back to hosts
+            </button>
+          </div>
+        </div>
+
+        <!-- Shown while the vault is locked -->
+        <div id="vaultLockedState" class="vault-locked-state">
+          <div class="vault-lock-icon"><i class="fas fa-lock"></i></div>
+          <h3 id="vaultLockedTitle">Vault is locked</h3>
+          <p id="vaultLockedMessage">Unlock the vault to view and manage your credentials.</p>
+          <button id="vaultUnlockPromptBtn" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem; background: var(--primary-color); color: white; border-color: var(--primary-color);">
+            <i class="fas fa-key"></i> Unlock Vault
+          </button>
+        </div>
+
+        <!-- Shown once unlocked -->
+        <div id="vaultUnlockedState" style="display: none;">
+          <div id="credentialsEmpty" class="vault-empty" style="display: none;">
+            <i class="fas fa-key"></i>
+            <h3>No credentials yet</h3>
+            <p>Add a password or SSH key credential and assign it to your hosts.</p>
+          </div>
+          <div id="credentialsList" class="credentials-list"></div>
+        </div>
+      </section>
     </main>
 
 
@@ -1847,26 +2039,16 @@
           </div>
 
           <div class="form-group" style="margin-bottom: 1rem;">
-            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Authentication Method</label>
-            <select id="authMethod" class="search-input" style="width: 100%;">
-              <option value="password">Password</option>
-              <option value="key">SSH Key</option>
-            </select>
-          </div>
-
-          <div id="passwordField" class="form-group" style="margin-bottom: 1rem;">
-            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Password (Optional - stored in Keychain)</label>
-            <div style="position: relative;">
-              <input type="password" id="hostPassword" class="search-input" style="width: 100%; padding-right: 40px;" placeholder="Leave empty to keep existing or prompt on connect">
-              <button type="button" id="togglePasswordBtn" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-secondary); cursor: pointer;">
-                <i class="fas fa-eye"></i>
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Credential</label>
+            <div style="display: flex; gap: 0.5rem;">
+              <select id="hostCredential" class="search-input" style="flex: 1;">
+                <option value="">No credential</option>
+              </select>
+              <button type="button" id="addCredentialInlineBtn" class="control-btn" style="width: auto; padding: 0.5rem 0.9rem; white-space: nowrap;" title="Add a new credential">
+                <i class="fas fa-plus"></i> New
               </button>
             </div>
-          </div>
-
-          <div id="keyField" class="form-group" style="margin-bottom: 1rem; display: none;">
-            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">SSH Key Path</label>
-            <input type="text" id="sshKeyPath" class="search-input" style="width: 100%;" placeholder="~/.ssh/id_rsa">
+            <small id="credentialHint" class="profile-hint"></small>
           </div>
 
           <div class="form-group" style="margin-bottom: 1rem;">
@@ -1903,6 +2085,122 @@
             <button type="submit" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem; background: var(--primary-color); color: white; border-color: var(--primary-color);">Save Host</button>
           </div>
         </form>
+      </div>
+    </div>
+
+    <!-- Vault Unlock / Create Modal -->
+    <div id="vaultUnlockModal" class="connection-overlay">
+      <div class="connection-modal" style="max-width: 460px; text-align: left;">
+        <h3 id="vaultUnlockTitle" style="margin-bottom: 0.5rem;">Unlock Vault</h3>
+        <p id="vaultUnlockHint" style="color: var(--text-secondary); margin-bottom: 1.25rem; font-size: 0.9rem;">
+          Enter your passcode to unlock the credentials vault.
+        </p>
+        <form id="vaultUnlockForm">
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Passcode</label>
+            <input type="password" id="vaultPasscode" class="search-input" style="width: 100%;" autocomplete="off" required>
+          </div>
+          <div class="form-group" id="vaultPasscodeConfirmField" style="margin-bottom: 1rem; display: none;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Confirm passcode</label>
+            <input type="password" id="vaultPasscodeConfirm" class="search-input" style="width: 100%;" autocomplete="off">
+            <small class="profile-hint">There is no recovery - if you forget this passcode the credentials are gone.</small>
+          </div>
+          <div id="vaultUnlockError" class="vault-error" style="display: none;"></div>
+          <div style="display: flex; justify-content: flex-end; gap: 1rem;">
+            <button type="button" id="cancelVaultUnlockBtn" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem;">Cancel</button>
+            <button type="submit" id="vaultUnlockSubmitBtn" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem; background: var(--primary-color); color: white; border-color: var(--primary-color);">Unlock</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Add/Edit Credential Modal -->
+    <div id="credentialModal" class="connection-overlay">
+      <div class="connection-modal" style="max-width: 560px; text-align: left;">
+        <h3 id="credentialModalTitle" style="margin-bottom: 1.5rem;">Add Credential</h3>
+        <form id="credentialForm">
+          <input type="hidden" id="credentialOriginalName">
+
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Name</label>
+            <input type="text" id="credentialName" class="search-input" style="width: 100%;" placeholder="prod-admin" required>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Description <span style="color: var(--text-muted); font-weight: 400;">(optional)</span></label>
+            <input type="text" id="credentialDescription" class="search-input" style="width: 100%;" placeholder="Shared admin login for production">
+          </div>
+
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Type</label>
+            <select id="credentialType" class="search-input" style="width: 100%;">
+              <option value="password">Password</option>
+              <option value="key">SSH Key</option>
+            </select>
+          </div>
+
+          <div id="credentialPasswordField" class="form-group" style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Password</label>
+            <div style="position: relative;">
+              <input type="password" id="credentialPassword" class="search-input" style="width: 100%; padding-right: 40px;" autocomplete="off">
+              <button type="button" id="toggleCredentialPasswordBtn" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-secondary); cursor: pointer;">
+                <i class="fas fa-eye"></i>
+              </button>
+            </div>
+          </div>
+
+          <div id="credentialKeyFields" style="display: none;">
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">SSH Key Path</label>
+              <input type="text" id="credentialKeyPath" class="search-input" style="width: 100%;" placeholder="~/.ssh/id_ed25519">
+            </div>
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Passphrase <span style="color: var(--text-muted); font-weight: 400;">(optional)</span></label>
+              <input type="password" id="credentialPassphrase" class="search-input" style="width: 100%;" autocomplete="off">
+            </div>
+          </div>
+
+          <div id="credentialError" class="vault-error" style="display: none;"></div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 1rem;">
+            <button type="button" id="cancelCredentialBtn" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem;">Cancel</button>
+            <button type="submit" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem; background: var(--primary-color); color: white; border-color: var(--primary-color);">Save Credential</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Duplicate Credential Name Modal -->
+    <div id="duplicateCredentialModal" class="connection-overlay">
+      <div class="connection-modal" style="max-width: 480px; text-align: left;">
+        <h3 style="margin-bottom: 0.75rem;">That name is taken</h3>
+        <p style="color: var(--text-secondary); margin-bottom: 1.25rem;">
+          A credential called <strong id="duplicateCredentialName"></strong> already exists. What would you like to do?
+        </p>
+        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+          <button id="duplicateChooseNameBtn" class="control-btn" style="width: 100%; padding: 0.65rem 1rem; justify-content: flex-start;">
+            <i class="fas fa-pen"></i> Choose a different name
+          </button>
+          <button id="duplicateEditExistingBtn" class="control-btn" style="width: 100%; padding: 0.65rem 1rem; justify-content: flex-start;">
+            <i class="fas fa-edit"></i> Edit the existing credential instead
+          </button>
+          <button id="duplicateDeleteExistingBtn" class="control-btn" style="width: 100%; padding: 0.65rem 1rem; justify-content: flex-start; color: var(--error-color); border-color: var(--error-color);">
+            <i class="fas fa-trash"></i> Delete the existing credential
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Credential Delete / In-Use Modal -->
+    <div id="credentialDeleteModal" class="connection-overlay">
+      <div class="connection-modal" style="max-width: 480px; text-align: left;">
+        <h3 id="credentialDeleteTitle" style="margin-bottom: 0.75rem;">Delete credential?</h3>
+        <p id="credentialDeleteMessage" style="color: var(--text-secondary); margin-bottom: 1rem;"></p>
+        <ul id="credentialDeleteHosts" class="credential-host-list" style="display: none;"></ul>
+        <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1.25rem;">
+          <button id="cancelCredentialDeleteBtn" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem;">Close</button>
+          <button id="confirmCredentialDeleteBtn" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem; background: var(--error-color); color: white; border-color: var(--error-color);">Delete</button>
+        </div>
       </div>
     </div>
 
@@ -2020,6 +2318,16 @@
         // Host groups currently in use (see loadGroups)
         this.availableGroups = [];
         this.groupHighlightIndex = -1;
+
+        // Credentials vault. The token lives in memory only, so reloading the
+        // page locks the vault again.
+        this.vaultToken = null;
+        this.vaultExists = false;
+        this.credentials = [];
+        this.pendingVaultAction = null;
+        this.vaultMode = 'unlock';
+        // Which page is on screen: the host dashboard or the vault
+        this.activePage = 'hosts';
         this.currentView = localStorage.getItem('sshManagerView') || 'grid';
         this.isLoading = false;
 
@@ -2072,15 +2380,66 @@
           // Form Fields
           modalTitle: document.getElementById('modalTitle'),
           originalName: document.getElementById('originalName'),
-          authMethod: document.getElementById('authMethod'),
-          passwordField: document.getElementById('passwordField'),
-          modalTitle: document.getElementById('modalTitle'),
-          originalName: document.getElementById('originalName'),
-          authMethod: document.getElementById('authMethod'),
-          passwordField: document.getElementById('passwordField'),
-          hostPassword: document.getElementById('hostPassword'),
-          togglePasswordBtn: document.getElementById('togglePasswordBtn'),
-          keyField: document.getElementById('keyField'),
+          hostCredential: document.getElementById('hostCredential'),
+          credentialHint: document.getElementById('credentialHint'),
+          addCredentialInlineBtn: document.getElementById('addCredentialInlineBtn'),
+
+          // Vault page
+          vaultBtn: document.getElementById('vaultBtn'),
+          vaultView: document.getElementById('vaultView'),
+          vaultSubtitle: document.getElementById('vaultSubtitle'),
+          vaultLockBtn: document.getElementById('vaultLockBtn'),
+          addCredentialBtn: document.getElementById('addCredentialBtn'),
+          backFromVaultBtn: document.getElementById('backFromVaultBtn'),
+          vaultLockedState: document.getElementById('vaultLockedState'),
+          vaultLockedTitle: document.getElementById('vaultLockedTitle'),
+          vaultLockedMessage: document.getElementById('vaultLockedMessage'),
+          vaultUnlockPromptBtn: document.getElementById('vaultUnlockPromptBtn'),
+          vaultUnlockedState: document.getElementById('vaultUnlockedState'),
+          credentialsList: document.getElementById('credentialsList'),
+          credentialsEmpty: document.getElementById('credentialsEmpty'),
+
+          // Vault unlock modal
+          vaultUnlockModal: document.getElementById('vaultUnlockModal'),
+          vaultUnlockForm: document.getElementById('vaultUnlockForm'),
+          vaultUnlockTitle: document.getElementById('vaultUnlockTitle'),
+          vaultUnlockHint: document.getElementById('vaultUnlockHint'),
+          vaultPasscode: document.getElementById('vaultPasscode'),
+          vaultPasscodeConfirm: document.getElementById('vaultPasscodeConfirm'),
+          vaultPasscodeConfirmField: document.getElementById('vaultPasscodeConfirmField'),
+          vaultUnlockError: document.getElementById('vaultUnlockError'),
+          vaultUnlockSubmitBtn: document.getElementById('vaultUnlockSubmitBtn'),
+          cancelVaultUnlockBtn: document.getElementById('cancelVaultUnlockBtn'),
+
+          // Credential modal
+          credentialModal: document.getElementById('credentialModal'),
+          credentialForm: document.getElementById('credentialForm'),
+          credentialModalTitle: document.getElementById('credentialModalTitle'),
+          credentialOriginalName: document.getElementById('credentialOriginalName'),
+          credentialName: document.getElementById('credentialName'),
+          credentialDescription: document.getElementById('credentialDescription'),
+          credentialType: document.getElementById('credentialType'),
+          credentialPasswordField: document.getElementById('credentialPasswordField'),
+          credentialPassword: document.getElementById('credentialPassword'),
+          toggleCredentialPasswordBtn: document.getElementById('toggleCredentialPasswordBtn'),
+          credentialKeyFields: document.getElementById('credentialKeyFields'),
+          credentialKeyPath: document.getElementById('credentialKeyPath'),
+          credentialPassphrase: document.getElementById('credentialPassphrase'),
+          credentialError: document.getElementById('credentialError'),
+          cancelCredentialBtn: document.getElementById('cancelCredentialBtn'),
+
+          // Duplicate + delete dialogs
+          duplicateCredentialModal: document.getElementById('duplicateCredentialModal'),
+          duplicateCredentialName: document.getElementById('duplicateCredentialName'),
+          duplicateChooseNameBtn: document.getElementById('duplicateChooseNameBtn'),
+          duplicateEditExistingBtn: document.getElementById('duplicateEditExistingBtn'),
+          duplicateDeleteExistingBtn: document.getElementById('duplicateDeleteExistingBtn'),
+          credentialDeleteModal: document.getElementById('credentialDeleteModal'),
+          credentialDeleteTitle: document.getElementById('credentialDeleteTitle'),
+          credentialDeleteMessage: document.getElementById('credentialDeleteMessage'),
+          credentialDeleteHosts: document.getElementById('credentialDeleteHosts'),
+          confirmCredentialDeleteBtn: document.getElementById('confirmCredentialDeleteBtn'),
+          cancelCredentialDeleteBtn: document.getElementById('cancelCredentialDeleteBtn'),
 
           // Advanced SSH Options
           sshOptionsDetails: document.getElementById('sshOptionsDetails'),
@@ -2141,6 +2500,7 @@
         await this.loadTags();
         await this.loadGroups();
         this.loadProfiles();
+        await this.loadVaultStatus();
         this.setView(this.currentView);
       }
 
@@ -2208,8 +2568,12 @@
           this.elements.hostForm.addEventListener('submit', (e) => this.handleHostSubmit(e));
         }
 
-        if (this.elements.authMethod) {
-          this.elements.authMethod.addEventListener('change', () => this.onAuthMethodChange());
+        if (this.elements.hostCredential) {
+          this.elements.hostCredential.addEventListener('change', () => this.onCredentialChange());
+        }
+        if (this.elements.addCredentialInlineBtn) {
+          this.elements.addCredentialInlineBtn.addEventListener('click',
+            () => this.openCredentialModal(null, { returnToHostForm: true }));
         }
 
         if (this.elements.cancelDeleteBtn) {
@@ -2219,8 +2583,80 @@
           this.elements.confirmDeleteBtn.addEventListener('click', () => this.confirmDelete());
         }
 
-        if (this.elements.togglePasswordBtn) {
-          this.elements.togglePasswordBtn.addEventListener('click', () => this.togglePasswordVisibility());
+        // Vault page + dialogs
+        if (this.elements.vaultBtn) {
+          this.elements.vaultBtn.addEventListener('click', () => this.showVaultView());
+        }
+        if (this.elements.backFromVaultBtn) {
+          this.elements.backFromVaultBtn.addEventListener('click', () => this.hideVaultView());
+        }
+        if (this.elements.vaultLockBtn) {
+          this.elements.vaultLockBtn.addEventListener('click', () => this.lockVault());
+        }
+        if (this.elements.vaultUnlockPromptBtn) {
+          this.elements.vaultUnlockPromptBtn.addEventListener('click', () => this.openVaultUnlockModal());
+        }
+        if (this.elements.addCredentialBtn) {
+          this.elements.addCredentialBtn.addEventListener('click', () => this.openCredentialModal());
+        }
+        if (this.elements.vaultUnlockForm) {
+          this.elements.vaultUnlockForm.addEventListener('submit', (e) => this.handleVaultUnlockSubmit(e));
+        }
+        if (this.elements.cancelVaultUnlockBtn) {
+          this.elements.cancelVaultUnlockBtn.addEventListener('click', () => this.closeVaultUnlockModal(false));
+        }
+        if (this.elements.credentialForm) {
+          this.elements.credentialForm.addEventListener('submit', (e) => this.handleCredentialSubmit(e));
+        }
+        if (this.elements.cancelCredentialBtn) {
+          this.elements.cancelCredentialBtn.addEventListener('click',
+            () => this.elements.credentialModal.classList.remove('show'));
+        }
+        if (this.elements.credentialType) {
+          this.elements.credentialType.addEventListener('change', () => this.toggleCredentialFields());
+        }
+        if (this.elements.toggleCredentialPasswordBtn) {
+          this.elements.toggleCredentialPasswordBtn.addEventListener('click', () => {
+            const input = this.elements.credentialPassword;
+            const icon = this.elements.toggleCredentialPasswordBtn.querySelector('i');
+            const revealed = input.type === 'text';
+            input.type = revealed ? 'password' : 'text';
+            icon.className = revealed ? 'fas fa-eye' : 'fas fa-eye-slash';
+          });
+        }
+
+        // Duplicate-name choices
+        if (this.elements.duplicateChooseNameBtn) {
+          this.elements.duplicateChooseNameBtn.addEventListener('click', () => {
+            this.closeDuplicateDialog();
+            this.elements.credentialName.focus();
+            this.elements.credentialName.select();
+          });
+        }
+        if (this.elements.duplicateEditExistingBtn) {
+          this.elements.duplicateEditExistingBtn.addEventListener('click', () => {
+            const name = this.duplicateCredentialTarget;
+            this.closeDuplicateDialog();
+            this.elements.credentialModal.classList.remove('show');
+            this.openCredentialModal(name);
+          });
+        }
+        if (this.elements.duplicateDeleteExistingBtn) {
+          this.elements.duplicateDeleteExistingBtn.addEventListener('click', () => {
+            const name = this.duplicateCredentialTarget;
+            this.closeDuplicateDialog();
+            this.deleteCredential(name);
+          });
+        }
+
+        // Credential delete dialog
+        if (this.elements.cancelCredentialDeleteBtn) {
+          this.elements.cancelCredentialDeleteBtn.addEventListener('click',
+            () => this.elements.credentialDeleteModal.classList.remove('show'));
+        }
+        if (this.elements.confirmCredentialDeleteBtn) {
+          this.elements.confirmCredentialDeleteBtn.addEventListener('click',
+            () => this.performCredentialDelete());
         }
 
         // Tag Input Events
@@ -2380,6 +2816,559 @@
         });
 
         dropdown.style.display = 'block';
+      }
+
+      // ---- credentials vault -----------------------------------------------
+
+      /**
+       * fetch() that carries the vault token and, when the server says the
+       * vault is locked, asks for the passcode and retries once.
+       */
+      async vaultFetch(url, options = {}, { retry = true } = {}) {
+        const headers = Object.assign({}, options.headers || {});
+        if (this.vaultToken) headers['X-Vault-Token'] = this.vaultToken;
+
+        const response = await fetch(url, Object.assign({}, options, { headers }));
+
+        if (response.status === 401 || response.status === 409) {
+          let detail = null;
+          try {
+            detail = (await response.clone().json()).detail;
+          } catch (e) { /* not a JSON error body */ }
+
+          const code = detail && detail.code;
+          if (code === 'vault_locked' || code === 'vault_missing') {
+            this.vaultToken = null;
+            this.vaultExists = code !== 'vault_missing';
+            if (!retry) return response;
+
+            const unlocked = await this.promptForVault();
+            if (!unlocked) return response;
+            return this.vaultFetch(url, options, { retry: false });
+          }
+        }
+
+        return response;
+      }
+
+      /** Show the unlock (or first-run create) dialog; resolves true once open. */
+      promptForVault() {
+        return new Promise(resolve => {
+          this.pendingVaultAction = resolve;
+          this.openVaultUnlockModal();
+        });
+      }
+
+      async loadVaultStatus() {
+        try {
+          const response = await fetch('/api/vault/status', {
+            headers: this.vaultToken ? { 'X-Vault-Token': this.vaultToken } : {}
+          });
+          const data = await response.json();
+          this.vaultExists = !!data.exists;
+          if (!data.unlocked) this.vaultToken = null;
+          this.updateVaultButton();
+          return data;
+        } catch (error) {
+          console.error('Error checking vault status:', error);
+          return { exists: false, unlocked: false };
+        }
+      }
+
+      updateVaultButton() {
+        const icon = this.elements.vaultBtn && this.elements.vaultBtn.querySelector('i');
+        if (!icon) return;
+        const unlocked = !!this.vaultToken;
+        icon.className = unlocked ? 'fas fa-lock-open' : 'fas fa-lock';
+        this.elements.vaultBtn.title = unlocked
+          ? 'Credentials Vault (unlocked)'
+          : 'Credentials Vault (locked)';
+      }
+
+      openVaultUnlockModal() {
+        const creating = !this.vaultExists;
+        this.vaultMode = creating ? 'create' : 'unlock';
+
+        this.elements.vaultUnlockTitle.textContent = creating ? 'Create Vault' : 'Unlock Vault';
+        this.elements.vaultUnlockHint.textContent = creating
+          ? 'Choose a passcode. It encrypts every credential you store and is never saved anywhere.'
+          : 'Enter your passcode to unlock the credentials vault.';
+        this.elements.vaultUnlockSubmitBtn.textContent = creating ? 'Create Vault' : 'Unlock';
+        this.elements.vaultPasscodeConfirmField.style.display = creating ? 'block' : 'none';
+        this.elements.vaultPasscode.value = '';
+        this.elements.vaultPasscodeConfirm.value = '';
+        this.hideError(this.elements.vaultUnlockError);
+
+        this.elements.vaultUnlockModal.classList.add('show');
+        setTimeout(() => this.elements.vaultPasscode.focus(), 50);
+      }
+
+      closeVaultUnlockModal(unlocked = false) {
+        this.elements.vaultUnlockModal.classList.remove('show');
+        if (this.pendingVaultAction) {
+          const resolve = this.pendingVaultAction;
+          this.pendingVaultAction = null;
+          resolve(unlocked);
+        }
+      }
+
+      showError(element, message) {
+        element.textContent = message;
+        element.style.display = 'block';
+      }
+
+      hideError(element) {
+        element.textContent = '';
+        element.style.display = 'none';
+      }
+
+      async handleVaultUnlockSubmit(e) {
+        e.preventDefault();
+        const passcode = this.elements.vaultPasscode.value;
+        const creating = this.vaultMode === 'create';
+
+        if (!passcode) {
+          this.showError(this.elements.vaultUnlockError, 'Enter a passcode');
+          return;
+        }
+
+        if (creating && passcode !== this.elements.vaultPasscodeConfirm.value) {
+          this.showError(this.elements.vaultUnlockError, 'The two passcodes do not match');
+          return;
+        }
+
+        try {
+          const response = await fetch(creating ? '/api/vault/create' : '/api/vault/unlock', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ passcode })
+          });
+          const data = await response.json();
+
+          if (!response.ok) {
+            const detail = data.detail;
+            const message = (detail && (detail.message || detail)) || 'Could not unlock the vault';
+            this.showError(this.elements.vaultUnlockError, message);
+            return;
+          }
+
+          this.vaultToken = data.token;
+          this.vaultExists = true;
+          this.updateVaultButton();
+          this.closeVaultUnlockModal(true);
+
+          if (creating) {
+            this.showToast(this.describeMigration(data.migration), 'success');
+            await this.loadHosts();
+            this.renderHosts();
+          } else {
+            this.showToast('Vault unlocked', 'success');
+          }
+
+          if (this.elements.vaultView.style.display !== 'none') {
+            await this.renderVaultPage();
+          }
+        } catch (error) {
+          console.error('Vault error:', error);
+          this.showError(this.elements.vaultUnlockError, 'Could not reach the vault');
+        }
+      }
+
+      describeMigration(migration) {
+        if (!migration || !migration.credentials) return 'Vault created';
+        const parts = [`Vault created with ${migration.credentials} imported credential(s)`];
+        if (migration.hosts) parts.push(`${migration.hosts} host(s) linked`);
+        if (migration.skipped && migration.skipped.length) {
+          parts.push(`${migration.skipped.length} host(s) need a credential`);
+        }
+        return parts.join(' - ');
+      }
+
+      async lockVault() {
+        if (this.vaultToken) {
+          try {
+            await fetch('/api/vault/lock', {
+              method: 'POST',
+              headers: { 'X-Vault-Token': this.vaultToken }
+            });
+          } catch (error) {
+            console.error('Error locking vault:', error);
+          }
+        }
+        this.vaultToken = null;
+        this.credentials = [];
+        this.updateVaultButton();
+        this.showToast('Vault locked', 'info');
+        if (this.elements.vaultView.style.display !== 'none') {
+          await this.renderVaultPage();
+        }
+      }
+
+      // ---- vault page ------------------------------------------------------
+
+      async showVaultView() {
+        this.activePage = 'vault';
+        this.elements.vaultView.style.display = 'block';
+        this.elements.hostsContainer.style.display = 'none';
+        this.elements.emptyState.style.display = 'none';
+        this.elements.loadingState.style.display = 'none';
+
+        await this.loadVaultStatus();
+        await this.renderVaultPage();
+      }
+
+      hideVaultView() {
+        this.activePage = 'hosts';
+        this.elements.vaultView.style.display = 'none';
+        this.renderHosts();
+      }
+
+      async renderVaultPage() {
+        const unlocked = !!this.vaultToken;
+
+        this.elements.vaultLockedState.style.display = unlocked ? 'none' : 'block';
+        this.elements.vaultUnlockedState.style.display = unlocked ? 'block' : 'none';
+        this.elements.vaultLockBtn.style.display = unlocked ? 'inline-flex' : 'none';
+        this.elements.addCredentialBtn.style.display = unlocked ? 'inline-flex' : 'none';
+
+        if (!unlocked) {
+          const creating = !this.vaultExists;
+          this.elements.vaultLockedTitle.textContent = creating ? 'No vault yet' : 'Vault is locked';
+          this.elements.vaultLockedMessage.textContent = creating
+            ? 'Create an encrypted vault to store SSH passwords and keys.'
+            : 'Unlock the vault to view and manage your credentials.';
+          this.elements.vaultUnlockPromptBtn.innerHTML = creating
+            ? '<i class="fas fa-plus"></i> Create Vault'
+            : '<i class="fas fa-key"></i> Unlock Vault';
+          return;
+        }
+
+        await this.loadCredentials();
+        this.renderCredentials();
+      }
+
+      async loadCredentials() {
+        try {
+          const response = await this.vaultFetch('/api/vault/credentials');
+          if (!response.ok) {
+            this.credentials = [];
+            return this.credentials;
+          }
+          const data = await response.json();
+          this.credentials = data.credentials || [];
+          return this.credentials;
+        } catch (error) {
+          console.error('Error loading credentials:', error);
+          this.credentials = [];
+          return this.credentials;
+        }
+      }
+
+      renderCredentials() {
+        const list = this.elements.credentialsList;
+        const empty = this.elements.credentialsEmpty;
+
+        this.elements.vaultSubtitle.textContent =
+          `${this.credentials.length} credential(s) - encrypted in ~/.connectify/vault.json`;
+
+        if (!this.credentials.length) {
+          list.innerHTML = '';
+          empty.style.display = 'block';
+          return;
+        }
+
+        empty.style.display = 'none';
+        list.innerHTML = this.credentials.map(credential => {
+          const usedBy = credential.used_by || [];
+          const detail = credential.type === 'key'
+            ? this.escapeHTML(credential.ssh_key_path || '')
+              + (credential.has_passphrase ? ' - passphrase set' : '')
+            : 'Password stored';
+          const usage = usedBy.length
+            ? `${usedBy.length} host(s): ${this.escapeHTML(usedBy.join(', '))}`
+            : 'Not used by any host';
+
+          return `
+            <div class="credential-card">
+              <div class="credential-main">
+                <div class="credential-name">
+                  ${this.escapeHTML(credential.name)}
+                  <span class="credential-type type-${credential.type}">${credential.type === 'key' ? 'SSH Key' : 'Password'}</span>
+                </div>
+                <div class="credential-meta">${credential.description ? this.escapeHTML(credential.description) + ' - ' : ''}${detail}</div>
+                <div class="credential-meta">${usage}</div>
+              </div>
+              <div class="credential-actions">
+                <button class="small-action-btn edit-btn" title="Edit credential"
+                        onclick="app.openCredentialModal('${this.escapeAttr(credential.name)}')">
+                  <i class="fas fa-edit"></i>
+                </button>
+                <button class="small-action-btn delete-btn" title="Delete credential"
+                        onclick="app.deleteCredential('${this.escapeAttr(credential.name)}')">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      escapeAttr(value) {
+        return String(value == null ? '' : value)
+          .replace(/\\/g, '\\\\')
+          .replace(/'/g, "\\'")
+          .replace(/"/g, '&quot;');
+      }
+
+      // ---- credential add / edit -------------------------------------------
+
+      async openCredentialModal(name = null, { returnToHostForm = false } = {}) {
+        if (!this.vaultToken) {
+          const unlocked = await this.promptForVault();
+          if (!unlocked) return;
+        }
+
+        this.credentialReturnToHostForm = returnToHostForm;
+        const form = this.elements.credentialForm;
+        form.reset();
+        this.hideError(this.elements.credentialError);
+        this.elements.credentialOriginalName.value = '';
+        this.elements.credentialModalTitle.textContent = 'Add Credential';
+
+        if (name) {
+          const response = await this.vaultFetch(`/api/vault/credentials/${encodeURIComponent(name)}`);
+          if (!response.ok) {
+            this.showToast('Could not load that credential', 'error');
+            return;
+          }
+          const credential = (await response.json()).credential;
+
+          this.elements.credentialModalTitle.textContent = 'Edit Credential';
+          this.elements.credentialOriginalName.value = credential.name;
+          this.elements.credentialName.value = credential.name;
+          this.elements.credentialDescription.value = credential.description || '';
+          this.elements.credentialType.value = credential.type;
+          this.elements.credentialPassword.value = credential.password || '';
+          this.elements.credentialKeyPath.value = credential.ssh_key_path || '';
+          this.elements.credentialPassphrase.value = credential.passphrase || '';
+        }
+
+        this.toggleCredentialFields();
+        this.elements.credentialModal.classList.add('show');
+        setTimeout(() => this.elements.credentialName.focus(), 50);
+      }
+
+      toggleCredentialFields() {
+        const isKey = this.elements.credentialType.value === 'key';
+        this.elements.credentialPasswordField.style.display = isKey ? 'none' : 'block';
+        this.elements.credentialKeyFields.style.display = isKey ? 'block' : 'none';
+      }
+
+      async handleCredentialSubmit(e) {
+        e.preventDefault();
+        this.hideError(this.elements.credentialError);
+
+        const originalName = this.elements.credentialOriginalName.value;
+        const type = this.elements.credentialType.value;
+        const payload = {
+          name: this.elements.credentialName.value.trim(),
+          description: this.elements.credentialDescription.value.trim(),
+          type
+        };
+
+        if (type === 'password') {
+          payload.password = this.elements.credentialPassword.value;
+        } else {
+          payload.ssh_key_path = this.elements.credentialKeyPath.value.trim();
+          payload.passphrase = this.elements.credentialPassphrase.value;
+        }
+
+        const url = originalName
+          ? `/api/vault/credentials/${encodeURIComponent(originalName)}`
+          : '/api/vault/credentials';
+
+        try {
+          const response = await this.vaultFetch(url, {
+            method: originalName ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          const data = await response.json();
+
+          if (!response.ok) {
+            const detail = data.detail;
+            if (detail && detail.code === 'duplicate_name') {
+              this.showDuplicateCredentialDialog(detail.name);
+              return;
+            }
+            this.showError(this.elements.credentialError,
+              (detail && (detail.message || detail)) || 'Could not save the credential');
+            return;
+          }
+
+          this.elements.credentialModal.classList.remove('show');
+          this.showToast(data.message || 'Credential saved', 'success');
+
+          await this.loadCredentials();
+          if (this.elements.vaultView.style.display !== 'none') {
+            this.renderCredentials();
+          }
+
+          // Renaming can move hosts onto the new name
+          if (data.renamed_hosts) {
+            await this.loadHosts();
+            this.renderHosts();
+          }
+
+          if (this.credentialReturnToHostForm) {
+            this.populateCredentialSelect(payload.name);
+            this.credentialReturnToHostForm = false;
+          }
+        } catch (error) {
+          console.error('Error saving credential:', error);
+          this.showError(this.elements.credentialError, 'Could not save the credential');
+        }
+      }
+
+      showDuplicateCredentialDialog(name) {
+        this.duplicateCredentialTarget = name;
+        this.elements.duplicateCredentialName.textContent = name;
+        this.elements.duplicateCredentialModal.classList.add('show');
+      }
+
+      closeDuplicateDialog() {
+        this.elements.duplicateCredentialModal.classList.remove('show');
+      }
+
+      // ---- credential delete -----------------------------------------------
+
+      async deleteCredential(name) {
+        if (!this.vaultToken) {
+          const unlocked = await this.promptForVault();
+          if (!unlocked) return;
+        }
+
+        // Use the association list we already have, so the user gets an
+        // explanation instead of a failed delete
+        const credential = this.credentials.find(c => c.name === name);
+        const usedBy = (credential && credential.used_by) || [];
+
+        if (usedBy.length) {
+          this.showCredentialInUseDialog({ name, hosts: usedBy, count: usedBy.length });
+          return;
+        }
+
+        this.confirmDeleteCredential(name);
+      }
+
+      confirmDeleteCredential(name) {
+        this.credentialToDelete = name;
+        this.elements.credentialDeleteTitle.textContent = 'Delete credential?';
+        this.elements.credentialDeleteMessage.innerHTML =
+          `Delete <strong>${this.escapeHTML(name)}</strong>? No host is using it. This cannot be undone.`;
+        this.elements.credentialDeleteHosts.style.display = 'none';
+        this.elements.confirmCredentialDeleteBtn.style.display = 'inline-flex';
+        this.elements.cancelCredentialDeleteBtn.textContent = 'Cancel';
+        this.elements.credentialDeleteModal.classList.add('show');
+      }
+
+      showCredentialInUseDialog(detail) {
+        this.credentialToDelete = null;
+        this.elements.credentialDeleteTitle.textContent = 'Credential is in use';
+        this.elements.credentialDeleteMessage.innerHTML =
+          `<strong>${detail.count}</strong> host(s) use <strong>${this.escapeHTML(detail.name)}</strong>, so it can't be deleted. ` +
+          `Point these hosts at another credential first:`;
+        this.elements.credentialDeleteHosts.innerHTML =
+          (detail.hosts || []).map(host => `<li>${this.escapeHTML(host)}</li>`).join('');
+        this.elements.credentialDeleteHosts.style.display = 'block';
+        this.elements.confirmCredentialDeleteBtn.style.display = 'none';
+        this.elements.cancelCredentialDeleteBtn.textContent = 'Close';
+        this.elements.credentialDeleteModal.classList.add('show');
+      }
+
+      async performCredentialDelete() {
+        const name = this.credentialToDelete;
+        this.elements.credentialDeleteModal.classList.remove('show');
+        if (!name) return;
+        this.credentialToDelete = null;
+
+        const response = await this.vaultFetch(`/api/vault/credentials/${encodeURIComponent(name)}`, {
+          method: 'DELETE'
+        });
+
+        if (response.ok) {
+          this.showToast(`Credential '${name}' deleted`, 'success');
+          await this.loadCredentials();
+          this.renderCredentials();
+          return;
+        }
+
+        let detail = null;
+        try {
+          detail = (await response.json()).detail;
+        } catch (e) { /* ignore */ }
+
+        // A host may have been pointed at it since the list was loaded
+        if (detail && detail.code === 'credential_in_use') {
+          await this.loadCredentials();
+          this.renderCredentials();
+          this.showCredentialInUseDialog(detail);
+          return;
+        }
+
+        this.showToast((detail && (detail.message || detail)) || 'Could not delete the credential', 'error');
+      }
+
+      // ---- credential picker in the host form ------------------------------
+
+      populateCredentialSelect(selected = '') {
+        const select = this.elements.hostCredential;
+        const current = selected || select.value || '';
+
+        select.innerHTML = '<option value="">No credential</option>';
+        this.credentials.forEach(credential => {
+          const option = document.createElement('option');
+          option.value = credential.name;
+          option.textContent = `${credential.name} (${credential.type === 'key' ? 'SSH Key' : 'Password'})`;
+          select.appendChild(option);
+        });
+
+        // Keep a credential the vault doesn't know about visible rather than
+        // silently clearing the host's setting
+        if (current && !this.credentials.some(c => c.name === current)) {
+          const option = document.createElement('option');
+          option.value = current;
+          option.textContent = `${current} (missing from vault)`;
+          select.appendChild(option);
+        }
+
+        select.value = current;
+        this.updateCredentialHint();
+      }
+
+      updateCredentialHint() {
+        const hint = this.elements.credentialHint;
+        if (!hint) return;
+
+        const name = this.elements.hostCredential.value;
+        if (!name) {
+          hint.textContent = 'Pick a credential from the vault, or add a new one.';
+          return;
+        }
+
+        const credential = this.credentials.find(c => c.name === name);
+        if (!credential) {
+          hint.textContent = 'This credential is not in the vault - add it or pick another.';
+          return;
+        }
+
+        hint.textContent = credential.type === 'key'
+          ? `SSH key: ${credential.ssh_key_path || '(no path)'}`
+          : 'Password credential';
+      }
+
+      selectedCredential() {
+        return this.credentials.find(c => c.name === this.elements.hostCredential.value) || null;
       }
 
       // ---- group picker ----------------------------------------------------
@@ -2977,6 +3966,7 @@
       }
 
       setLoading(loading) {
+        if (this.activePage === 'vault') { this.isLoading = loading; return; }
         this.isLoading = loading;
 
         if (loading) {
@@ -3011,6 +4001,8 @@
 
       renderHosts() {
         if (this.isLoading) return;
+        // The vault page owns the screen while it is open
+        if (this.activePage === 'vault') return;
 
         if (this.filteredHosts.length === 0) {
           this.elements.emptyState.style.display = 'flex';
@@ -3195,7 +4187,8 @@
           tile.classList.add('loading');
 
           const minWait = new Promise(resolve => setTimeout(resolve, 4000));
-          const request = fetch('/api/connect', {
+          // vaultFetch prompts for the passcode if the vault is locked
+          const request = this.vaultFetch('/api/connect', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
@@ -3289,9 +4282,16 @@
       // Manage Hosts Methods - REMOVED (Merged into Dashboard)
 
 
-      openHostModal(hostName = null) {
+      async openHostModal(hostName = null) {
         const modal = this.elements.hostModal;
         const form = this.elements.hostForm;
+
+        // The credential picker needs the vault open
+        if (!this.vaultToken) {
+          const unlocked = await this.promptForVault();
+          if (!unlocked) return;
+        }
+        await this.loadCredentials();
 
         // Pull the current iTerm2 profile list (profiles can be added/removed
         // in iTerm2 while this page is open) and the groups in use
@@ -3317,9 +4317,8 @@
             document.getElementById('hostAddress').value = host.hostname;
             document.getElementById('hostUser').value = host.username;
             document.getElementById('hostPort').value = host.port;
-            document.getElementById('authMethod').value = host.auth_method;
-            document.getElementById('sshKeyPath').value = host.ssh_key_path || '';
             document.getElementById('itermProfile').value = host.iterm_profile || 'Default';
+            this.populateCredentialSelect(host.credential || '');
             this.elements.hostGroup.value = host.group || '';
             this.setSelectedTheme(host.theme || 'default');
 
@@ -3335,28 +4334,19 @@
               : (this.defaultSshOptions[host.auth_method] || []);
             this.setSshOptions(savedOptions);
 
-            // Handle password placeholder
-
-            // Handle password placeholder
-            if (host.auth_method === 'password') {
-              document.getElementById('hostPassword').placeholder = 'Leave empty to keep existing password';
-            }
           }
         } else {
           // Add mode
           this.elements.modalTitle.textContent = 'Add New Host';
-          // Add mode
-          this.elements.modalTitle.textContent = 'Add New Host';
-          document.getElementById('hostPassword').placeholder = 'Password (optional)';
+          this.populateCredentialSelect('');
 
           // Reset tags
           this.currentModalTags = [];
           this.renderTagPills();
           this.updateHiddenTagInput();
 
-          // Pre-check the defaults for the current auth method
-          const method = document.getElementById('authMethod').value;
-          this.setSshOptions(this.defaultSshOptions[method] || []);
+          // Pre-check the defaults for the selected credential's type
+          this.setSshOptions(this.defaultSshOptions['password']);
         }
 
         // Collapse the advanced section by default each time the modal opens
@@ -3364,7 +4354,7 @@
           this.elements.sshOptionsDetails.open = false;
         }
 
-        this.toggleAuthFields();
+        this.updateCredentialHint();
         modal.classList.add('show');
       }
 
@@ -3375,77 +4365,34 @@
         modal.classList.remove('show');
       }
 
-      onAuthMethodChange() {
-        // When the user switches auth method, reset the advanced SSH options
-        // to that method's sensible defaults.
-        const method = this.elements.authMethod.value;
-        this.setSshOptions(this.defaultSshOptions[method] || []);
-        this.toggleAuthFields();
-      }
-
-      toggleAuthFields() {
-        const method = this.elements.authMethod.value;
-        if (method === 'password') {
-          this.elements.passwordField.style.display = 'block';
-          this.elements.keyField.style.display = 'none';
-        } else {
-          this.elements.passwordField.style.display = 'none';
-          this.elements.keyField.style.display = 'block';
+      onCredentialChange() {
+        // Reset the advanced SSH options to sensible defaults for this
+        // credential's type, mirroring the old auth-method behaviour.
+        const credential = this.selectedCredential();
+        if (credential) {
+          this.setSshOptions(this.defaultSshOptions[credential.type] || []);
         }
-      }
-
-      async togglePasswordVisibility() {
-        const input = this.elements.hostPassword;
-        const icon = this.elements.togglePasswordBtn.querySelector('i');
-        const hostName = this.elements.originalName.value;
-
-        // If we're in edit mode and the field is empty (placeholder shown), fetch the password
-        if (hostName && !input.value) {
-          try {
-            const response = await fetch(`/api/hosts/${encodeURIComponent(hostName)}/password`);
-            const data = await response.json();
-
-            if (data.success && data.password) {
-              input.value = data.password;
-            } else {
-              this.showToast('No password stored or failed to retrieve', 'info');
-              return;
-            }
-          } catch (error) {
-            console.error('Error fetching password:', error);
-            this.showToast('Error fetching password', 'error');
-            return;
-          }
-        }
-
-        // Toggle visibility
-        if (input.type === 'password') {
-          input.type = 'text';
-          icon.classList.remove('fa-eye');
-          icon.classList.add('fa-eye-slash');
-        } else {
-          input.type = 'password';
-          icon.classList.add('fa-eye');
-          icon.classList.remove('fa-eye-slash');
-        }
+        this.updateCredentialHint();
       }
 
       async handleHostSubmit(e) {
         e.preventDefault();
+
+        const credential = this.selectedCredential();
 
         const formData = {
           name: document.getElementById('hostName').value,
           hostname: document.getElementById('hostAddress').value,
           username: document.getElementById('hostUser').value,
           port: parseInt(document.getElementById('hostPort').value),
-          auth_method: document.getElementById('authMethod').value,
-          ssh_key_path: document.getElementById('sshKeyPath').value || null,
+          credential: this.elements.hostCredential.value,
+          // Kept in sync with the credential so SSH option defaults still apply
+          auth_method: credential ? credential.type : 'password',
           iterm_profile: document.getElementById('itermProfile').value,
           group: this.elements.hostGroup.value.trim(),
           theme: this.elements.hostTheme.value || 'default',
           tags: this.currentModalTags,
-          ssh_options: this.getSelectedSshOptions(),
-          password: document.getElementById('hostPassword').value || null
+          ssh_options: this.getSelectedSshOptions()
         };
 
         const originalName = this.elements.originalName.value;

@@ -324,7 +324,7 @@ def run_doctor():
     except Exception as e:
         print(f"   ⚠️  Could not inspect iTerm2: {e}")
 
-    # Config + keychain
+    # Config + credentials
     print("\n📁 Configuration")
     try:
         from main import SSHManager, group_hosts
@@ -335,7 +335,27 @@ def run_doctor():
         print(f"   Config file  : {manager.config_file}")
         print(f"   Hosts        : {len(hosts)} ({len(groups)} group(s), {len(ungrouped)} ungrouped)")
 
-        manager.debug_keychain()
+        without_credential = [h.get('name') for h in hosts if not h.get('credential')]
+        if without_credential:
+            print(f"   ⚠️  {len(without_credential)} host(s) have no credential: "
+                  f"{', '.join(str(n) for n in without_credential[:5])}"
+                  f"{'...' if len(without_credential) > 5 else ''}")
+
+        print("\n🔐 Credentials vault")
+        import vault as vault_module
+
+        store = vault_module.Vault()
+        if store.exists():
+            print(f"   Vault file   : {store.path}")
+            print("   Status       : ✅ present (locked - unlock it in the web UI)")
+        else:
+            print(f"   Vault file   : {store.path}")
+            print("   Status       : ⬜ not created yet - open the Vault page in the web UI")
+
+        legacy = manager.legacy_keychain_passwords()
+        if legacy:
+            print(f"   Legacy keychain: {len(legacy)} password(s) still in the macOS Keychain")
+            print("                    (they migrate into the vault when you create it)")
     except Exception as e:
         print(f"   ⚠️  Could not inspect configuration: {e}")
         return 1
