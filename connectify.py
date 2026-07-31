@@ -418,7 +418,8 @@ This command exists to run that server and to diagnose problems.
   connectify profiles list      Show bundled and available iTerm2 profiles
   connectify profiles install   (Re)install the bundled iTerm2 profiles
 
-  connectify doctor             Full diagnostics (server, iTerm2, config, keychain)
+  connectify doctor             Full diagnostics (server, iTerm2, config, vault)
+  connectify upgrade            Download and install the latest release
   connectify version            Show version information
 """.format(port=UI_PORT)
 
@@ -441,6 +442,30 @@ def main():
 
     if command in ('doctor', 'diagnostics'):
         sys.exit(run_doctor())
+
+    # Installing and upgrading share one Rich-based UI, which lives in the
+    # binary so install.sh needs nothing on the host to look good
+    if command in ('install', 'upgrade'):
+        parser = argparse.ArgumentParser(prog=f'connectify {command}')
+        parser.add_argument('--from', dest='source',
+                            help='Directory holding an unpacked build (used by install.sh)')
+        parser.add_argument('--version', help='Version being installed')
+        options = parser.parse_args(args[1:])
+
+        try:
+            import installer
+        except ImportError as e:
+            print(f"❌ Installer UI unavailable: {e}")
+            sys.exit(1)
+
+        if command == 'install':
+            if not options.source:
+                print("❌ 'connectify install' needs --from <directory>")
+                print("   To install the latest release instead, run: connectify upgrade")
+                sys.exit(1)
+            sys.exit(installer.run_install(options.source, options.version))
+
+        sys.exit(installer.run_upgrade(options.version))
 
     if command == 'profiles':
         parser = argparse.ArgumentParser(

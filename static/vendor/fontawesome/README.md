@@ -12,27 +12,24 @@ Contents:
 | `css/fontawesome.min.css` | Core styles and icon glyph definitions |
 | `css/solid.min.css` | `fas` / `fa-solid` family |
 | `css/regular.min.css` | `far` / `fa-regular` family |
+| `css/brands.min.css` | `fab` / `fa-brands` family (the GitHub link in the footer) |
 | `webfonts/fa-solid-900.woff2` | Solid font |
 | `webfonts/fa-regular-400.woff2` | Regular font |
+| `webfonts/fa-brands-400.woff2` | Brands font |
 
-Only the solid and regular families are shipped - the UI uses no brand icons.
-The `.ttf` fallbacks were removed from the two `@font-face` rules since only the
+The solid, regular and brands families are shipped. The `.ttf` fallbacks were removed from the two `@font-face` rules since only the
 `.woff2` files are vendored; every browser Connectify runs in supports woff2.
 
 ## Updating
 
 ```bash
 BASE=https://cdnjs.cloudflare.com/ajax/libs/font-awesome/<version>
-for f in css/fontawesome.min.css css/solid.min.css css/regular.min.css \
-         webfonts/fa-solid-900.woff2 webfonts/fa-regular-400.woff2; do
+for f in css/fontawesome.min.css css/solid.min.css css/regular.min.css css/brands.min.css \
+         webfonts/fa-solid-900.woff2 webfonts/fa-regular-400.woff2 webfonts/fa-brands-400.woff2; do
   curl -fL "$BASE/$f" -o "static/vendor/fontawesome/$f"
 done
 # then drop the ".ttf" entries from the src: lines in solid/regular.min.css
 ```
-
-If a new icon ever comes from the brands family (`fab`), add
-`css/brands.min.css` and `webfonts/fa-brands-400.woff2` the same way and link
-the CSS from `static/index.html`.
 
 ## License
 

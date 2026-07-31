@@ -1,370 +1,104 @@
 #!/bin/bash
 set -e
 
-# Connectify Installer - Downloads and installs pre-built binary
-# No build required on user's machine!
+# Connectify installer - bootstrap only.
+#
+# This does the little that has to happen before Connectify exists on the
+# machine: work out the architecture, fetch the release archive and unpack it.
+# Everything after that - requirement checks, installing, iTerm2 profiles, PATH
+# guidance - is done by the build we just downloaded, which brings its own UI
+# along and so needs nothing installed on the host.
 
 VERSION="${CONNECTIFY_VERSION:-latest}"
 GITHUB_REPO="rahulbhooteshwar/connectify-iterm2"
-INSTALL_DIR="$HOME/.local/bin"
-LIB_DIR="$HOME/.local/lib/connectify"
-TEMP_DIR="/tmp/connectify-install-$$"
+TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/connectify-install-XXXXXX")"
 
-# iTerm2 requirements
-ITERM_BUNDLE_ID="com.googlecode.iterm2"
-BROWSER_PLUGIN_BUNDLE_ID="com.googlecode.iterm2.iTermBrowserPlugin"
-ITERM_DOWNLOAD_URL="https://iterm2.com/index.html"
-BROWSER_PLUGIN_DOWNLOAD_URL="https://iterm2.com/browser-plugin.html"
-
-# Colors for output
-RED='\033[0;31m'
+CYAN='\033[0;36m'
 GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
+RED='\033[0;31m'
+DIM='\033[2m'
+BOLD='\033[1m'
 NC='\033[0m'
 
-print_info() {
-    printf "${BLUE}ℹ️  %s${NC}\n" "$1"
-}
+cleanup() { rm -rf "$TEMP_DIR"; }
+trap cleanup EXIT
 
-print_success() {
-    printf "${GREEN}✅ %s${NC}\n" "$1"
-}
+say() { printf "${CYAN}›${NC} %s\n" "$1"; }
+ok()  { printf "  ${GREEN}✔${NC} %s\n" "$1"; }
+die() { printf "  ${RED}✘${NC} %s\n" "$1"; exit 1; }
 
-print_error() {
-    printf "${RED}❌ %s${NC}\n" "$1"
-}
-
-print_warning() {
-    printf "${YELLOW}⚠️  %s${NC}\n" "$1"
+banner() {
+    printf "\n${CYAN}╭────────────────────────────────────────────────────────────╮${NC}\n"
+    printf "${CYAN}│${NC}  ${BOLD}Connectify${NC}  ${DIM}SSH Session Manager for iTerm2${NC}                ${CYAN}│${NC}\n"
+    printf "${CYAN}╰────────────────────────────────────────────────────────────╯${NC}\n\n"
 }
 
 check_macos() {
-    if [[ "$OSTYPE" != "darwin"* ]]; then
-        print_error "This installer is only for macOS"
-        exit 1
-    fi
-}
-
-check_not_root() {
-    if [[ $EUID -eq 0 ]]; then
-        print_error "Please do not run this installer as root or with sudo"
-        print_info "Connectify installs to your home directory and doesn't need sudo"
-        exit 1
-    fi
-}
-
-# Locate an app by bundle id via AppleScript, falling back to the usual app
-# folders (a freshly copied app may not be registered with LaunchServices yet).
-find_app() {
-    local bundle_id="$1"
-    local app_name="$2"
-    local path
-
-    path=$(osascript -e "tell application \"Finder\" to get POSIX path of (application file id \"${bundle_id}\" as alias)" 2>/dev/null || true)
-
-    if [[ -z "$path" ]]; then
-        for base in "/Applications" "$HOME/Applications"; do
-            if [[ -d "$base/$app_name" ]]; then
-                path="$base/$app_name"
-                break
-            fi
-        done
-    fi
-
-    echo "$path"
-}
-
-check_iterm2() {
-    print_info "Checking for iTerm2..."
-
-    ITERM_PATH=$(find_app "$ITERM_BUNDLE_ID" "iTerm.app")
-
-    if [[ -z "$ITERM_PATH" ]]; then
-        print_error "iTerm2 is not installed"
-        echo ""
-        print_info "Connectify launches every SSH session in iTerm2, so it cannot be installed without it."
-        print_info "Install iTerm2 first, then re-run this installer:"
-        echo ""
-        echo "    $ITERM_DOWNLOAD_URL"
-        echo ""
-        exit 1
-    fi
-
-    print_success "iTerm2 found: $ITERM_PATH"
-}
-
-check_browser_plugin() {
-    print_info "Checking for the iTerm2 browser plugin..."
-
-    BROWSER_PLUGIN_PATH=$(find_app "$BROWSER_PLUGIN_BUNDLE_ID" "iTermBrowserPlugin.app")
-
-    if [[ -z "$BROWSER_PLUGIN_PATH" ]]; then
-        print_warning "iTerm2 browser plugin is not installed"
-        print_info "Connectify ships a 'connectify-UI' profile that opens the Connectify web UI"
-        print_info "inside iTerm2 - it needs this plugin. Everything else works without it."
-        echo ""
-        echo "    $BROWSER_PLUGIN_DOWNLOAD_URL"
-        echo ""
-        return 0
-    fi
-
-    print_success "iTerm2 browser plugin found: $BROWSER_PLUGIN_PATH"
-}
-
-check_path() {
-    # Check if ~/.local/bin is in PATH and guide user if not
-    if [[ ":$PATH:" == *":$HOME/.local/bin:"* ]]; then
-        return 0  # Already in PATH
-    else
-        return 1  # Not in PATH
-    fi
-}
-
-setup_path() {
-    # Guide user to add ~/.local/bin to PATH if needed
-    if check_path; then
-        return 0
-    fi
-    
-    echo ""
-    print_warning "~/.local/bin is not in your PATH"
-    echo ""
-    print_info "To use 'connectify' command, add this to your shell profile:"
-    echo ""
-    
-    # Detect shell
-    if [[ "$SHELL" == *"zsh"* ]]; then
-        SHELL_RC="$HOME/.zshrc"
-        echo '  echo '\''export PATH="$HOME/.local/bin:$PATH"'\'' >> ~/.zshrc'
-        echo '  source ~/.zshrc'
-    elif [[ "$SHELL" == *"bash"* ]]; then
-        SHELL_RC="$HOME/.bashrc"
-        echo '  echo '\''export PATH="$HOME/.local/bin:$PATH"'\'' >> ~/.bashrc'
-        echo '  source ~/.bashrc'
-    else
-        echo '  export PATH="$HOME/.local/bin:$PATH"'
-        echo "  (Add to your shell profile)"
-    fi
-    
-    echo ""
-    read -p "Would you like me to add it automatically? (y/N): " -n 1 -r
-    echo ""
-    
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        if [[ "$SHELL" == *"zsh"* ]]; then
-            echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
-            print_success "Added to ~/.zshrc"
-            print_info "Run: source ~/.zshrc"
-        elif [[ "$SHELL" == *"bash"* ]]; then
-            echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-            print_success "Added to ~/.bashrc"
-            print_info "Run: source ~/.bashrc"
-        fi
-        echo ""
-        print_info "Or open a new terminal window"
-    else
-        print_info "You'll need to add it manually to use 'connectify' command"
-    fi
-    
-    echo ""
+    [[ "$OSTYPE" == darwin* ]] || die "Connectify only runs on macOS"
 }
 
 detect_architecture() {
-    # Releases ship one build per architecture; note that on Apple Silicon a
-    # shell running under Rosetta reports x86_64, which is still correct - that
-    # build runs fine there.
-    ARCH=$(uname -m)
-    case "$ARCH" in
+    # Releases ship one build per architecture. On Apple Silicon a shell running
+    # under Rosetta reports x86_64, which is still the right build for it.
+    case "$(uname -m)" in
         arm64)  echo "arm64" ;;
         x86_64) echo "amd64" ;;
-        *)
-            print_error "Unsupported architecture: $ARCH"
-            exit 1
-            ;;
+        *)      die "Unsupported architecture: $(uname -m)" ;;
     esac
 }
 
-download_binary() {
-    local arch=$1
-    
-    print_info "Downloading Connectify for macOS ($arch)..."
-    
-    # Create temp directory
-    mkdir -p "$TEMP_DIR"
-    cd "$TEMP_DIR"
-    
-    # Determine download URL
-    if [[ "$VERSION" == "latest" ]]; then
-        DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/latest/download/connectify-macos-${arch}.tar.gz"
-    else
-        DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/download/${VERSION}/connectify-macos-${arch}.tar.gz"
+resolve_version() {
+    # Ask GitHub which release is current, so the version can be shown up front
+    if [[ "$VERSION" != "latest" ]]; then
+        echo "${VERSION#v}"
+        return
     fi
-    
-    # Download with progress
-    if command -v curl &> /dev/null; then
-        if ! curl -fL --progress-bar "$DOWNLOAD_URL" -o connectify.tar.gz; then
-            print_error "Failed to download Connectify"
-            print_info "URL: $DOWNLOAD_URL"
-            print_info ""
-            print_info "This might mean:"
-            print_info "  1. No release has been published yet"
-            print_info "  2. That release has no connectify-macos-${arch}.tar.gz build"
-            print_info "     (releases from v2.0.1 on ship both arm64 and amd64)"
-            print_info ""
-            print_info "For development installation, use:"
-            print_info "  ./dev-install.sh"
-            exit 1
-        fi
-    else
-        print_error "curl is required but not found"
-        exit 1
-    fi
-    
-    print_success "Downloaded successfully"
+
+    local tag
+    tag=$(curl -fsSL "https://api.github.com/repos/${GITHUB_REPO}/releases/latest" 2>/dev/null \
+          | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)
+    echo "${tag#v}"
 }
 
-extract_binary() {
-    print_info "Extracting..."
-    
-    if ! tar -xzf connectify.tar.gz; then
-        print_error "Failed to extract archive"
-        exit 1
-    fi
-    
-    if [[ ! -d "connectify" ]] || [[ ! -f "connectify/connectify" ]]; then
-        print_error "Invalid archive structure"
-        exit 1
-    fi
-    
-    print_success "Extracted successfully"
-}
+download() {
+    local version="$1" arch="$2"
+    local archive="connectify-macos-${arch}.tar.gz"
+    local url="https://github.com/${GITHUB_REPO}/releases/download/v${version}/${archive}"
 
-install_binary() {
-    print_info "Installing to $LIB_DIR..."
-    
-    # Remove old installation
-    if [[ -d "$LIB_DIR" ]]; then
-        rm -rf "$LIB_DIR"
-    fi
-    
-    # Create directories
-    mkdir -p "$LIB_DIR"
-    mkdir -p "$INSTALL_DIR"
-    
-    # Copy files
-    cp -R connectify/* "$LIB_DIR/"
-    chmod +x "$LIB_DIR/connectify"
-    
-    # Create or update symlink
-    if [[ -L "$INSTALL_DIR/connectify" ]] || [[ -f "$INSTALL_DIR/connectify" ]]; then
-        rm -f "$INSTALL_DIR/connectify"
-    fi
-    ln -s "$LIB_DIR/connectify" "$INSTALL_DIR/connectify"
-    
-    print_success "Installed to $INSTALL_DIR/connectify"
-}
+    say "$(printf "Downloading Connectify ${BOLD}v%s${NC} ${DIM}(%s)${NC}" "$version" "$arch")" >&2
 
-cleanup() {
-    if [[ -d "$TEMP_DIR" ]]; then
-        rm -rf "$TEMP_DIR"
-    fi
-}
-
-verify_installation() {
-    print_info "Verifying installation..."
-    
-    if [[ ! -f "$INSTALL_DIR/connectify" ]]; then
-        print_error "Installation verification failed - connectify not found"
-        exit 1
-    fi
-    
-    print_success "Files installed successfully"
-}
-
-install_iterm_profiles() {
-    print_info "Installing Connectify iTerm2 profiles..."
-
-    # The binary knows where its bundled profiles live and copies them into
-    # iTerm2's DynamicProfiles folder. Never fail the install over this.
-    if "$LIB_DIR/connectify" profiles install; then
-        print_success "iTerm2 profiles installed"
-    else
-        print_warning "Could not install iTerm2 profiles automatically"
-        print_info "You can retry later with: connectify profiles install"
+    if ! curl -fL --progress-bar "$url" -o "${TEMP_DIR}/${archive}" >&2; then
+        printf "\n" >&2
+        die "Could not download ${archive} from ${url}"
     fi
 
-    echo ""
-}
-
-
-# No interactive setup - provide guidance in post-install message
-
-print_post_install() {
-    echo ""
-    echo "╔══════════════════════════════════════════════════════════════╗"
-    echo "║                                                              ║"
-    echo "║        🎉 Connectify installed successfully! 🎉              ║"
-    echo "║                                                              ║"
-    echo "╚══════════════════════════════════════════════════════════════╝"
-    echo ""
-    print_success "Installation complete!"
-    echo ""
-    print_info "Getting Started:"
-    echo ""
-    echo "  # Start the Web UI server (runs in background)"
-    echo "  connectify ui start           # Start UI server"
-    echo "  connectify ui status          # Check if running"
-    echo "  connectify ui logs            # View server logs"
-    echo "  connectify ui stop            # Stop server"
-    echo ""
-    echo "  # Everything else - hosts, groups, themes - lives in the web UI"
-    echo "  connectify doctor             # Diagnostics if something looks wrong"
-    echo ""
-    echo "  # iTerm2 profiles shipped with Connectify"
-    echo "  connectify profiles list      # Show bundled + available profiles"
-    echo "  connectify profiles install   # Reinstall the bundled profiles"
-    echo ""
-    echo "  # Configure auto-start (UI server starts automatically on login)"
-    echo "  curl -fsSL https://raw.githubusercontent.com/rahulbhooteshwar/connectify-iterm2/main/setup-autostart.sh | bash"
-    echo ""
-    print_info "Web UI: http://localhost:7890 (when server is running)"
-    print_info "Config: ~/.connectify/hosts.json"
-    echo ""
-    print_info "Run 'connectify --help' for all options"
-    echo ""
+    ok "$(du -h "${TEMP_DIR}/${archive}" | cut -f1 | tr -d ' ') downloaded" >&2
+    echo "${TEMP_DIR}/${archive}"
 }
 
 main() {
-    echo ""
-    echo "╔══════════════════════════════════════════════════════════════╗"
-    echo "║                                                              ║"
-    echo "║              Connectify Installer                            ║"
-    echo "║          SSH Session Manager for macOS                       ║"
-    echo "║                                                              ║"
-    echo "╚══════════════════════════════════════════════════════════════╝"
-    echo ""
-    
+    banner
     check_macos
-    check_not_root
 
-    # iTerm2 is a hard requirement - stop before downloading anything
-    check_iterm2
-    check_browser_plugin
+    local arch version archive
+    arch=$(detect_architecture)
 
-    ARCH=$(detect_architecture)
-    print_info "Detected architecture: $ARCH"
-    
-    # Set trap to cleanup on exit
-    trap cleanup EXIT
-    
-    download_binary "$ARCH"
-    extract_binary
-    install_binary
-    verify_installation
-    install_iterm_profiles
-    setup_path
-    print_post_install
+    say "Looking up the latest release"
+    version=$(resolve_version)
+    [[ -n "$version" ]] || die "Could not work out which version to install. Set CONNECTIFY_VERSION=x.y.z to pick one."
+    ok "v${version}"
+
+    archive=$(download "$version" "$arch")
+
+    say "Unpacking"
+    tar -xzf "$archive" -C "$TEMP_DIR"
+    [[ -x "${TEMP_DIR}/connectify/connectify" ]] || die "The archive did not contain a Connectify build"
+    ok "Ready"
+
+    # Hand over to the build's own installer: it does the checks, the copying,
+    # the iTerm2 profiles and the instructions, with a proper UI
+    "${TEMP_DIR}/connectify/connectify" install \
+        --from "${TEMP_DIR}/connectify" --version "$version"
 }
 
 main

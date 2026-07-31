@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="/static/vendor/fontawesome/css/fontawesome.min.css">
   <link rel="stylesheet" href="/static/vendor/fontawesome/css/solid.min.css">
   <link rel="stylesheet" href="/static/vendor/fontawesome/css/regular.min.css">
+  <link rel="stylesheet" href="/static/vendor/fontawesome/css/brands.min.css">
   <!-- favicon -->
   <link rel="icon" href="/static/ssh.png">
   <style>
@@ -1683,23 +1684,41 @@
       overflow-x: hidden;
     }
 
+    /* Slim strip: credit on the left, source link on the right */
     .footer {
       background: var(--bg-secondary);
       border-top: 1px solid var(--border-color);
-      padding: var(--spacing-sm) var(--spacing-xl);
-      text-align: center;
+      padding: 0.35rem var(--spacing-lg);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--spacing-md);
       flex-shrink: 0;
-    }
-
-    .footer-content p {
-      color: var(--text-secondary);
-      font-size: 0.875rem;
-      margin-bottom: var(--spacing-xs);
+      min-height: 1.9rem;
     }
 
     .footer-credit {
       color: var(--text-muted);
-      font-size: 0.75rem;
+      font-size: 0.7rem;
+      line-height: 1.2;
+    }
+
+    .footer-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+
+    .footer-link:hover {
+      color: var(--primary-color);
+    }
+
+    .footer-link i {
+      font-size: 0.9rem;
     }
 
     /* Responsive Design */
@@ -1757,7 +1776,13 @@
       }
 
       .footer {
-        padding: var(--spacing-md);
+        padding: 0.35rem var(--spacing-sm);
+      }
+
+      /* Just the icon when there's no room for the repo name */
+      .footer-link span,
+      .footer-link {
+        font-size: 0.65rem;
       }
 
       .mini-toast {
@@ -2275,11 +2300,11 @@
 
   <!-- Footer -->
   <footer class="footer">
-    <div class="footer-content">
-      <p class="footer-credit">
-        Built with ❤️ by <strong>RB (Rahul Bhooteshwar)</strong>
-      </p>
-    </div>
+    <span class="footer-credit">Built with ❤️ by <strong>RB (Rahul Bhooteshwar)</strong></span>
+    <a class="footer-link" href="https://github.com/rahulbhooteshwar/connectify-iterm2"
+       target="_blank" rel="noopener noreferrer" title="Connectify on GitHub">
+      <i class="fab fa-github"></i> rahulbhooteshwar/connectify-iterm2
+    </a>
   </footer>
 
   <script>

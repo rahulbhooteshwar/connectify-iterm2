@@ -10,4 +10,5 @@ dependencies = [
     "uvicorn>=0.24.0",
     "pydantic>=2.5.0",
     "cryptography>=45.0.5",
+    "rich>=15.0.0",
 ]

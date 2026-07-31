@@ -38,7 +38,7 @@ git clone https://github.com/rahulbhooteshwar/connectify-iterm2.git
 cd connectify-iterm2
 
 # Install dependencies
-make setup
+uv run tasks.py setup
 
 # Verify installation
 uv run python connectify.py --help
@@ -50,7 +50,7 @@ uv run python connectify.py --help
 
 ```bash
 # Web interface (foreground)
-make ui
+uv run tasks.py ui
 
 # Run with arguments
 uv run python main.py --ui --port 8080
@@ -61,13 +61,13 @@ uv run python connectify.py doctor
 
 ```bash
 # Build standalone executable
-make build
+uv run tasks.py build
 
 # Build and test local installation
-make test-install
+uv run tasks.py install
 
 # Clean build artifacts
-make clean
+uv run tasks.py clean
 ```
 
 ### Manual Development Commands
@@ -108,8 +108,9 @@ connectify/
 │   └── connectify-UI.json     # Browser profile for the web UI
 ├── connectify.spec            # PyInstaller build configuration
 ├── pyproject.toml             # Python dependencies
-├── Makefile                   # Build automation
-├── install.sh                 # Installation script
+├── tasks.py                   # Dev tasks (uv run tasks.py <name>)
+├── installer.py               # Rich installer UI, bundled in the binary
+├── install.sh                 # curl|sh bootstrap (download + hand off)
 ├── uninstall.sh               # Uninstallation script
 ├── static/                    # Web UI assets
 │   ├── index.html            # Single-page web interface
@@ -247,17 +248,17 @@ binary for the machine it runs on. Each build verifies with `lipo -archs` that
 it really is the architecture it claims, smoke-tests the binary, and uploads
 `connectify-macos-<arch>.tar.gz`; a final job publishes both to one release.
 
-`make release` archives a build for whatever machine you are on, named the same
+`uv run tasks.py release` archives a build for whatever machine you are on, named the same
 way.
 
 ### Build Process
 
 ```bash
 # 1. Clean previous builds
-make clean
+uv run tasks.py clean
 
 # 2. Build executable
-make build
+uv run tasks.py build
 
 # This creates:
 # dist/connectify/
@@ -267,13 +268,22 @@ make build
 
 ### Installation Process
 
-The `install.sh` script:
-1. Checks for dependencies (Python 3.12+)
-2. Detects installation mode (local source vs remote)
-3. Builds from source if needed
-4. Installs to `/usr/local/lib/connectify/`
-5. Creates symlink at `/usr/local/bin/connectify`
-6. Verifies installation
+`install.sh` is only a bootstrap: it detects the architecture, asks GitHub for
+the current version, downloads `connectify-macos-<arch>.tar.gz` and unpacks it.
+Everything after that runs from the build itself -
+
+```
+connectify install --from <unpacked dir> --version <v>
+```
+
+- which is `installer.py`: a Rich UI that checks requirements, copies into
+`~/.local/lib/connectify`, links `~/.local/bin/connectify`, installs the iTerm2
+profiles and prints the next steps. Because it ships inside the binary, the
+pretty output needs nothing installed on the user's machine.
+
+The same module powers `connectify upgrade`, which additionally downloads the
+release itself with a progress bar. `uv run tasks.py install` runs it against a
+local build.
 
 ## Testing
 
@@ -323,8 +333,8 @@ If a command genuinely belongs on the command line:
 
 1. Update `api_server.py` for backend
 2. Update `static/index.html` for frontend
-3. Test with `make ui`
-4. Rebuild and test: `make build`
+3. Test with `uv run tasks.py ui`
+4. Rebuild and test: `uv run tasks.py build`
 
 ### Adding a New Dependency
 
@@ -336,8 +346,8 @@ uv add <package-name>
 # Edit connectify.spec to add hidden imports
 
 # Rebuild
-make clean
-make build
+uv run tasks.py clean
+uv run tasks.py build
 ```
 
 ## Debugging
@@ -413,8 +423,8 @@ See `DISTRIBUTION_CHECKLIST.md` for complete release process.
 ```bash
 # 1. Update version in pyproject.toml
 # 2. Build release
-make clean
-make build
+uv run tasks.py clean
+uv run tasks.py build
 
 # 3. Create release archive
 cd dist
@@ -470,13 +480,13 @@ To reduce:
 2. **Test locally**:
    ```bash
    # Build
-   make build
+   uv run tasks.py build
    
    # Test executable
    ./dist/connectify/connectify --help
    
    # Test local installation
-   make dev-install
+   uv run tasks.py ui-install
    connectify --help
    connectify ui start
    ```
@@ -501,7 +511,7 @@ If you need to create a release manually:
 
 1. **Build and create archive**:
    ```bash
-   make release
+   uv run tasks.py release
    ```
 
 2. **Create GitHub Release**:

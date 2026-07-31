@@ -33,14 +33,14 @@ No build required! Downloads pre-built binary:
 curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/connectify-iterm2/main/install.sh | sh
 ```
 
-This will:
-- ✅ Check that iTerm2 (and the browser plugin) are installed
-- ✅ Download the latest pre-built binary
-- ✅ Install to `~/.local/bin/connectify` (no sudo required!)
-- ✅ Optionally setup auto-start
-- ✅ Setup PATH if needed
-- ✅ Install the bundled iTerm2 profiles
-- ✅ No Python or build tools required!
+The installer shows you what it is doing: the version and architecture being
+downloaded with a progress bar, a checklist of requirements (iTerm2, the browser
+plugin, OpenSSH), where things are installed, the iTerm2 profiles it sets up and
+how to put `~/.local/bin` on your PATH if it isn't. No sudo, no Python and no
+build tools needed on your machine.
+
+Already installed? `connectify upgrade` fetches and installs the latest release
+with the same UI.
 
 ## Usage
 

@@ -96,3 +96,45 @@ def test_no_interactive_prompt_dependency():
     assert 'inquirer' not in sys.modules
     with open(os.path.join(REPO_ROOT, 'pyproject.toml')) as f:
         assert 'inquirer' not in f.read()
+
+
+# --- installer ---------------------------------------------------------------
+
+def test_installer_ui_is_bundled_not_a_host_dependency():
+    """install.sh must not need rich (or python) on the user's machine."""
+    import installer
+
+    # The pretty parts live in the binary
+    for attr in ('run_install', 'run_upgrade', 'download_release', 'check_requirements'):
+        assert hasattr(installer, attr)
+
+    with open(os.path.join(REPO_ROOT, 'install.sh')) as f:
+        bootstrap = f.read()
+
+    assert 'rich' not in bootstrap
+    assert '/connectify" install' in bootstrap, "the script hands off to the bundled installer"
+    assert '--version' in bootstrap, "the version being installed is passed through"
+    # The heavy lifting is no longer duplicated in bash
+    for gone in ('install_binary()', 'setup_path()', 'check_and_install_sshpass'):
+        assert gone not in bootstrap
+
+
+def test_install_and_upgrade_are_documented_commands():
+    result = run_cli('--help')
+    assert 'connectify upgrade' in result.stdout
+
+
+def test_install_requires_a_source_directory():
+    result = run_cli('install')
+    assert result.returncode == 1
+    assert '--from' in result.stdout
+
+
+def test_tasks_replace_the_makefile():
+    assert not os.path.exists(os.path.join(REPO_ROOT, 'Makefile')), "the Makefile is gone"
+
+    result = subprocess.run([sys.executable, os.path.join(REPO_ROOT, 'tasks.py')],
+                            capture_output=True, text=True, timeout=60, cwd=REPO_ROOT)
+    assert result.returncode == 0
+    for task_name in ('setup', 'ui', 'test', 'build', 'install', 'release', 'clean'):
+        assert task_name in result.stdout
