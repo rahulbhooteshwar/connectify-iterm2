@@ -41,7 +41,7 @@ cd connectify-iterm2
 make setup
 
 # Verify installation
-uv run python main.py --help
+uv run python connectify.py --help
 ```
 
 ## Development Workflow
@@ -49,15 +49,12 @@ uv run python main.py --help
 ### Running in Development Mode
 
 ```bash
-# Terminal interface
-make dev
-
-# Web interface
+# Web interface (foreground)
 make ui
 
 # Run with arguments
-uv run python main.py --list
 uv run python main.py --ui --port 8080
+uv run python connectify.py doctor
 ```
 
 ### Building the Executable
@@ -82,8 +79,8 @@ uv sync
 # Add new dependency
 uv add <package-name>
 
-# Run the application
-uv run python main.py
+# Run the web UI
+uv run python main.py --ui
 
 # Build executable manually
 uv run pyinstaller connectify.spec
@@ -98,7 +95,7 @@ ln -sf ~/.local/lib/connectify/connectify ~/.local/bin/connectify
 
 ```
 connectify/
-├── connectify.py              # CLI wrapper with ui subcommands
+├── connectify.py              # User-facing CLI (ui / profiles / doctor)
 ├── main.py                    # Core SSH manager functionality
 ├── api_server.py              # FastAPI web server
 ├── iterm_profiles.py          # Bundled profile install + iTerm2 discovery
@@ -126,21 +123,26 @@ connectify/
 
 ## Key Components
 
-### 1. connectify.py - CLI Wrapper
+### 1. connectify.py - The CLI
 
-Handles:
-- UI server management (start, stop, restart, logs, status)
-- Delegation to main.py for SSH functionality
-- Works with both PyInstaller bundle and source code
+The entire user-facing command line. Deliberately small: hosts, groups, themes
+and connections are managed in the web UI, so the CLI only covers
+
+- UI server management (`ui start|stop|restart|status|logs`)
+- Bundled iTerm2 profiles (`profiles install|list`)
+- Diagnostics (`doctor`) and `version`
+- Internally, `--silent`/`--ui` hand off to `main.main()` to run the server -
+  this is how `ui start` relaunches the executable in the background
+
+Works with both the PyInstaller bundle and the source checkout.
 
 ### 2. main.py - Core Functionality
 
-Handles:
-- SSH host management
-- Interactive host selection
+The SSH engine behind the web UI:
+- SSH host configuration (load/save/CRUD)
 - Keychain integration
-- iTerm2 profile support
-- Configuration management
+- iTerm2 session launching and profile support
+- `main()` starts the web server (no interactive terminal UI)
 
 ### 3. iterm_profiles.py - iTerm2 Profiles
 
@@ -224,6 +226,7 @@ The `install.sh` script:
 # Test executable directly
 ./dist/connectify/connectify --help
 ./dist/connectify/connectify ui status
+./dist/connectify/connectify doctor
 
 # Test installation
 ./install.sh
@@ -238,7 +241,7 @@ connectify ui start
 
 - [ ] Build succeeds without errors
 - [ ] Executable runs and shows help
-- [ ] All CLI commands work
+- [ ] `ui start|stop|restart|status|logs`, `profiles`, `doctor` and `version` work
 - [ ] UI server starts and stops correctly
 - [ ] Web interface is accessible
 - [ ] SSH connections work
@@ -251,8 +254,11 @@ connectify ui start
 
 ### Adding a New CLI Command
 
-1. Update `connectify.py` to add the command
-2. Update help text in `main.py`
+The CLI stays intentionally minimal - prefer adding features to the web UI.
+If a command genuinely belongs on the command line:
+
+1. Add it to the dispatcher in `connectify.py`
+2. Add it to `USAGE` in the same file
 3. Update documentation
 4. Test thoroughly
 
@@ -295,8 +301,8 @@ uv run pyinstaller --log-level DEBUG connectify.spec
 ### Debug Runtime Issues
 
 ```bash
-# Run with debug flag
-connectify --debug
+# Full diagnostics
+connectify doctor
 
 # Check UI logs
 tail -f ~/.connectify/ui.log
@@ -305,7 +311,7 @@ tail -f ~/.connectify/ui.log
 lsof -i :7890
 
 # Test in development mode
-uv run python main.py --debug
+uv run python connectify.py doctor
 ```
 
 ### Common Issues

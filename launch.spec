@@ -6,8 +6,6 @@ import os
 block_cipher = None
 
 # Collect all data and hidden imports for packages
-inquirer_datas, inquirer_binaries, inquirer_hiddenimports = collect_all('inquirer')
-readchar_datas, readchar_binaries, readchar_hiddenimports = collect_all('readchar')
 keyring_datas, keyring_binaries, keyring_hiddenimports = collect_all('keyring')
 fastapi_datas, fastapi_binaries, fastapi_hiddenimports = collect_all('fastapi')
 uvicorn_datas, uvicorn_binaries, uvicorn_hiddenimports = collect_all('uvicorn')
@@ -30,23 +28,12 @@ if os.path.exists(profiles_dir):
 a = Analysis(
     ['main.py', 'api_server.py'],
     pathex=[],
-    binaries=[] + inquirer_binaries + readchar_binaries + keyring_binaries + fastapi_binaries + uvicorn_binaries + pydantic_binaries,
-    datas=[] + inquirer_datas + readchar_datas + keyring_datas + fastapi_datas + uvicorn_datas + pydantic_datas + additional_datas,
+    binaries=[] + keyring_binaries + fastapi_binaries + uvicorn_binaries + pydantic_binaries,
+    datas=[] + keyring_datas + fastapi_datas + uvicorn_datas + pydantic_datas + additional_datas,
     hiddenimports=[
         'keyring.backends.macOS',
         'keyring.backends.OS_X',
         'keyring.backends.SecretService',
-        'inquirer',
-        'inquirer.themes',
-        'inquirer.themes.GreenPassion',
-        'inquirer.render.console',
-        'inquirer.events',
-        'readchar',
-        'readchar.readkey',
-        'blessed',
-        'blessed.terminal',
-        'blessed.keyboard',
-        'blessed.sequences',
         'importlib.metadata',
         'importlib_metadata',
         # FastAPI dependencies
@@ -71,7 +58,7 @@ a = Analysis(
         'pydantic.types',
         'email_validator',
         'pkg_resources',
-    ] + inquirer_hiddenimports + readchar_hiddenimports + keyring_hiddenimports + fastapi_hiddenimports + uvicorn_hiddenimports + pydantic_hiddenimports,
+    ] + keyring_hiddenimports + fastapi_hiddenimports + uvicorn_hiddenimports + pydantic_hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

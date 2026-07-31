@@ -13,12 +13,8 @@ import argparse
 import subprocess
 import keyring
 import uuid
-import getpass
 import time
 from pathlib import Path
-import inquirer
-from inquirer.themes import GreenPassion
-import shutil
 import threading
 import glob
 
@@ -96,24 +92,10 @@ def resolve_ssh_options(host):
         return list(DEFAULT_SSH_OPTIONS.get(auth_method, []))
     return list(options)
 
-# Custom theme for better visibility
-class CustomTheme(GreenPassion):
-    def __init__(self):
-        super().__init__()
-        # Enhanced visual indicators
-        self.List.selection_cursor = "🔸"
-
 class SSHManager:
     # Class-level lock to serialize iTerm2 tab launches and prevent race conditions
     # when multiple connections are launched simultaneously
     _iterm_launch_lock = threading.Lock()
-
-    # Escape hatch in the interactive profile picker for names iTerm2 doesn't report
-    MANUAL_PROFILE_CHOICE = "✏️  Enter profile name manually..."
-
-    # Options in the interactive group picker
-    NEW_GROUP_CHOICE = "➕ Create a new group..."
-    NO_GROUP_CHOICE = "— No group —"
 
     def __init__(self, config_file="~/.connectify/hosts.json", debug=False):
         self.config_file = Path(config_file).expanduser()
@@ -152,24 +134,6 @@ class SSHManager:
             print(f"🎨 Installed Connectify iTerm2 profiles: {names}")
         for error in result.get('errors', []):
             print(f"⚠️  Could not install iTerm2 profile - {error}")
-
-    def get_groups(self):
-        """Existing group names across all hosts, sorted case-insensitively."""
-        groups = {
-            normalize_group(host.get('group'))
-            for host in self.config.get('hosts', [])
-        }
-        groups.discard('')
-        return sorted(groups, key=str.lower)
-
-    def get_available_iterm_profiles(self):
-        """All iTerm2 profiles available for host configuration."""
-        host_profiles = [
-            host.get('iterm_profile')
-            for host in self.config.get('hosts', [])
-            if host.get('iterm_profile')
-        ]
-        return iterm_profiles.list_available_profiles(extra_names=host_profiles)
 
     def migrate_old_config(self):
         """Migrate from old config location to new location"""
@@ -436,229 +400,6 @@ class SSHManager:
 
         return filtered_hosts
 
-    def filter_hosts_internal(self, hosts, filter_term):
-        """Internal filtering method for menu search"""
-        if not filter_term:
-            return hosts
-
-        filter_term = filter_term.lower()
-        filtered_hosts = []
-
-        for host in hosts:
-            # Search in name, group and tags only (excluding hostname)
-            search_fields = [
-                host.get('name', '').lower(),
-                normalize_group(host.get('group')).lower(),
-                ' '.join(host.get('tags', [])).lower()
-            ]
-
-            if any(filter_term in field for field in search_fields):
-                filtered_hosts.append(host)
-
-        return filtered_hosts
-
-    def display_host_menu(self, hosts, has_active_filter=False):
-        """Display interactive menu for host selection with tag-based visual grouping and search"""
-        if not hosts:
-            print("No hosts found matching your criteria.")
-            return None
-
-        # Get terminal height for better display info
-        terminal_height = shutil.get_terminal_size().lines
-
-        # Show helpful info about scrolling if we have many hosts
-        if len(hosts) > 10:
-            print(f"📋 Found {len(hosts)} hosts. Use ↑/↓ arrows to scroll through options.\n")
-
-        # Add search functionality option
-        search_option = "🔍 Search/Filter hosts..."
-        all_hosts = hosts.copy()  # Keep reference to all hosts
-        internal_filter_active = False  # Track if internal search filter is active
-
-        while True:
-            # Group hosts by their configured group; ungrouped hosts are listed as-is
-            groups, ungrouped_hosts = group_hosts(hosts)
-
-            # Build choices with visual grouping
-            choices = []
-
-            # Add search option at the top
-            choices.append((search_option, "search"))
-
-            # Add clear filter option if there's an active filter (command-line or internal search)
-            if has_active_filter or internal_filter_active:
-                choices.append(("🗑️  Clear filter and show all hosts", "clear_filter"))
-
-            # Add separator
-            if hosts:
-                choices.append(("──────────────────────", None))
-
-            # Add groups
-            for group_name, group_hosts_list in groups.items():
-                # Add visual header for this group (non-selectable)
-                choices.append((f"── {group_name.upper()} ──", None))
-
-                # Add hosts in this group
-                for host in group_hosts_list:
-                    tags_str = f" [{', '.join(host.get('tags', []))}]" if host.get('tags') else ""
-                    display_name = f"  {host['name']} ({host['username']}@{host['hostname']}:{host['port']}){tags_str}"
-                    choices.append((display_name, host))
-
-            # Add ungrouped hosts as-is
-            if ungrouped_hosts:
-                if groups:  # Only add separator if there are groups above
-                    choices.append(("──────────────────────", None))
-
-                for host in ungrouped_hosts:
-                    display_name = f"  {host['name']} ({host['username']}@{host['hostname']}:{host['port']})"
-                    choices.append((display_name, host))
-
-            # If no hosts after filtering, show message
-            if not hosts:
-                choices.append(("── No hosts match current filter ──", None))
-                choices.append(("↩️  Clear filter and show all hosts", "clear_filter"))
-
-            questions = [
-                inquirer.List(
-                    'host',
-                    message="Select SSH host to connect (↑/↓ scroll, Enter select, Ctrl+C exit):",
-                    choices=choices,
-                    carousel=True
-                )
-            ]
-
-            try:
-                answers = inquirer.prompt(questions, theme=CustomTheme())
-                if not answers:
-                    return None
-
-                selected = answers['host']
-
-                if selected == "search":
-                    # Handle search functionality
-                    search_question = [
-                        inquirer.Text(
-                            'search_term',
-                            message="Enter search term (name or tags):",
-                            default=""
-                        )
-                    ]
-                    search_answer = inquirer.prompt(search_question, theme=CustomTheme())
-
-                    if search_answer and search_answer['search_term']:
-                        # Filter hosts based on search term
-                        hosts = self.filter_hosts_internal(all_hosts, search_answer['search_term'])
-                        internal_filter_active = True  # Mark that internal filter is active
-                        if not hosts:
-                            print(f"No hosts found matching '{search_answer['search_term']}'")
-                            input("Press Enter to continue...")
-                    else:
-                        # Empty search term, show all hosts
-                        hosts = all_hosts
-                        internal_filter_active = False
-                    continue
-
-                elif selected == "clear_filter":
-                    # Reset to show all hosts and clear internal filter
-                    hosts = all_hosts
-                    internal_filter_active = False
-                    continue
-
-                elif selected is not None:  # Valid host selected
-                    return selected
-                # If None (header selected), continue the loop to ask again
-
-            except KeyboardInterrupt:
-                print("\nOperation cancelled.")
-                return None
-
-    def display_simple_host_menu(self, hosts):
-        """Display simple numbered list for host selection"""
-        if not hosts:
-            print("No hosts found matching your criteria.")
-            return None
-
-        # Group hosts by tags for organized display
-        tag_groups = {}
-        untagged_hosts = []
-
-        for host in hosts:
-            host_tags = host.get('tags', [])
-            if not host_tags:
-                untagged_hosts.append(host)
-            else:
-                primary_tag = host_tags[0]
-                if primary_tag not in tag_groups:
-                    tag_groups[primary_tag] = []
-                tag_groups[primary_tag].append(host)
-
-        print(f"\n📋 Available SSH Hosts ({len(hosts)} total):")
-        print("=" * 60)
-
-        host_list = []
-        index = 1
-
-        # Display tagged groups
-        for tag in sorted(tag_groups.keys()):
-            print(f"\n── {tag.upper()} ──")
-            for host in tag_groups[tag]:
-                tags_str = f" [{', '.join(host.get('tags', []))}]" if host.get('tags') else ""
-                print(f"{index:2}. {host['name']} ({host['username']}@{host['hostname']}:{host['port']}){tags_str}")
-                host_list.append(host)
-                index += 1
-
-        # Display untagged hosts
-        if untagged_hosts:
-            if tag_groups:
-                print(f"\n── UNTAGGED ──")
-            for host in untagged_hosts:
-                print(f"{index:2}. {host['name']} ({host['username']}@{host['hostname']}:{host['port']})")
-                host_list.append(host)
-                index += 1
-
-        print("\nOptions:")
-        print("  0. Exit")
-        print("  s. Search/filter hosts")
-        print("  c. Clear current filter (show all hosts)")
-
-        while True:
-            try:
-                choice = input(f"\nSelect host (1-{len(host_list)}, 0=exit, s=search, c=clear filter): ").strip().lower()
-
-                if choice == '0' or choice == 'exit' or choice == 'q':
-                    return None
-                elif choice == 's' or choice == 'search':
-                    search_term = input("Enter search term (name or tags): ").strip()
-                    if search_term:
-                        filtered_hosts = self.filter_hosts_internal(hosts, search_term)
-                        if filtered_hosts:
-                            return self.display_simple_host_menu(filtered_hosts)
-                        else:
-                            print(f"No hosts found matching '{search_term}'")
-                            continue
-                    else:
-                        continue
-                elif choice == 'c' or choice == 'clear':
-                    # Clear terminal and filter by returning to display all hosts
-                    import os
-                    os.system('clear')
-                    print("🗑️  Filter cleared, showing all hosts...\n")
-                    all_hosts = self.config.get('hosts', [])
-                    return self.display_simple_host_menu(all_hosts)
-                elif choice.isdigit():
-                    choice_num = int(choice)
-                    if 1 <= choice_num <= len(host_list):
-                        return host_list[choice_num - 1]
-                    else:
-                        print(f"Please enter a number between 1 and {len(host_list)}")
-                else:
-                    print("Invalid choice. Please enter a number, 's' for search, 'c' to clear filter, or '0' to exit.")
-            except KeyboardInterrupt:
-                print("\nOperation cancelled.")
-                return None
-            except ValueError:
-                print("Invalid input. Please enter a number.")
-
     def build_ssh_command(self, host, password=None, temp_file=None):
         """Build SSH command for the selected host"""
         hostname = host['hostname']
@@ -817,26 +558,12 @@ class SSHManager:
                 print(f"DEBUG: Retrieved password: {'[PRESENT]' if password else '[NOT FOUND]'}")
 
             if not password:
-                # For CLI usage, prompt for password
-                # For web UI usage, this should never be reached due to pre-check
-                try:
-                    print(f"⚠️  Password required for {username}@{host['hostname']}")
-                    print(f"⚠️  Please set the password via the web UI or use --add command")
-                    # Try to prompt if in interactive mode
-                    if sys.stdin and sys.stdin.isatty():
-                        password = getpass.getpass("Password (will be stored in keychain): ")
-                        if password:
-                            self.store_password(service_name, username, password)
-                            # Verify it was stored
-                            test_password = self.get_password(service_name, username)
-                            if not test_password:
-                                print("⚠ Warning: Password storage may have failed")
-                    else:
-                        # Non-interactive mode (web UI), cannot prompt
-                        raise ValueError(f"Password required for {host_name} but not stored in keychain")
-                except Exception as e:
-                    print(f"❌ Cannot launch session: {e}")
-                    raise
+                # Sessions are always launched from the web UI, which checks for
+                # a stored password before getting here - there is nobody to
+                # prompt at this point.
+                print(f"⚠️  Password required for {username}@{host['hostname']}")
+                print(f"⚠️  Set it in the web UI (edit the host) and try again")
+                raise ValueError(f"Password required for {host_name} but not stored in keychain")
 
         # Generate unique temporary file name for password with timestamp
         temp_pass_file = None
@@ -1009,134 +736,6 @@ class SSHManager:
                         except Exception as cleanup_error:
                             print(f"⚠ Warning: Could not remove temporary file {temp_pass_file}: {cleanup_error}")
 
-    def prompt_for_group(self):
-        """Ask which group a host belongs to, offering the existing ones."""
-        existing = self.get_groups()
-
-        if existing:
-            choices = existing + [self.NEW_GROUP_CHOICE, self.NO_GROUP_CHOICE]
-            answer = inquirer.prompt(
-                [inquirer.List('group',
-                               message="Group (used to organize hosts)",
-                               choices=choices,
-                               default=self.NO_GROUP_CHOICE)],
-                theme=CustomTheme()
-            )
-            selected = (answer or {}).get('group')
-            if selected == self.NO_GROUP_CHOICE or not selected:
-                return ""
-            if selected != self.NEW_GROUP_CHOICE:
-                return selected
-
-        answer = inquirer.prompt(
-            [inquirer.Text('group', message="Group name (leave empty for ungrouped)")],
-            theme=CustomTheme()
-        )
-        return normalize_group((answer or {}).get('group'))
-
-    def prompt_for_iterm_profile(self):
-        """Ask for an iTerm2 profile, listing the ones actually available."""
-        try:
-            available = self.get_available_iterm_profiles()
-        except Exception:
-            available = []
-
-        if len(available) > 1:
-            choices = [p['name'] for p in available] + [self.MANUAL_PROFILE_CHOICE]
-            answer = inquirer.prompt(
-                [inquirer.List('iterm_profile',
-                               message="iTerm2 profile",
-                               choices=choices,
-                               default="Default")],
-                theme=CustomTheme()
-            )
-            selected = (answer or {}).get('iterm_profile')
-            if selected and selected != self.MANUAL_PROFILE_CHOICE:
-                return selected
-
-        answer = inquirer.prompt(
-            [inquirer.Text('iterm_profile',
-                           message="iTerm2 profile name (optional)",
-                           default="Default")],
-            theme=CustomTheme()
-        )
-        return (answer or {}).get('iterm_profile') or "Default"
-
-    def add_host(self):
-        """Interactive host addition"""
-        print("\n=== Add New SSH Host ===")
-
-        questions = [
-            inquirer.Text('name', message="Host display name"),
-            inquirer.Text('hostname', message="Hostname/IP address"),
-            inquirer.Text('username', message="Username"),
-            inquirer.Text('port', message="SSH port", default="22"),
-            inquirer.List('auth_method',
-                         message="Authentication method",
-                         choices=['password', 'key']),
-        ]
-
-        answers = inquirer.prompt(questions, theme=CustomTheme())
-        if not answers:
-            return
-
-        # Additional questions based on auth method
-        if answers['auth_method'] == 'key':
-            key_questions = [
-                inquirer.Text('ssh_key_path',
-                             message="Path to SSH private key",
-                             default="~/.ssh/id_rsa")
-            ]
-            key_answers = inquirer.prompt(key_questions, theme=CustomTheme())
-            answers.update(key_answers)
-
-        # Group - offer the groups already in use, or let the user name a new one
-        answers['group'] = self.prompt_for_group()
-
-        # iTerm2 profile - offer everything iTerm2 currently knows about
-        # (including the profiles shipped with Connectify) instead of asking
-        # the user to remember exact profile names.
-        answers['iterm_profile'] = self.prompt_for_iterm_profile()
-
-        # Optional fields
-        optional_questions = [
-            inquirer.Text('tags',
-                         message="Tags (comma-separated, optional)")
-        ]
-
-        optional_answers = inquirer.prompt(optional_questions, theme=CustomTheme())
-        answers.update(optional_answers)
-
-        # Process tags
-        if answers.get('tags'):
-            answers['tags'] = [tag.strip() for tag in answers['tags'].split(',')]
-        else:
-            answers['tags'] = []
-
-        # Convert port to integer
-        try:
-            answers['port'] = int(answers['port'])
-        except ValueError:
-            answers['port'] = 22
-
-        # Add to config
-        self.config.setdefault('hosts', []).append(answers)
-
-        # Save config
-        with open(self.config_file, 'w') as f:
-            json.dump(self.config, f, indent=2, ensure_ascii=False)
-
-        print(f"Host '{answers['name']}' added successfully!")
-
-        # Store password if needed
-        if answers['auth_method'] == 'password':
-            store_pwd = input("Store password in keychain now? (y/N): ").lower() == 'y'
-            if store_pwd:
-                password = getpass.getpass("Enter password: ")
-                if password:
-                    service_name = f"ssh-{answers['hostname']}"
-                    self.store_password(service_name, answers['username'], password)
-
     def debug_keychain(self):
         """Debug keychain storage and retrieval"""
         print("\n=== Keychain Debug Information ===")
@@ -1207,271 +806,73 @@ class SSHManager:
         else:
             print("  No hosts configured for password authentication")
 
-    def list_hosts(self, filter_term=None):
-        """List all hosts or filtered hosts"""
-        hosts = self.filter_hosts(filter_term)
-
-        if not hosts:
-            print("No hosts found.")
-            return
-
-        print(f"\n=== SSH Hosts{' (filtered)' if filter_term else ''} ===")
-
-        def print_host(index, host):
-            tags_str = f" [{', '.join(host.get('tags', []))}]" if host.get('tags') else ""
-            auth_info = f" ({host.get('auth_method', 'password')})"
-            print(f"{index:2}. {host['name']} - {host['username']}@{host['hostname']}:{host['port']}{auth_info}{tags_str}")
-
-        groups, ungrouped = group_hosts(hosts)
-        index = 1
-
-        for group_name, group_hosts_list in groups.items():
-            print(f"\n{group_name}")
-            for host in group_hosts_list:
-                print_host(index, host)
-                index += 1
-
-        if ungrouped:
-            # Ungrouped hosts are listed as-is, without a group heading
-            if groups:
-                print()
-            for host in ungrouped:
-                print_host(index, host)
-                index += 1
-
 def main():
-    parser = argparse.ArgumentParser(description="Connectify - SSH Session Manager for iTerm2",
-                                     formatter_class=argparse.RawDescriptionHelpFormatter,
-                                     epilog="""
-╔══════════════════════════════════════════════════════════════╗
-║              CONNECTIFY - SSH Session Manager                ║
-║                     Comprehensive Help                      ║
-╚══════════════════════════════════════════════════════════════╝
+    """Entry point for running the web UI server directly.
 
-🚀 QUICK START:
-  connectify                    # Interactive host selection
-  connectify prod               # Filter hosts containing "prod"
-  connectify --add              # Add a new SSH host
-  connectify --list             # List all configured hosts
-  connectify ui start           # Start background UI server
-
-📖 DETAILED USAGE:
-
-BASIC COMMANDS:
-  connectify                    Start interactive host selection
-  connectify <filter>           Filter hosts by name or tags
-  connectify --add              Add a new SSH host interactively
-  connectify --list             List all hosts without connecting
-  connectify --list <filter>    List hosts matching filter
-  connectify --version          Show version information
-  connectify --debug            Debug keychain functionality
-  connectify --config <path>    Use custom config file
-  connectify --simple           Use numbered list instead of scrolling menu
-
-UI SERVER MANAGEMENT:
-  connectify ui start           Start background UI server (port 7890)
-  connectify ui stop            Stop UI server
-  connectify ui restart         Restart UI server
-  connectify ui logs            Show UI server logs
-  connectify ui status          Check UI server status
-
-INTERACTIVE FEATURES:
-  🔍 Search/Filter          Search and filter hosts by name or tags
-  ↑/↓ Navigation           Navigate through host list
-  Enter                     Connect to selected host
-  Ctrl+C                    Exit application
-
-🗂️  HOST ORGANIZATION:
-  • Hosts are organized by their optional "group" (e.g. Production, Team A)
-  • Hosts without a group are listed as-is, after the groups
-  • Tags stay available for search and filtering
-  • Filter by group, tag or host name
-
-🔐 AUTHENTICATION:
-  • Password auth: Stored securely in consolidated macOS Keychain storage
-  • SSH key auth: Specify path to private key
-  • Automatic password prompting if not stored
-  • Single keyring permission for all SSH hosts
-  • Optional sshpass integration for seamless connections
-
-🎨 iTerm2 PROFILES:
-  • Assign custom iTerm2 profiles to hosts
-  • Different colors, fonts, and settings per environment
-  • Automatic session naming with host information
-  • Connectify ships ready-made profiles (connectify-PERSONAL,
-    connectify-PROD, connectify-NONPROD) and installs them into iTerm2
-  • 'connectify --profiles' lists every profile available for a host
-  • 'connectify --install-profiles' reinstalls the shipped profiles
-
-📁 CONFIGURATION:
-  Config file: ~/.connectify/hosts.json
-
-  Host properties:
-    name           Display name for the host
-    hostname       Server hostname or IP address
-    username       SSH username
-    port           SSH port (default: 22)
-    auth_method    "password" or "key"
-    ssh_key_path   Path to private key (for key auth)
-    iterm_profile  iTerm2 profile name
-    group          Group used to organize hosts (optional)
-    theme          Tile theme in the web UI: default, red, green or orange
-    tags           Array of tags for search and filtering
-
-💡 TIPS:
-  • Group hosts by environment or team to keep the list tidy
-  • Use meaningful host names and tags for easy filtering
-  • Set up iTerm2 profiles for different environments
-  • Use consistent tagging (e.g., env:prod, type:web)
-  • Store frequently used connection details
-  • Use the search feature for quick access to specific hosts
-
-🔧 TROUBLESHOOTING:
-  • Config issues: Check ~/.connectify/hosts.json syntax
-  • Keychain issues: Run 'connectify --debug' to check password storage
-  • SSH key problems: Verify file paths and permissions
-  • iTerm2 not opening: Check if iTerm2 is installed
-  • First-time setup: You'll be prompted once for keyring access
-
-Built with ❤️  by RB (Rahul Bhooteshwar)
-        """)
-    parser.add_argument('filter', nargs='?', help='Filter hosts by name, hostname, or tags')
-    parser.add_argument('--add', action='store_true', help='Add a new SSH host')
-    parser.add_argument('--list', action='store_true', help='List all hosts without launching')
-    parser.add_argument('--debug', action='store_true', help='Debug keychain functionality')
+    The user-facing CLI lives in connectify.py; this module is the SSH engine
+    behind the web UI and only needs to be able to start the server.
+    """
+    parser = argparse.ArgumentParser(
+        prog='connectify',
+        description="Connectify - SSH Session Manager for iTerm2 (web UI server)",
+    )
     parser.add_argument('--version', action='store_true', help='Show version information')
     parser.add_argument('--config', help='Path to config file', default='~/.connectify/hosts.json')
-    parser.add_argument('--simple', action='store_true', help='Use simple numbered list instead of scrolling menu')
-    parser.add_argument('--profiles', action='store_true', help='Show bundled and available iTerm2 profiles')
-    parser.add_argument('--install-profiles', action='store_true', help='(Re)install the bundled iTerm2 profiles into iTerm2')
-    parser.add_argument('--ui', action='store_true', help='Launch web interface')
-    parser.add_argument('--port', type=int, default=7860, help='Port for web interface (default: 7860)')
-    parser.add_argument('--share', action='store_true', help='Create shareable link for web interface')
-    parser.add_argument('--silent', action='store_true', help='Launch web interface silently in background (fixed port 7890, no browser)')
+    parser.add_argument('--ui', action='store_true', help='Launch the web interface (default)')
+    parser.add_argument('--port', type=int, default=7860, help='Port for the web interface (default: 7860)')
+    parser.add_argument('--share', action='store_true', help='Bind to 0.0.0.0 instead of localhost')
+    parser.add_argument('--silent', action='store_true',
+                        help='Run the web interface in background mode (fixed port 7890, no browser)')
 
     args = parser.parse_args()
 
-    # Show initialization message on first run
-    config_path = Path(args.config).expanduser()
-    old_config_path = Path("~/.ssh_manager_config.json").expanduser()
-    
-    if not config_path.exists() or (old_config_path.exists() and not config_path.exists()):
-        print("⏳ First run initialization (this may take a moment)...")
-        print()
-    
-    # Handle version flag
     if args.version:
         print(f"Connectify v{VERSION}")
         print(f"Build: {BUILD_DATE}")
         return
 
-    # Profile management doesn't need the host config
-    if args.install_profiles:
-        result = iterm_profiles.install_bundled_profiles(force=True)
-        iterm_profiles.warn_if_browser_plugin_missing()
+    # Show initialization message on first run
+    config_path = Path(args.config).expanduser()
+    if not config_path.exists():
+        print("⏳ First run initialization (this may take a moment)...")
         print()
-        print("💡 Restart iTerm2 (or open a new window) if the profiles don't show up right away")
-        sys.exit(1 if result['errors'] else 0)
 
-    if args.profiles:
-        iterm_profiles.print_profiles_status()
-        sys.exit(0)
+    try:
+        from api_server import launch_api_server
+    except ImportError as e:
+        print("❌ Web interface dependencies not installed.")
+        print(f"Missing: {e}")
+        print("Please run: uv sync")
+        sys.exit(1)
 
-    # Create manager with debug flag
-    manager = SSHManager(args.config, debug=args.debug)
-
-    if args.debug:
-        manager.debug_keychain()
-        return
-
-    if args.add:
-        manager.add_host()
-        return
-
-    if args.list:
-        manager.list_hosts(args.filter)
-        return
-
-    if args.ui or args.silent:
-        # Launch web interface
-        try:
-            from api_server import launch_api_server
-            if args.silent:
-                # Silent mode: fixed port, no browser, background
-                print("🔇 Starting SSH Session Manager API Server in silent mode...")
-                print("🌐 Server will run on http://localhost:7890")
-                print("📋 Use Ctrl+C to stop the server")
-                launch_api_server(args.config, 7890, "127.0.0.1", silent=True)
-            else:
-                # Normal UI mode
-                print("🌐 Starting SSH Session Manager Web Interface...")
-                print(f"🚀 Server will be available at http://localhost:{args.port}")
-                if not args.share:
-                    # Open browser automatically for local development
-                    import webbrowser
-                    import threading
-                    def open_browser():
-                        import time
-                        time.sleep(1.5)  # Wait for server to start
-                        webbrowser.open(f"http://localhost:{args.port}")
-                    threading.Thread(target=open_browser, daemon=True).start()
-
-                launch_api_server(args.config, args.port, "0.0.0.0" if args.share else "127.0.0.1", silent=False)
-        except ImportError as e:
-            print("❌ Web interface dependencies not installed.")
-            print(f"Missing: {e}")
-            print("Please run: uv sync")
-            sys.exit(1)
-        except Exception as e:
-            print(f"❌ Error launching web interface: {e}")
-            sys.exit(1)
-        return
-
-    # Main functionality: filter and launch
-    initial_filter = args.filter
-
-    while True:
-        hosts = manager.filter_hosts(initial_filter)
-
-        if not hosts:
-            if initial_filter:
-                print(f"No hosts found matching \"{initial_filter}\".")
-            else:
-                print("No hosts found.")
-            return
-
-        # Choose menu style based on user preference
-        if args.simple:
-            selected_host = manager.display_simple_host_menu(hosts)
+    try:
+        if args.silent:
+            # Background mode: fixed port, no browser
+            print("🔇 Starting Connectify web server in silent mode...")
+            print("🌐 Server will run on http://localhost:7890")
+            print("📋 Use Ctrl+C to stop the server")
+            launch_api_server(args.config, 7890, "127.0.0.1", silent=True)
         else:
-            selected_host = manager.display_host_menu(hosts, has_active_filter=bool(initial_filter))
+            print("🌐 Starting Connectify web interface...")
+            print(f"🚀 Server will be available at http://localhost:{args.port}")
+            if not args.share:
+                # Open the browser once the server is up
+                import webbrowser
 
-        if selected_host == "clear_filter":
-            # This handles command-line filter clearing only
-            # Internal filter clearing is handled within display_host_menu
-            import os
-            os.system('clear')
-            print("🗑️  Filter cleared, showing all hosts...\n")
-            initial_filter = None
-            continue
-        elif selected_host:
-            manager.launch_iterm_session(selected_host)
+                def open_browser():
+                    time.sleep(1.5)
+                    webbrowser.open(f"http://localhost:{args.port}")
 
-            # Clear terminal and return to main menu
-            import os
-            os.system('clear')
-            print("🔄 Returning to host selection...\n")
+                threading.Thread(target=open_browser, daemon=True).start()
 
-            # Clear the initial filter after first use to show all hosts
-            initial_filter = None
-        else:
-            # User cancelled selection or pressed Ctrl+C
-            print("👋 Goodbye!")
-            sys.exit(0)
+            launch_api_server(args.config, args.port, "0.0.0.0" if args.share else "127.0.0.1", silent=False)
+    except Exception as e:
+        print(f"❌ Error launching web interface: {e}")
+        sys.exit(1)
+
 
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
         print("\n👋 Goodbye!")
-        sys.exit(0)

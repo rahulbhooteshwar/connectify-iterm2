@@ -7,8 +7,8 @@ help:
 	@echo ""
 	@echo "Development:"
 	@echo "  make setup         Set up development environment"
-	@echo "  make dev           Run in development mode (terminal)"
-	@echo "  make ui            Launch web interface"
+	@echo "  make ui            Run the web interface in the foreground"
+	@echo "  make dev           Alias for 'make ui'"
 	@echo ""
 	@echo "Building:"
 	@echo "  make build         Build standalone executable"
@@ -27,9 +27,7 @@ setup:
 	@uv sync
 	@echo "✅ Environment setup complete!"
 
-dev:
-	@echo "🚀 Running in development mode..."
-	@uv run python main.py
+dev: ui
 
 ui:
 	@echo "🌐 Launching web interface..."

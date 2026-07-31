@@ -1,15 +1,14 @@
 # Connectify - SSH Session Manager for iTerm2
 
-A powerful command-line utility to manage and launch SSH sessions with credential storage and iTerm2 profile support on macOS.
+A web-based manager for your SSH sessions, with credential storage in the macOS Keychain and iTerm2 profile support.
 
 ## Features
 
 - 🔐 **Secure credential storage** using macOS Keychain
-- 🎯 **Interactive host selection** with tag-based filtering
+- 🎯 **Web-based host management** - add, edit, group and connect
 - 🖥️ **iTerm2 integration** with custom profiles
 - 🎨 **Bundled iTerm2 profiles** (PERSONAL / NON-PROD / PROD / UI) installed for you
 - 🔍 **Smart search and filtering** by name or tags
-- ⚡ **Fast host management** - add, list, and connect
 - 🗂️ **Group-based organization** with per-host tile themes
 - 🌐 **Web interface** - Modern tile-based UI for easy host management
 - 🚀 **Background UI server** - Always-on web interface
@@ -44,31 +43,31 @@ This will:
 
 ## Usage
 
-### SSH Connection Management
+Connectify is used from its **web interface** - adding hosts, connecting, groups,
+themes and profiles all live there. The `connectify` command exists to run that
+server and to diagnose problems.
+
+### Web UI server
 
 ```bash
-connectify                    # Interactive host selection
-connectify production         # Filter hosts by "production"
-connectify --add              # Add a new SSH host
-connectify --list             # List all configured hosts
-connectify profiles list      # Show bundled + available iTerm2 profiles
-connectify --version          # Show version information
-connectify --help             # Show all options
-```
-
-### Background UI Server
-
-The background UI server provides a web interface for managing SSH connections:
-
-```bash
-connectify ui start           # Start background UI server
-connectify ui stop            # Stop UI server
-connectify ui restart         # Restart UI server
-connectify ui logs            # Show UI server logs
-connectify ui status          # Check if UI server is running
+connectify ui start           # Start the server in the background
+connectify ui stop            # Stop the server
+connectify ui restart         # Restart the server
+connectify ui status          # Is it running?
+connectify ui logs            # Print the server log
 ```
 
 Once started, access the UI at: **http://localhost:7890**
+
+### Everything else
+
+```bash
+connectify profiles list      # Bundled + available iTerm2 profiles
+connectify profiles install   # (Re)install the bundled iTerm2 profiles
+connectify doctor             # Diagnostics: server, iTerm2, config, keychain
+connectify version            # Version information
+connectify --help             # Show all commands
+```
 
 The web interface provides:
 - 🎨 **Tile-based host display** organized by group
@@ -108,8 +107,8 @@ Uninstalling Connectify removes the `connectify-*` profiles again.
 
 ### Choosing a profile for a host
 
-The **iTerm Profile** field in the web UI (and the prompt in `connectify --add`)
-lists every profile iTerm2 currently knows about - your own profiles, the shipped
+The **iTerm Profile** field in the web UI lists every profile iTerm2 currently
+knows about - your own profiles, the shipped
 Connectify ones and any other dynamic profiles - so you can use any theme you
 already have. The list is searchable, refreshable, and still accepts a manually
 typed profile name.
@@ -226,22 +225,19 @@ The uninstaller will:
 ### Custom Port for Temporary UI
 
 ```bash
-connectify --ui               # Launch on port 7860
-connectify --ui --port 8080   # Launch on custom port
-connectify --ui --share       # Create shareable link (0.0.0.0)
+connectify --ui               # Run in the foreground on port 7860 and open a browser
+connectify --ui --port 8080   # Foreground on a custom port
+connectify --ui --share       # Bind to 0.0.0.0 instead of localhost
 ```
+
+These run the server in the foreground; `connectify ui start` is the normal way
+to run it in the background on port 7890.
 
 ### Debugging
 
 ```bash
-connectify --debug            # Debug keychain functionality
+connectify doctor             # Server, iTerm2, profiles, config and keychain checks
 connectify ui logs            # View UI server logs
-```
-
-### Simple Menu Mode
-
-```bash
-connectify --simple           # Use numbered list instead of scrolling menu
 ```
 
 ## Troubleshooting
@@ -284,10 +280,10 @@ lsof -i :7890
 
 ### Keychain access issues
 
-Run the debug command:
+Run the diagnostics:
 
 ```bash
-connectify --debug
+connectify doctor
 ```
 
 ### iTerm2 not opening

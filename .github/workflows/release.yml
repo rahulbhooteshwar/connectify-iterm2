@@ -76,7 +76,7 @@ jobs:
             ## What's New
             
             - SSH session management with iTerm2 integration
-            - Web UI with background server support
+            - Web UI with background server support (hosts, groups, tile themes)
             - Auto-start configuration
             - Secure credential storage in macOS Keychain
             
@@ -88,10 +88,10 @@ jobs:
             ## Usage
             
             ```bash
-            connectify                    # Interactive SSH session selector
-            connectify --add              # Add a new SSH host
-            connectify ui start           # Start background UI server
-            connectify --help             # Show all options
+            connectify ui start           # Start the web UI server (background)
+            connectify ui status          # Check if it is running
+            connectify doctor             # Diagnostics
+            connectify --help             # Show all commands
             ```
             
             See [README](https://github.com/rahulbhooteshwar/connectify-iterm2) for full documentation.

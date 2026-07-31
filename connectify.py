@@ -283,6 +283,66 @@ def handle_profiles_command(command):
         return 1
 
 
+def run_doctor():
+    """Print everything useful for diagnosing a broken setup"""
+    print(f"Connectify v{VERSION} ({BUILD_DATE})")
+    print("=" * 60)
+
+    # Where are we running from
+    print("\n🔧 Installation")
+    if getattr(sys, 'frozen', False):
+        print(f"   Executable   : {sys.executable}")
+    else:
+        print(f"   Source       : {os.path.dirname(os.path.abspath(__file__))}")
+    print(f"   Python       : {sys.version.split()[0]}")
+
+    # UI server
+    print("\n🌐 Web UI server")
+    if is_ui_running():
+        print(f"   Status       : ✅ running (PID {get_ui_pid()})")
+        print(f"   URL          : http://localhost:{UI_PORT}")
+    else:
+        print("   Status       : ❌ not running ('connectify ui start')")
+    print(f"   Log file     : {LOG_FILE}{'' if os.path.exists(LOG_FILE) else ' (none yet)'}")
+
+    launchagent_plist = os.path.expanduser("~/Library/LaunchAgents/com.connectify.ui.plist")
+    print(f"   Auto-start   : {'✅ configured' if os.path.exists(launchagent_plist) else '❌ disabled'}")
+
+    # iTerm2 + profiles
+    print("\n🎨 iTerm2")
+    try:
+        import iterm_profiles
+
+        status = iterm_profiles.check_iterm2_requirements(quiet=True)
+        print(f"   iTerm2       : {status['iterm2'] or '❌ not found - ' + iterm_profiles.ITERM_DOWNLOAD_URL}")
+        print(f"   Plugin       : {status['browser_plugin'] or '⚠️  not found - ' + iterm_profiles.BROWSER_PLUGIN_DOWNLOAD_URL}")
+
+        target_dir = iterm_profiles.dynamic_profiles_dir()
+        for profile in iterm_profiles.list_bundled_profiles():
+            installed = (target_dir / f"{profile['name']}.json").exists()
+            print(f"   Profile      : {profile['name']} - {'✅ installed' if installed else '⬜ not installed'}")
+    except Exception as e:
+        print(f"   ⚠️  Could not inspect iTerm2: {e}")
+
+    # Config + keychain
+    print("\n📁 Configuration")
+    try:
+        from main import SSHManager, group_hosts
+
+        manager = SSHManager()
+        hosts = manager.config.get('hosts', [])
+        groups, ungrouped = group_hosts(hosts)
+        print(f"   Config file  : {manager.config_file}")
+        print(f"   Hosts        : {len(hosts)} ({len(groups)} group(s), {len(ungrouped)} ungrouped)")
+
+        manager.debug_keychain()
+    except Exception as e:
+        print(f"   ⚠️  Could not inspect configuration: {e}")
+        return 1
+
+    return 0
+
+
 def handle_ui_command(args):
     """Handle UI subcommands"""
     if args.ui_command == 'start':
@@ -300,17 +360,45 @@ def handle_ui_command(args):
         return 1
 
 
+USAGE = """Connectify - SSH Session Manager for iTerm2
+
+Connectify is managed from its web UI at http://localhost:{port}
+This command exists to run that server and to diagnose problems.
+
+  connectify ui start           Start the web UI server in the background
+  connectify ui stop            Stop the server
+  connectify ui restart         Restart the server
+  connectify ui status          Show whether the server is running
+  connectify ui logs            Print the server log
+
+  connectify profiles list      Show bundled and available iTerm2 profiles
+  connectify profiles install   (Re)install the bundled iTerm2 profiles
+
+  connectify doctor             Full diagnostics (server, iTerm2, config, keychain)
+  connectify version            Show version information
+""".format(port=UI_PORT)
+
+
 def main():
     """Main entry point for connectify CLI"""
-    
-    # Handle version flag early
-    if len(sys.argv) > 1 and sys.argv[1] in ['--version', '-v', 'version']:
+
+    args = sys.argv[1:]
+    command = args[0] if args else None
+
+    # No arguments: show what this command can do
+    if command is None or command in ('--help', '-h', 'help'):
+        print(USAGE)
+        sys.exit(0)
+
+    if command in ('--version', '-v', 'version'):
         print(f"Connectify v{VERSION}")
         print(f"Build: {BUILD_DATE}")
         sys.exit(0)
-    
-    # Check if 'profiles' command is being used
-    if len(sys.argv) > 1 and sys.argv[1] == 'profiles':
+
+    if command in ('doctor', 'diagnostics'):
+        sys.exit(run_doctor())
+
+    if command == 'profiles':
         parser = argparse.ArgumentParser(
             prog='connectify profiles',
             description='Manage the iTerm2 profiles shipped with Connectify'
@@ -322,59 +410,31 @@ def main():
             choices=['install', 'list', 'status'],
             help='Profile command (default: list)'
         )
-        args = parser.parse_args(sys.argv[2:])
-        sys.exit(handle_profiles_command(args.profiles_command))
+        sys.exit(handle_profiles_command(parser.parse_args(args[1:]).profiles_command))
 
-    # Check if 'ui' command is being used
-    if len(sys.argv) > 1 and sys.argv[1] == 'ui':
-        # Create UI subcommand parser
+    if command == 'ui':
         parser = argparse.ArgumentParser(
             prog='connectify ui',
-            description='Connectify UI Server Management'
+            description='Connectify web UI server management'
         )
         parser.add_argument(
             'ui_command',
             choices=['start', 'stop', 'restart', 'logs', 'status'],
             help='UI server command'
         )
-        
-        # Parse only the ui subcommand args
-        args = parser.parse_args(sys.argv[2:])
-        args.ui_command = sys.argv[2] if len(sys.argv) > 2 else None
-        
-        if not args.ui_command:
-            parser.print_help()
-            sys.exit(1)
-        
-        sys.exit(handle_ui_command(args))
-    
-    # Otherwise, delegate to main SSH functionality
-    # Import main module and call it directly (works with PyInstaller)
-    try:
-        # When bundled by PyInstaller, we can import main directly
+        sys.exit(handle_ui_command(parser.parse_args(args[1:])))
+
+    # Internal: 'connectify ui start' relaunches this executable with --silent to
+    # run the server itself. --ui/--port/--config are the same entry point.
+    if command in ('--silent', '--ui', '--port', '--config', '--share'):
         import main as ssh_main
         ssh_main.main()
-    except ImportError:
-        # Fallback for development mode
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        main_py = os.path.join(script_dir, "main.py")
-        
-        if not os.path.exists(main_py):
-            print("❌ Error: Cannot find main.py. Installation may be corrupted.")
-            sys.exit(1)
-        
-        # Running from source - use uv run
-        cmd = ["uv", "run", "python", main_py] + sys.argv[1:]
-        
-        try:
-            result = subprocess.run(cmd, cwd=script_dir)
-            sys.exit(result.returncode)
-        except KeyboardInterrupt:
-            print("\n👋 Goodbye!")
-            sys.exit(0)
-        except Exception as e:
-            print(f"❌ Error: {e}")
-            sys.exit(1)
+        sys.exit(0)
+
+    print(f"❌ Unknown command: {command}")
+    print()
+    print(USAGE)
+    sys.exit(1)
 
 
 if __name__ == "__main__":
