@@ -113,7 +113,8 @@ connectify/
 ├── install.sh                 # Installation script
 ├── uninstall.sh               # Uninstallation script
 ├── static/                    # Web UI assets
-│   └── index.html            # Single-page web interface
+│   ├── index.html            # Single-page web interface
+│   └── vendor/fontawesome/   # Vendored icon font (no CDN at runtime)
 ├── tests/                     # Test files
 └── docs/                      # Documentation
     ├── README.md             # User documentation
