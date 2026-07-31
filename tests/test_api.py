@@ -20,18 +20,36 @@ def mock_ssh_manager():
         mock.get_host.return_value = None
         yield mock
 
-def test_read_hosts(mock_ssh_manager):
-    mock_ssh_manager.config = {'hosts': [{'name': 'Test Host', 'tags': ['test']}]}
-    # We need to mock refresh_hosts_data or modify api_manager directly since it loads on init
-    from api_server import api_manager
-    api_manager.all_hosts = [{'name': 'Test Host', 'tags': ['test']}]
-    
+def test_read_hosts_groups_by_group_field(mock_ssh_manager):
+    mock_ssh_manager.config = {'hosts': [
+        {'name': 'Grouped Host', 'group': 'Production', 'tags': ['test']},
+        {'name': 'Loose Host', 'tags': ['test']},
+        {'name': 'Blank Group Host', 'group': '  ', 'tags': []},
+    ]}
+
     response = client.get("/api/hosts")
     assert response.status_code == 200
-    data = response.json()
-    assert data['success'] is True
-    assert len(data['data']['tag_groups']['test']) == 1
-    assert data['data']['tag_groups']['test'][0]['name'] == 'Test Host'
+    data = response.json()['data']
+
+    assert list(data['groups']) == ['Production']
+    assert [h['name'] for h in data['groups']['Production']] == ['Grouped Host']
+    # Hosts without a usable group are returned separately, to be rendered as-is
+    assert [h['name'] for h in data['ungrouped_hosts']] == ['Loose Host', 'Blank Group Host']
+    assert data['total_hosts'] == 3
+
+
+def test_groups_endpoint_lists_groups_in_use(mock_ssh_manager):
+    mock_ssh_manager.config = {'hosts': [
+        {'name': 'a', 'group': 'prod'},
+        {'name': 'b', 'group': 'Dev'},
+        {'name': 'c', 'group': 'prod'},
+        {'name': 'd'},
+    ]}
+
+    response = client.get("/api/groups")
+
+    assert response.status_code == 200
+    assert response.json()['groups'] == ['Dev', 'prod']
 
 def test_create_host(mock_ssh_manager):
     new_host = {
@@ -41,6 +59,8 @@ def test_create_host(mock_ssh_manager):
         "port": 22,
         "auth_method": "password",
         "password": "secret_password",
+        "group": " Production ",
+        "theme": "RED",
         "tags": ["new"]
     }
     
@@ -52,6 +72,9 @@ def test_create_host(mock_ssh_manager):
     assert response.status_code == 200
     assert response.json()['success'] is True
     mock_ssh_manager.add_host_programmatic.assert_called_once()
+    stored = mock_ssh_manager.add_host_programmatic.call_args[0][0]
+    assert stored['group'] == 'Production'
+    assert stored['theme'] == 'red'
     mock_ssh_manager.store_password.assert_called_once_with("ssh-192.168.1.1", "user", "secret_password")
 
 def test_update_host(mock_ssh_manager):

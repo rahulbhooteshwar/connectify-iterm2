@@ -10,7 +10,7 @@ A powerful command-line utility to manage and launch SSH sessions with credentia
 - 🎨 **Bundled iTerm2 profiles** (PERSONAL / NON-PROD / PROD / UI) installed for you
 - 🔍 **Smart search and filtering** by name or tags
 - ⚡ **Fast host management** - add, list, and connect
-- 🏷️ **Tag-based organization** for better host grouping
+- 🗂️ **Group-based organization** with per-host tile themes
 - 🌐 **Web interface** - Modern tile-based UI for easy host management
 - 🚀 **Background UI server** - Always-on web interface
 
@@ -71,7 +71,7 @@ connectify ui status          # Check if UI server is running
 Once started, access the UI at: **http://localhost:7890**
 
 The web interface provides:
-- 🎨 **Tile-based host display** organized by tags
+- 🎨 **Tile-based host display** organized by group
 - 🔍 **Real-time search** and filtering
 - 🖱️ **Click-to-connect** functionality
 - 📱 **Responsive design** for desktop and mobile
@@ -114,6 +114,20 @@ Connectify ones and any other dynamic profiles - so you can use any theme you
 already have. The list is searchable, refreshable, and still accepts a manually
 typed profile name.
 
+## Groups and Tile Themes
+
+Hosts are organized by an optional **Group** (e.g. `Production`, `Team A`). The
+add/edit form offers the groups already in use and lets you type a new one on the
+fly, which then becomes available to every other host. Hosts without a group are
+rendered as-is, below the groups - grouping is entirely optional.
+
+Each host also picks its own **Theme**: 🔴 red, 🟢 green, 🟠 orange or the neutral
+grey default. Click a dot in the add/edit form; the selected one is ringed. The
+theme colours that host's tile in the web UI, replacing the old guesswork based
+on tag names.
+
+Tags are unchanged and still used for search and filtering.
+
 ## Configuration
 
 Configuration is stored at `~/.connectify/hosts.json`. On first run, a sample configuration is created automatically:
@@ -127,7 +141,9 @@ Configuration is stored at `~/.connectify/hosts.json`. On first run, a sample co
       "username": "admin",
       "port": 22,
       "auth_method": "password",
-      "iterm_profile": "Production",
+      "iterm_profile": "connectify-PROD",
+      "group": "Production",
+      "theme": "red",
       "tags": ["production", "web"]
     },
     {
@@ -137,7 +153,9 @@ Configuration is stored at `~/.connectify/hosts.json`. On first run, a sample co
       "port": 2222,
       "auth_method": "key",
       "ssh_key_path": "~/.ssh/dev_server_key",
-      "iterm_profile": "Development",
+      "iterm_profile": "connectify-NONPROD",
+      "group": "Development",
+      "theme": "green",
       "tags": ["development", "testing"]
     }
   ]
@@ -155,7 +173,9 @@ Configuration is stored at `~/.connectify/hosts.json`. On first run, a sample co
 | `auth_method` | `"password"` or `"key"` | Yes |
 | `ssh_key_path` | Path to private key (for key auth) | If using key auth |
 | `iterm_profile` | iTerm2 profile name | No |
-| `tags` | Array of tags for organization | No |
+| `group` | Group used to organize the host list | No |
+| `theme` | Tile theme: `default`, `red`, `green` or `orange` | No |
+| `tags` | Array of tags for search and filtering | No |
 
 ## Auto-Start on Login
 

@@ -46,6 +46,43 @@ DEFAULT_SSH_OPTIONS = {
 }
 
 
+# Tile themes offered in the UI. "default" is the neutral grey/black tile.
+HOST_THEMES = ['default', 'red', 'green', 'orange']
+DEFAULT_HOST_THEME = 'default'
+
+
+def normalize_theme(value):
+    """Coerce a stored theme to one Connectify knows about."""
+    theme = str(value or '').strip().lower()
+    return theme if theme in HOST_THEMES else DEFAULT_HOST_THEME
+
+
+def normalize_group(value):
+    """Normalize a host's group; empty/missing means "ungrouped"."""
+    return str(value or '').strip()
+
+
+def group_hosts(hosts):
+    """Split hosts into ``(groups, ungrouped)``.
+
+    ``groups`` maps group name -> hosts, ordered alphabetically
+    (case-insensitive). Hosts without a group are returned separately and
+    rendered as-is by the callers.
+    """
+    groups = {}
+    ungrouped = []
+
+    for host in hosts:
+        group = normalize_group(host.get('group'))
+        if group:
+            groups.setdefault(group, []).append(host)
+        else:
+            ungrouped.append(host)
+
+    ordered = {name: groups[name] for name in sorted(groups, key=str.lower)}
+    return ordered, ungrouped
+
+
 def resolve_ssh_options(host):
     """Resolve the list of SSH `-o` options for a host.
 
@@ -73,6 +110,10 @@ class SSHManager:
 
     # Escape hatch in the interactive profile picker for names iTerm2 doesn't report
     MANUAL_PROFILE_CHOICE = "✏️  Enter profile name manually..."
+
+    # Options in the interactive group picker
+    NEW_GROUP_CHOICE = "➕ Create a new group..."
+    NO_GROUP_CHOICE = "— No group —"
 
     def __init__(self, config_file="~/.connectify/hosts.json", debug=False):
         self.config_file = Path(config_file).expanduser()
@@ -111,6 +152,15 @@ class SSHManager:
             print(f"🎨 Installed Connectify iTerm2 profiles: {names}")
         for error in result.get('errors', []):
             print(f"⚠️  Could not install iTerm2 profile - {error}")
+
+    def get_groups(self):
+        """Existing group names across all hosts, sorted case-insensitively."""
+        groups = {
+            normalize_group(host.get('group'))
+            for host in self.config.get('hosts', [])
+        }
+        groups.discard('')
+        return sorted(groups, key=str.lower)
 
     def get_available_iterm_profiles(self):
         """All iTerm2 profiles available for host configuration."""
@@ -174,7 +224,9 @@ class SSHManager:
                     "username": "admin",
                     "port": 22,
                     "auth_method": "password",
-                    "iterm_profile": "Production",
+                    "iterm_profile": "connectify-PROD",
+                    "group": "Production",
+                    "theme": "red",
                     "tags": ["production", "web"]
                 },
                 {
@@ -184,7 +236,9 @@ class SSHManager:
                     "port": 2222,
                     "auth_method": "key",
                     "ssh_key_path": "~/.ssh/dev_server_key",
-                    "iterm_profile": "Development",
+                    "iterm_profile": "connectify-NONPROD",
+                    "group": "Development",
+                    "theme": "green",
                     "tags": ["development", "testing"]
                 }
             ]
@@ -370,9 +424,10 @@ class SSHManager:
         filtered_hosts = []
 
         for host in hosts:
-            # Search in name and tags only (excluding hostname)
+            # Search in name, group and tags only (excluding hostname)
             search_fields = [
                 host.get('name', '').lower(),
+                normalize_group(host.get('group')).lower(),
                 ' '.join(host.get('tags', [])).lower()
             ]
 
@@ -390,9 +445,10 @@ class SSHManager:
         filtered_hosts = []
 
         for host in hosts:
-            # Search in name and tags only (excluding hostname)
+            # Search in name, group and tags only (excluding hostname)
             search_fields = [
                 host.get('name', '').lower(),
+                normalize_group(host.get('group')).lower(),
                 ' '.join(host.get('tags', [])).lower()
             ]
 
@@ -420,20 +476,8 @@ class SSHManager:
         internal_filter_active = False  # Track if internal search filter is active
 
         while True:
-            # Group hosts by tags
-            tag_groups = {}
-            untagged_hosts = []
-
-            for host in hosts:
-                host_tags = host.get('tags', [])
-                if not host_tags:
-                    untagged_hosts.append(host)
-                else:
-                    # Use the first tag as primary category for grouping
-                    primary_tag = host_tags[0]
-                    if primary_tag not in tag_groups:
-                        tag_groups[primary_tag] = []
-                    tag_groups[primary_tag].append(host)
+            # Group hosts by their configured group; ungrouped hosts are listed as-is
+            groups, ungrouped_hosts = group_hosts(hosts)
 
             # Build choices with visual grouping
             choices = []
@@ -449,24 +493,23 @@ class SSHManager:
             if hosts:
                 choices.append(("──────────────────────", None))
 
-            # Add tagged groups
-            for tag in sorted(tag_groups.keys()):
-                # Add visual header for this tag group (non-selectable)
-                tag_header = f"── {tag.upper()} ──"
-                choices.append((tag_header, None))
+            # Add groups
+            for group_name, group_hosts_list in groups.items():
+                # Add visual header for this group (non-selectable)
+                choices.append((f"── {group_name.upper()} ──", None))
 
                 # Add hosts in this group
-                for host in tag_groups[tag]:
+                for host in group_hosts_list:
                     tags_str = f" [{', '.join(host.get('tags', []))}]" if host.get('tags') else ""
                     display_name = f"  {host['name']} ({host['username']}@{host['hostname']}:{host['port']}){tags_str}"
                     choices.append((display_name, host))
 
-            # Add untagged hosts if any
-            if untagged_hosts:
-                if tag_groups:  # Only add separator if there are tagged groups above
-                    choices.append(("── UNTAGGED ──", None))
+            # Add ungrouped hosts as-is
+            if ungrouped_hosts:
+                if groups:  # Only add separator if there are groups above
+                    choices.append(("──────────────────────", None))
 
-                for host in untagged_hosts:
+                for host in ungrouped_hosts:
                     display_name = f"  {host['name']} ({host['username']}@{host['hostname']}:{host['port']})"
                     choices.append((display_name, host))
 
@@ -966,6 +1009,31 @@ class SSHManager:
                         except Exception as cleanup_error:
                             print(f"⚠ Warning: Could not remove temporary file {temp_pass_file}: {cleanup_error}")
 
+    def prompt_for_group(self):
+        """Ask which group a host belongs to, offering the existing ones."""
+        existing = self.get_groups()
+
+        if existing:
+            choices = existing + [self.NEW_GROUP_CHOICE, self.NO_GROUP_CHOICE]
+            answer = inquirer.prompt(
+                [inquirer.List('group',
+                               message="Group (used to organize hosts)",
+                               choices=choices,
+                               default=self.NO_GROUP_CHOICE)],
+                theme=CustomTheme()
+            )
+            selected = (answer or {}).get('group')
+            if selected == self.NO_GROUP_CHOICE or not selected:
+                return ""
+            if selected != self.NEW_GROUP_CHOICE:
+                return selected
+
+        answer = inquirer.prompt(
+            [inquirer.Text('group', message="Group name (leave empty for ungrouped)")],
+            theme=CustomTheme()
+        )
+        return normalize_group((answer or {}).get('group'))
+
     def prompt_for_iterm_profile(self):
         """Ask for an iTerm2 profile, listing the ones actually available."""
         try:
@@ -1021,6 +1089,9 @@ class SSHManager:
             ]
             key_answers = inquirer.prompt(key_questions, theme=CustomTheme())
             answers.update(key_answers)
+
+        # Group - offer the groups already in use, or let the user name a new one
+        answers['group'] = self.prompt_for_group()
 
         # iTerm2 profile - offer everything iTerm2 currently knows about
         # (including the profiles shipped with Connectify) instead of asking
@@ -1145,10 +1216,28 @@ class SSHManager:
             return
 
         print(f"\n=== SSH Hosts{' (filtered)' if filter_term else ''} ===")
-        for i, host in enumerate(hosts, 1):
+
+        def print_host(index, host):
             tags_str = f" [{', '.join(host.get('tags', []))}]" if host.get('tags') else ""
             auth_info = f" ({host.get('auth_method', 'password')})"
-            print(f"{i:2}. {host['name']} - {host['username']}@{host['hostname']}:{host['port']}{auth_info}{tags_str}")
+            print(f"{index:2}. {host['name']} - {host['username']}@{host['hostname']}:{host['port']}{auth_info}{tags_str}")
+
+        groups, ungrouped = group_hosts(hosts)
+        index = 1
+
+        for group_name, group_hosts_list in groups.items():
+            print(f"\n{group_name}")
+            for host in group_hosts_list:
+                print_host(index, host)
+                index += 1
+
+        if ungrouped:
+            # Ungrouped hosts are listed as-is, without a group heading
+            if groups:
+                print()
+            for host in ungrouped:
+                print_host(index, host)
+                index += 1
 
 def main():
     parser = argparse.ArgumentParser(description="Connectify - SSH Session Manager for iTerm2",
@@ -1192,11 +1281,11 @@ INTERACTIVE FEATURES:
   Enter                     Connect to selected host
   Ctrl+C                    Exit application
 
-🏷️  HOST ORGANIZATION:
-  • Hosts are grouped by tags (first tag = primary group)
-  • Use descriptive tags like: production, staging, web, database
-  • Filter by any tag or host name
-  • Tags help organize large numbers of hosts
+🗂️  HOST ORGANIZATION:
+  • Hosts are organized by their optional "group" (e.g. Production, Team A)
+  • Hosts without a group are listed as-is, after the groups
+  • Tags stay available for search and filtering
+  • Filter by group, tag or host name
 
 🔐 AUTHENTICATION:
   • Password auth: Stored securely in consolidated macOS Keychain storage
@@ -1225,9 +1314,12 @@ INTERACTIVE FEATURES:
     auth_method    "password" or "key"
     ssh_key_path   Path to private key (for key auth)
     iterm_profile  iTerm2 profile name
-    tags           Array of tags for organization
+    group          Group used to organize hosts (optional)
+    theme          Tile theme in the web UI: default, red, green or orange
+    tags           Array of tags for search and filtering
 
 💡 TIPS:
+  • Group hosts by environment or team to keep the list tidy
   • Use meaningful host names and tags for easy filtering
   • Set up iTerm2 profiles for different environments
   • Use consistent tagging (e.g., env:prod, type:web)

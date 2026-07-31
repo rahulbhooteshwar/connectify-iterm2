@@ -171,9 +171,11 @@ Handles:
 ### 5. static/index.html - Web UI
 
 Single-page application with:
-- Tile-based host display
-- Real-time search and filtering
-- Tag-based organization
+- Tile-based host display grouped by each host's `group` (ungrouped hosts are
+  rendered as-is, after the groups)
+- Per-host tile theme (`default`/`red`/`green`/`orange`), picked with the colour
+  dots in the add/edit form - `GET /api/groups` feeds the group picker
+- Real-time search and filtering (tags remain search/filter only)
 - Responsive design
 
 ## Building and Packaging

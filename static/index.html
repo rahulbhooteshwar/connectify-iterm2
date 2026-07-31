@@ -33,6 +33,16 @@
       --tag-api: #9575cd;
       --tag-default: #90a4ae;
 
+      /* Tile Themes - picked per host in the add/edit form */
+      --theme-red: #e57373;
+      --theme-green: #66bb6a;
+      --theme-orange: #ffa726;
+      --theme-default: #78909c;
+      --theme-red-rgb: 229, 115, 115;
+      --theme-green-rgb: 102, 187, 106;
+      --theme-orange-rgb: 255, 167, 38;
+      --theme-default-rgb: 120, 144, 156;
+
       /* UI Colors */
       --bg-primary: #ffffff;
       --bg-secondary: #f8fafc;
@@ -450,57 +460,13 @@
       background: currentColor;
     }
 
-    /* Tag-specific colors */
-    .group-header.tag-production {
-      background: linear-gradient(135deg, rgba(220, 53, 69, 0.15) 0%, rgba(220, 53, 69, 0.08) 100%);
-      color: var(--tag-production);
-      border-left: 6px solid var(--tag-production);
+    /* Group headers are neutral - colour comes from the per-host tile theme */
+    .group-header {
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(99, 102, 241, 0.05) 100%);
+      color: var(--primary-color);
+      border-left: 6px solid var(--primary-color);
     }
 
-    .group-header.tag-staging {
-      background: linear-gradient(135deg, rgba(253, 126, 20, 0.15) 0%, rgba(253, 126, 20, 0.08) 100%);
-      color: var(--tag-staging);
-      border-left: 6px solid var(--tag-staging);
-    }
-
-    .group-header.tag-development,
-    .group-header.tag-dev {
-      background: linear-gradient(135deg, rgba(25, 135, 84, 0.15) 0%, rgba(25, 135, 84, 0.08) 100%);
-      color: var(--tag-development);
-      border-left: 6px solid var(--tag-development);
-    }
-
-    .group-header.tag-testing,
-    .group-header.tag-test {
-      background: linear-gradient(135deg, rgba(111, 66, 193, 0.15) 0%, rgba(111, 66, 193, 0.08) 100%);
-      color: var(--tag-testing);
-      border-left: 6px solid var(--tag-testing);
-    }
-
-    .group-header.tag-database,
-    .group-header.tag-db {
-      background: linear-gradient(135deg, rgba(13, 202, 240, 0.15) 0%, rgba(13, 202, 240, 0.08) 100%);
-      color: var(--tag-database);
-      border-left: 6px solid var(--tag-database);
-    }
-
-    .group-header.tag-web {
-      background: linear-gradient(135deg, rgba(13, 110, 253, 0.15) 0%, rgba(13, 110, 253, 0.08) 100%);
-      color: var(--tag-web);
-      border-left: 6px solid var(--tag-web);
-    }
-
-    .group-header.tag-api {
-      background: linear-gradient(135deg, rgba(102, 16, 242, 0.15) 0%, rgba(102, 16, 242, 0.08) 100%);
-      color: var(--tag-api);
-      border-left: 6px solid var(--tag-api);
-    }
-
-    .group-header.tag-untagged {
-      background: linear-gradient(135deg, rgba(108, 117, 125, 0.15) 0%, rgba(108, 117, 125, 0.08) 100%);
-      color: var(--tag-default);
-      border-left: 6px solid var(--tag-default);
-    }
 
     .host-count-badge {
       background: #6D6ACC;
@@ -578,91 +544,47 @@
       border-color: var(--primary-color);
     }
 
-    .host-tile.tag-production {
-      border-color: var(--tag-production);
+    /* Tile themes (chosen per host in the add/edit form) */
+    .host-tile.theme-red {
+      border-color: var(--theme-red);
     }
 
-    .host-tile.tag-production:hover {
-      background: linear-gradient(135deg, rgba(229, 115, 115, 0.08) 0%, rgba(229, 115, 115, 0.15) 100%);
-      border-color: var(--tag-production);
-      box-shadow: 0 12px 30px rgba(229, 115, 115, 0.2);
+    .host-tile.theme-red:hover {
+      background: linear-gradient(135deg, rgba(var(--theme-red-rgb), 0.08) 0%, rgba(var(--theme-red-rgb), 0.15) 100%);
+      border-color: var(--theme-red);
+      box-shadow: 0 12px 30px rgba(var(--theme-red-rgb), 0.2);
     }
 
-    .host-tile.tag-staging {
-      border-color: var(--tag-staging);
+    .host-tile.theme-green {
+      border-color: var(--theme-green);
     }
 
-    .host-tile.tag-staging:hover {
-      background: linear-gradient(135deg, rgba(255, 183, 77, 0.08) 0%, rgba(255, 183, 77, 0.15) 100%);
-      border-color: var(--tag-staging);
-      box-shadow: 0 12px 30px rgba(255, 183, 77, 0.2);
+    .host-tile.theme-green:hover {
+      background: linear-gradient(135deg, rgba(var(--theme-green-rgb), 0.08) 0%, rgba(var(--theme-green-rgb), 0.15) 100%);
+      border-color: var(--theme-green);
+      box-shadow: 0 12px 30px rgba(var(--theme-green-rgb), 0.2);
     }
 
-    .host-tile.tag-development,
-    .host-tile.tag-dev {
-      border-color: var(--tag-development);
+    .host-tile.theme-orange {
+      border-color: var(--theme-orange);
     }
 
-    .host-tile.tag-development:hover,
-    .host-tile.tag-dev:hover {
-      background: linear-gradient(135deg, rgba(129, 199, 132, 0.08) 0%, rgba(129, 199, 132, 0.15) 100%);
-      border-color: var(--tag-development);
-      box-shadow: 0 12px 30px rgba(129, 199, 132, 0.2);
+    .host-tile.theme-orange:hover {
+      background: linear-gradient(135deg, rgba(var(--theme-orange-rgb), 0.08) 0%, rgba(var(--theme-orange-rgb), 0.15) 100%);
+      border-color: var(--theme-orange);
+      box-shadow: 0 12px 30px rgba(var(--theme-orange-rgb), 0.2);
     }
 
-    .host-tile.tag-testing,
-    .host-tile.tag-test {
-      border-color: var(--tag-testing);
+    .host-tile.theme-default {
+      border-color: var(--theme-default);
     }
 
-    .host-tile.tag-testing:hover,
-    .host-tile.tag-test:hover {
-      background: linear-gradient(135deg, rgba(186, 104, 200, 0.08) 0%, rgba(186, 104, 200, 0.15) 100%);
-      border-color: var(--tag-testing);
-      box-shadow: 0 12px 30px rgba(186, 104, 200, 0.2);
+    .host-tile.theme-default:hover {
+      background: linear-gradient(135deg, rgba(var(--theme-default-rgb), 0.08) 0%, rgba(var(--theme-default-rgb), 0.15) 100%);
+      border-color: var(--theme-default);
+      box-shadow: 0 12px 30px rgba(var(--theme-default-rgb), 0.2);
     }
 
-    .host-tile.tag-database,
-    .host-tile.tag-db {
-      border-color: var(--tag-database);
-    }
-
-    .host-tile.tag-database:hover,
-    .host-tile.tag-db:hover {
-      background: linear-gradient(135deg, rgba(77, 208, 225, 0.08) 0%, rgba(77, 208, 225, 0.15) 100%);
-      border-color: var(--tag-database);
-      box-shadow: 0 12px 30px rgba(77, 208, 225, 0.2);
-    }
-
-    .host-tile.tag-web {
-      border-color: var(--tag-web);
-    }
-
-    .host-tile.tag-web:hover {
-      background: linear-gradient(135deg, rgba(100, 181, 246, 0.08) 0%, rgba(100, 181, 246, 0.15) 100%);
-      border-color: var(--tag-web);
-      box-shadow: 0 12px 30px rgba(100, 181, 246, 0.2);
-    }
-
-    .host-tile.tag-api {
-      border-color: var(--tag-api);
-    }
-
-    .host-tile.tag-api:hover {
-      background: linear-gradient(135deg, rgba(149, 117, 205, 0.08) 0%, rgba(149, 117, 205, 0.15) 100%);
-      border-color: var(--tag-api);
-      box-shadow: 0 12px 30px rgba(149, 117, 205, 0.2);
-    }
-
-    .host-tile.tag-untagged {
-      border-color: var(--tag-default);
-    }
-
-    .host-tile.tag-untagged:hover {
-      background: linear-gradient(135deg, rgba(144, 164, 174, 0.08) 0%, rgba(144, 164, 174, 0.15) 100%);
-      border-color: var(--tag-default);
-      box-shadow: 0 12px 30px rgba(144, 164, 174, 0.2);
-    }
 
     /* Host Tile Content */
     /* Host Tile Content */
@@ -1228,6 +1150,63 @@
     .tag-option.selected {
       background: var(--primary-color);
       color: white;
+    }
+
+    /* Tile Theme Picker (dots in the add/edit form) */
+    .theme-dots {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .theme-dot {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 3px solid transparent;
+      background: none;
+      padding: 2px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+
+    .theme-dot span {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      display: block;
+    }
+
+    .theme-dot:hover {
+      transform: scale(1.1);
+    }
+
+    .theme-dot.selected {
+      border-color: var(--text-primary);
+    }
+
+    .theme-dot[data-theme="red"] span {
+      background: var(--theme-red);
+    }
+
+    .theme-dot[data-theme="green"] span {
+      background: var(--theme-green);
+    }
+
+    .theme-dot[data-theme="orange"] span {
+      background: var(--theme-orange);
+    }
+
+    .theme-dot[data-theme="default"] span {
+      background: var(--theme-default);
+    }
+
+    /* Ungrouped hosts render as-is, without the group card chrome */
+    .ungrouped-hosts {
+      margin-bottom: var(--spacing-xl);
     }
 
     /* iTerm2 Profile Picker */
@@ -1814,6 +1793,34 @@
             <input type="hidden" id="hostTags">
           </div>
 
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div class="form-group">
+              <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Group <span style="color: var(--text-muted); font-weight: 400;">(optional)</span></label>
+              <div class="profile-select" id="groupSelect">
+                <input type="text" id="hostGroup" class="search-input" style="width: 100%;"
+                       placeholder="Search or type a new group..." autocomplete="off">
+                <button type="button" id="clearGroupBtn" class="profile-icon-btn profile-refresh-btn" title="Clear group">
+                  <i class="fas fa-times"></i>
+                </button>
+                <button type="button" id="groupToggleBtn" class="profile-icon-btn profile-toggle-btn" title="Show all groups">
+                  <i class="fas fa-chevron-down"></i>
+                </button>
+                <div id="groupDropdown" class="tag-dropdown"></div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Theme</label>
+              <div class="theme-dots" id="themeDots">
+                <button type="button" class="theme-dot" data-theme="red" title="Red"><span></span></button>
+                <button type="button" class="theme-dot" data-theme="green" title="Green"><span></span></button>
+                <button type="button" class="theme-dot" data-theme="orange" title="Orange"><span></span></button>
+                <button type="button" class="theme-dot selected" data-theme="default" title="Default"><span></span></button>
+              </div>
+              <input type="hidden" id="hostTheme" value="default">
+            </div>
+          </div>
+
           <div class="form-group" style="margin-bottom: 1rem;">
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Display Name</label>
             <input type="text" id="hostName" class="search-input" style="width: 100%;" placeholder="Production DB" required>
@@ -2006,6 +2013,9 @@
         // iTerm2 profiles discovered at runtime (see loadProfiles)
         this.availableProfiles = [];
         this.profileHighlightIndex = -1;
+        // Host groups currently in use (see loadGroups)
+        this.availableGroups = [];
+        this.groupHighlightIndex = -1;
         this.currentView = localStorage.getItem('sshManagerView') || 'grid';
         this.isLoading = false;
 
@@ -2073,6 +2083,17 @@
           sshOptionsBody: document.getElementById('sshOptionsBody'),
           sshOptionsCount: document.getElementById('sshOptionsCount'),
 
+          // Group Picker
+          groupSelect: document.getElementById('groupSelect'),
+          hostGroup: document.getElementById('hostGroup'),
+          groupDropdown: document.getElementById('groupDropdown'),
+          groupToggleBtn: document.getElementById('groupToggleBtn'),
+          clearGroupBtn: document.getElementById('clearGroupBtn'),
+
+          // Tile Theme Picker
+          themeDots: document.getElementById('themeDots'),
+          hostTheme: document.getElementById('hostTheme'),
+
           // iTerm2 Profile Picker
           profileSelect: document.getElementById('profileSelect'),
           itermProfile: document.getElementById('itermProfile'),
@@ -2114,6 +2135,7 @@
         console.log('Initializing SSH Session Manager...');
         await this.loadHosts();
         await this.loadTags();
+        await this.loadGroups();
         this.loadProfiles();
         this.setView(this.currentView);
       }
@@ -2202,6 +2224,10 @@
 
         // iTerm2 Profile Picker Events
         this.setupProfileInput();
+
+        // Group + Theme Picker Events
+        this.setupGroupInput();
+        this.setupThemeDots();
 
         // Import/Export Events
         if (this.elements.importBtn) {
@@ -2350,6 +2376,197 @@
         });
 
         dropdown.style.display = 'block';
+      }
+
+      // ---- group picker ----------------------------------------------------
+
+      async loadGroups() {
+        try {
+          const response = await fetch('/api/groups');
+          const data = await response.json();
+
+          if (data.success && Array.isArray(data.groups)) {
+            this.availableGroups = data.groups;
+            return this.availableGroups;
+          }
+          throw new Error(data.detail || 'Failed to load groups');
+        } catch (error) {
+          console.error('Error loading groups:', error);
+          // Fall back to the groups already visible in the loaded hosts
+          const names = new Set(
+            this.hosts.map(h => (h.group || '').trim()).filter(Boolean)
+          );
+          this.availableGroups = Array.from(names).sort((a, b) => a.localeCompare(b));
+          return this.availableGroups;
+        }
+      }
+
+      setupGroupInput() {
+        const input = this.elements.hostGroup;
+        const dropdown = this.elements.groupDropdown;
+        if (!input || !dropdown) return;
+
+        input.addEventListener('input', () => this.showGroupDropdown(input.value));
+        input.addEventListener('focus', () => this.showGroupDropdown(''));
+
+        input.addEventListener('keydown', (e) => {
+          const options = dropdown.querySelectorAll('.profile-option');
+
+          if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (dropdown.style.display !== 'block' || options.length === 0) {
+              this.showGroupDropdown('');
+              return;
+            }
+            const delta = e.key === 'ArrowDown' ? 1 : -1;
+            const count = options.length;
+            this.groupHighlightIndex = (this.groupHighlightIndex + delta + count) % count;
+            this.highlightGroupOption();
+          } else if (e.key === 'Enter') {
+            // Never submit the form from the group box - pick/keep the value instead
+            e.preventDefault();
+            if (dropdown.style.display === 'block' && this.groupHighlightIndex >= 0 && options.length) {
+              this.selectGroup(options[this.groupHighlightIndex].dataset.group);
+            } else {
+              this.hideGroupDropdown();
+            }
+          } else if (e.key === 'Escape') {
+            this.hideGroupDropdown();
+          }
+        });
+
+        if (this.elements.groupToggleBtn) {
+          this.elements.groupToggleBtn.addEventListener('click', () => {
+            if (dropdown.style.display === 'block') {
+              this.hideGroupDropdown();
+            } else {
+              this.showGroupDropdown('');
+              input.focus();
+            }
+          });
+        }
+
+        if (this.elements.clearGroupBtn) {
+          this.elements.clearGroupBtn.addEventListener('click', () => {
+            input.value = '';
+            this.hideGroupDropdown();
+            input.focus();
+          });
+        }
+
+        document.addEventListener('click', (e) => {
+          if (!this.elements.groupSelect.contains(e.target)) {
+            this.hideGroupDropdown();
+          }
+        });
+      }
+
+      showGroupDropdown(searchTerm) {
+        const dropdown = this.elements.groupDropdown;
+        const term = (searchTerm || '').trim();
+        const lowerTerm = term.toLowerCase();
+        const selected = (this.elements.hostGroup.value || '').trim().toLowerCase();
+
+        let groups = this.availableGroups.slice();
+        if (lowerTerm) {
+          groups = groups.filter(name => name.toLowerCase().includes(lowerTerm));
+        }
+
+        // Offer the typed text as a brand new group
+        const isNewGroup = term && !this.availableGroups.some(
+          name => name.toLowerCase() === lowerTerm
+        );
+
+        dropdown.innerHTML = '';
+        this.groupHighlightIndex = -1;
+
+        if (groups.length === 0 && !isNewGroup) {
+          const empty = document.createElement('div');
+          empty.className = 'profile-empty';
+          empty.textContent = 'No groups yet - type a name to create one';
+          dropdown.appendChild(empty);
+          dropdown.style.display = 'block';
+          return;
+        }
+
+        const entries = groups.map(name => ({ name, isNew: false }));
+        if (isNewGroup) {
+          entries.push({ name: term, isNew: true });
+        }
+
+        entries.forEach((entry, index) => {
+          const option = document.createElement('div');
+          option.className = 'tag-option profile-option';
+          option.dataset.group = entry.name;
+
+          const name = document.createElement('span');
+          name.className = 'profile-option-name';
+          name.textContent = entry.name;
+          option.appendChild(name);
+
+          if (entry.isNew) {
+            const badge = document.createElement('span');
+            badge.className = 'profile-source source-connectify';
+            badge.textContent = 'New';
+            option.appendChild(badge);
+          }
+
+          if (!entry.isNew && entry.name.toLowerCase() === selected) {
+            option.classList.add('selected');
+            this.groupHighlightIndex = index;
+          }
+
+          option.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            this.selectGroup(entry.name);
+          });
+
+          dropdown.appendChild(option);
+        });
+
+        dropdown.style.display = 'block';
+        this.highlightGroupOption();
+      }
+
+      highlightGroupOption() {
+        const options = this.elements.groupDropdown.querySelectorAll('.profile-option');
+        options.forEach((option, index) => {
+          option.classList.toggle('active', index === this.groupHighlightIndex);
+        });
+        if (this.groupHighlightIndex >= 0 && options[this.groupHighlightIndex]) {
+          options[this.groupHighlightIndex].scrollIntoView({ block: 'nearest' });
+        }
+      }
+
+      hideGroupDropdown() {
+        this.elements.groupDropdown.style.display = 'none';
+        this.groupHighlightIndex = -1;
+      }
+
+      selectGroup(name) {
+        this.elements.hostGroup.value = name || '';
+        this.hideGroupDropdown();
+      }
+
+      // ---- tile theme picker -----------------------------------------------
+
+      setupThemeDots() {
+        const container = this.elements.themeDots;
+        if (!container) return;
+
+        container.querySelectorAll('.theme-dot').forEach(dot => {
+          dot.addEventListener('click', () => this.setSelectedTheme(dot.dataset.theme));
+        });
+      }
+
+      setSelectedTheme(theme) {
+        const themes = ['red', 'green', 'orange', 'default'];
+        const selected = themes.includes(theme) ? theme : 'default';
+
+        this.elements.hostTheme.value = selected;
+        this.elements.themeDots.querySelectorAll('.theme-dot').forEach(dot => {
+          dot.classList.toggle('selected', dot.dataset.theme === selected);
+        });
       }
 
       // ---- iTerm2 profile picker -------------------------------------------
@@ -2631,9 +2848,9 @@
 
           const response = await (await fetch('/api/hosts')).json();
           const { data } = response;
-          const { tag_groups, untagged_hosts } = data;
+          const { groups, ungrouped_hosts } = data;
 
-          this.hosts = [...Object.values(tag_groups).flat(), ...untagged_hosts];
+          this.hosts = [...Object.values(groups || {}).flat(), ...(ungrouped_hosts || [])];
           this.filteredHosts = [...this.hosts];
           this.updateHostCount();
           console.log(`Loaded ${this.hosts.length} hosts`);
@@ -2686,6 +2903,7 @@
               host.name,
               host.hostname,
               host.username,
+              host.group || '',
               ...(host.tags || [])
             ].join(' ').toLowerCase();
 
@@ -2799,8 +3017,8 @@
         this.elements.emptyState.style.display = 'none';
         this.elements.hostsContainer.style.display = 'block';
 
-        // Group hosts by tags
-        const grouped = this.groupHostsByTags(this.filteredHosts);
+        // Group hosts by their configured group
+        const grouped = this.groupHostsByGroup(this.filteredHosts);
 
         // Generate HTML
         const html = this.generateHostsHTML(grouped);
@@ -2810,61 +3028,56 @@
         this.bindHostClickEvents();
       }
 
-      groupHostsByTags(hosts) {
-        const tagGroups = {};
-        const untaggedHosts = [];
+      groupHostsByGroup(hosts) {
+        const groups = {};
+        const ungroupedHosts = [];
 
         hosts.forEach(host => {
-          const hostTags = host.tags || [];
-          if (hostTags.length === 0) {
-            untaggedHosts.push(host);
+          const group = (host.group || '').trim();
+          if (!group) {
+            ungroupedHosts.push(host);
           } else {
-            const primaryTag = hostTags[0];
-            if (!tagGroups[primaryTag]) {
-              tagGroups[primaryTag] = [];
+            if (!groups[group]) {
+              groups[group] = [];
             }
-            tagGroups[primaryTag].push(host);
+            groups[group].push(host);
           }
         });
 
-        return { tagGroups, untaggedHosts };
+        return { groups, ungroupedHosts };
       }
 
       generateHostsHTML(grouped) {
         let html = '';
+        const layoutClass = this.currentView === 'grid' ? 'hosts-grid' : 'hosts-list';
 
-        // Add tagged groups
-        const sortedTags = Object.keys(grouped.tagGroups).sort();
-        for (const tag of sortedTags) {
-          const hosts = grouped.tagGroups[tag];
-          // For group headers, pass the single tag as array to maintain consistency
-          const tagClass = this.getTagClass([tag]);
+        // Named groups first, alphabetically
+        const sortedGroups = Object.keys(grouped.groups)
+          .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+        for (const group of sortedGroups) {
+          const hosts = grouped.groups[group];
 
           html += `
                         <div class="host-group">
-                            <div class="group-header ${tagClass}">
+                            <div class="group-header">
                                 <i class="fas fa-folder"></i>
-                                ${tag.toUpperCase()}
+                                ${this.escapeHTML(group)}
                                 <span class="host-count-badge">${hosts.length}</span>
                             </div>
-                            <div class="${this.currentView === 'grid' ? 'hosts-grid' : 'hosts-list'}">
-                                ${hosts.map(host => this.generateHostTileHTML(host, tag)).join('')}
+                            <div class="${layoutClass}">
+                                ${hosts.map(host => this.generateHostTileHTML(host)).join('')}
                             </div>
                         </div>
                     `;
         }
 
-        // Add untagged hosts
-        if (grouped.untaggedHosts.length > 0) {
+        // Ungrouped hosts are rendered as-is, with no group heading
+        if (grouped.ungroupedHosts.length > 0) {
           html += `
-                        <div class="host-group">
-                            <div class="group-header tag-untagged">
-                                <i class="fas fa-file"></i>
-                                UNTAGGED
-                                <span class="host-count-badge">${grouped.untaggedHosts.length}</span>
-                            </div>
-                            <div class="${this.currentView === 'grid' ? 'hosts-grid' : 'hosts-list'}">
-                                ${grouped.untaggedHosts.map(host => this.generateHostTileHTML(host, 'untagged')).join('')}
+                        <div class="ungrouped-hosts">
+                            <div class="${layoutClass}">
+                                ${grouped.ungroupedHosts.map(host => this.generateHostTileHTML(host)).join('')}
                             </div>
                         </div>
                     `;
@@ -2873,18 +3086,24 @@
         return html;
       }
 
-      generateHostTileHTML(host, primaryTag) {
+      escapeHTML(value) {
+        const div = document.createElement('div');
+        div.textContent = value == null ? '' : String(value);
+        return div.innerHTML;
+      }
+
+      generateHostTileHTML(host) {
         const authText = host.auth_method === 'key' ? '🔑' : '🌟';
         const authTitle = host.auth_method === 'key' ? 'SSH Key Based' : 'Password Based Auth';
-        // Pass all host tags to getTagClass and getTagColor instead of just primary tag
+        // Tile colour comes from the theme picked on the host, not from its tags
         const hostTags = host.tags || [];
-        const tagClass = this.getTagClass(hostTags);
+        const themeClass = this.getThemeClass(host);
         const tagsText = hostTags.length > 0 ? hostTags.join(', ') : 'NO TAGS';
         const viewClass = this.currentView === 'list' ? 'list-view' : '';
-        const tagColor = this.getTagColor(hostTags);
+        const tagColor = this.getThemeColor(host);
 
         return `
-                    <div class="host-tile ${tagClass} ${viewClass}" data-host-name="${host.name}" id="tile-${host.name}">
+                    <div class="host-tile ${themeClass} ${viewClass}" data-host-name="${host.name}" id="tile-${host.name}">
                         <div class="tile-content">
                             <div class="tile-main-info">
                                 <div class="host-name-row">
@@ -2933,88 +3152,21 @@
                 `;
       }
 
-      getTagClass(tags) {
-        // If tags is a string (single tag), convert to array
-        const tagArray = Array.isArray(tags) ? tags : [tags];
-        // Filter out NON-PROD tags and convert to lowercase
-        const filteredTagsLower = tagArray
-          .filter(tag => tag.toUpperCase() !== 'NON-PROD')
-          .map(tag => tag.toLowerCase());
-
-        // Check for production tags (highest priority)
-        if (filteredTagsLower.some(tag =>
-          tag === 'prod' ||
-          tag === 'production'
-        )) {
-          return 'tag-production';
-        }
-
-        // Check for staging tags
-        if (filteredTagsLower.some(tag =>
-          tag === 'stage' ||
-          tag === 'staging' ||
-          tag === 'uat'
-        )) {
-          return 'tag-staging';
-        }
-
-        // Check for development tags
-        if (filteredTagsLower.some(tag =>
-          tag === 'dev' ||
-          tag === 'development'
-        )) {
-          return 'tag-development';
-        }
-
-        // Check for untagged
-        if (tagArray.length === 0 || tagArray[0] === 'untagged') {
-          return 'tag-untagged';
-        }
-
-        // Everything else gets default styling
-        return 'tag-default';
+      getThemeClass(host) {
+        const themes = ['red', 'green', 'orange', 'default'];
+        const theme = (host.theme || 'default').toLowerCase();
+        return `theme-${themes.includes(theme) ? theme : 'default'}`;
       }
 
-      getTagColor(tags) {
-        // If tags is a string (single tag), convert to array
-        const tagArray = Array.isArray(tags) ? tags : [tags];
-        // Filter out NON-PROD tags and convert to lowercase
-        const filteredTagsLower = tagArray
-          .filter(tag => tag.toUpperCase() !== 'NON-PROD')
-          .map(tag => tag.toLowerCase());
-
-        // Check for production tags (highest priority)
-        if (filteredTagsLower.some(tag =>
-          tag === 'prod' ||
-          tag === 'production'
-        )) {
-          return '#dc3545'; // red
-        }
-
-        // Check for staging tags
-        if (filteredTagsLower.some(tag =>
-          tag === 'stage' ||
-          tag === 'staging' ||
-          tag === 'uat'
-        )) {
-          return '#fd7e14'; // orange
-        }
-
-        // Check for development tags
-        if (filteredTagsLower.some(tag =>
-          tag === 'dev' ||
-          tag === 'development'
-        )) {
-          return '#198754'; // green
-        }
-
-        // Check for untagged
-        if (tagArray.length === 0 || tagArray[0] === 'untagged') {
-          return '#6c757d'; // gray
-        }
-
-        // Everything else gets default gray
-        return '#6c757d'; // default gray
+      getThemeColor(host) {
+        const colors = {
+          red: '#e57373',
+          green: '#66bb6a',
+          orange: '#ffa726',
+          default: '#78909c'
+        };
+        const theme = (host.theme || 'default').toLowerCase();
+        return colors[theme] || colors.default;
       }
 
       bindHostClickEvents() {
@@ -3138,13 +3290,17 @@
         const form = this.elements.hostForm;
 
         // Pull the current iTerm2 profile list (profiles can be added/removed
-        // in iTerm2 while this page is open)
+        // in iTerm2 while this page is open) and the groups in use
         this.hideProfileDropdown();
+        this.hideGroupDropdown();
         this.loadProfiles();
+        this.loadGroups();
 
         // Reset form
         form.reset();
         this.elements.originalName.value = '';
+        this.elements.hostGroup.value = '';
+        this.setSelectedTheme('default');
 
         if (hostName) {
           // Edit mode
@@ -3160,8 +3316,8 @@
             document.getElementById('authMethod').value = host.auth_method;
             document.getElementById('sshKeyPath').value = host.ssh_key_path || '';
             document.getElementById('itermProfile').value = host.iterm_profile || 'Default';
-            document.getElementById('sshKeyPath').value = host.ssh_key_path || '';
-            document.getElementById('itermProfile').value = host.iterm_profile || 'Default';
+            this.elements.hostGroup.value = host.group || '';
+            this.setSelectedTheme(host.theme || 'default');
 
             // Initialize tags
             this.currentModalTags = [...(host.tags || [])];
@@ -3281,6 +3437,8 @@
           auth_method: document.getElementById('authMethod').value,
           ssh_key_path: document.getElementById('sshKeyPath').value || null,
           iterm_profile: document.getElementById('itermProfile').value,
+          group: this.elements.hostGroup.value.trim(),
+          theme: this.elements.hostTheme.value || 'default',
           tags: this.currentModalTags,
           ssh_options: this.getSelectedSshOptions(),
           password: document.getElementById('hostPassword').value || null
@@ -3354,6 +3512,7 @@
         console.log('Refreshing hosts...');
         await this.loadHosts();
         await this.loadTags();
+        await this.loadGroups();
         this.renderHosts();
         this.showToast('Hosts refreshed successfully', 'success');
       }

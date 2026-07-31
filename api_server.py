@@ -16,11 +16,17 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 import uvicorn
 
 import iterm_profiles
-from main import SSHManager
+from main import (
+    DEFAULT_HOST_THEME,
+    SSHManager,
+    group_hosts,
+    normalize_group,
+    normalize_theme,
+)
 
 
 class HostModel(BaseModel):
@@ -31,11 +37,26 @@ class HostModel(BaseModel):
     auth_method: str = "password"
     ssh_key_path: Optional[str] = None
     iterm_profile: str = "Default"
+    # Optional grouping label used to organize the host list. Empty means the
+    # host is rendered ungrouped.
+    group: str = ""
+    # Tile theme in the web UI: default (neutral), red, green or orange.
+    theme: str = DEFAULT_HOST_THEME
     tags: List[str] = []
     # SSH "-o" options (e.g. "PreferredAuthentications=password"). None means
     # "not configured" so the backend applies auth-method defaults; an empty
     # list means "no extra options".
     ssh_options: Optional[List[str]] = None
+
+    @field_validator('group')
+    @classmethod
+    def _clean_group(cls, value):
+        return normalize_group(value)
+
+    @field_validator('theme')
+    @classmethod
+    def _clean_theme(cls, value):
+        return normalize_theme(value)
 
 
 class HostCreate(HostModel):
@@ -79,6 +100,12 @@ class APISSHManager:
             hosts = self.all_hosts
         return hosts
 
+    def get_unique_groups(self):
+        """Get all group names currently in use, for the group picker"""
+        groups = {normalize_group(host.get('group')) for host in self.all_hosts}
+        groups.discard('')
+        return sorted(groups, key=str.lower)
+
     def get_unique_tags(self):
         """Get all unique tags from hosts"""
         tags = set()
@@ -96,27 +123,18 @@ class APISSHManager:
         ]
         return iterm_profiles.list_available_profiles(extra_names=host_profiles)
 
-    def get_hosts_by_tag_groups(self, search_term="", tag_filter=""):
-        """Get hosts organized by tag groups"""
+    def get_hosts_by_groups(self, search_term="", tag_filter=""):
+        """Get hosts organized by their configured group.
+
+        Hosts without a group come back separately so the UI can render them
+        as-is instead of inventing a bucket for them.
+        """
         hosts = self.get_hosts_data(search_term, tag_filter)
-
-        # Group hosts by tags
-        tag_groups = {}
-        untagged_hosts = []
-
-        for host in hosts:
-            host_tags = host.get('tags', [])
-            if not host_tags:
-                untagged_hosts.append(host)
-            else:
-                primary_tag = host_tags[0]
-                if primary_tag not in tag_groups:
-                    tag_groups[primary_tag] = []
-                tag_groups[primary_tag].append(host)
+        groups, ungrouped_hosts = group_hosts(hosts)
 
         return {
-            "tag_groups": tag_groups,
-            "untagged_hosts": untagged_hosts,
+            "groups": groups,
+            "ungrouped_hosts": ungrouped_hosts,
             "total_hosts": len(hosts)
         }
 
@@ -368,7 +386,7 @@ async def get_hosts(search_term: str = "", tag_filter: str = ""):
     """Get all hosts with optional filtering"""
     try:
         api_manager.refresh_hosts_data()
-        result = api_manager.get_hosts_by_tag_groups(search_term, tag_filter)
+        result = api_manager.get_hosts_by_groups(search_term, tag_filter)
         return {
             "success": True,
             "data": result
@@ -386,6 +404,19 @@ async def get_tags():
         return {
             "success": True,
             "tags": tags
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/groups")
+async def get_groups():
+    """Get all group names in use, so the form can offer them"""
+    try:
+        api_manager.refresh_hosts_data()
+        return {
+            "success": True,
+            "groups": api_manager.get_unique_groups()
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -576,7 +607,9 @@ async def export_template():
                 "auth_method": "password",
                 "password": "your_password_here",
                 "ssh_key_path": None,
-                "iterm_profile": "Default",
+                "iterm_profile": "connectify-PROD",
+                "group": "Production",
+                "theme": "red",
                 "tags": ["production", "web"],
                 "ssh_options": ["PreferredAuthentications=password", "PubkeyAuthentication=no"]
             },
@@ -588,12 +621,14 @@ async def export_template():
                 "auth_method": "key",
                 "password": None,
                 "ssh_key_path": "~/.ssh/id_rsa",
-                "iterm_profile": "Development",
+                "iterm_profile": "connectify-NONPROD",
+                "group": "Development",
+                "theme": "green",
                 "tags": ["development", "testing"],
                 "ssh_options": ["PreferredAuthentications=publickey", "PasswordAuthentication=no"]
             }
         ],
-        "_note": "For password authentication hosts, provide the password in the 'password' field. Passwords will be securely stored in keychain. For key-based auth, set password to null and provide ssh_key_path."
+        "_note": "group is optional (hosts without one are listed ungrouped) and theme is one of default, red, green, orange. For password authentication hosts, provide the password in the 'password' field. Passwords will be securely stored in keychain. For key-based auth, set password to null and provide ssh_key_path."
     }
     
     return JSONResponse(
