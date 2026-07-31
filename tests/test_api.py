@@ -79,6 +79,22 @@ def test_create_host(mock_ssh_manager):
     assert stored['credential'] == 'prod-admin'
     assert 'password' not in stored
     mock_ssh_manager.store_password.assert_not_called()
+    # Not asked for, so ssh stays quiet
+    assert stored['ssh_verbosity'] == 0
+
+
+@pytest.mark.parametrize("sent,stored", [(0, 0), (1, 1), (3, 3), (7, 3), (-2, 0), ("2", 2)])
+def test_verbosity_is_clamped_to_what_ssh_understands(mock_ssh_manager, sent, stored):
+    mock_ssh_manager.add_host_programmatic.return_value = True
+    mock_ssh_manager.get_host.return_value = {"name": "Verbose"}
+
+    response = client.post("/api/hosts", json={
+        "name": "Verbose", "hostname": "h", "username": "u", "credential": "c",
+        "ssh_verbosity": sent,
+    })
+
+    assert response.status_code == 200, response.text
+    assert mock_ssh_manager.add_host_programmatic.call_args[0][0]['ssh_verbosity'] == stored
 
 def test_update_host(mock_ssh_manager):
     update_data = {

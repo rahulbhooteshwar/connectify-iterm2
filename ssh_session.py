@@ -42,6 +42,13 @@ DEFAULT_TIMEOUT = 180
 # Belt-and-braces removal of a session directory the launcher didn't clean up
 RUNTIME_SWEEP_AGE = 6 * 60 * 60
 
+# ssh understands -v, -vv and -vvv; past that it makes no difference
+MAX_VERBOSITY = 3
+
+# How long the tab's spinner keeps animating before it gives up waiting for
+# the connection - the session is still running, we just stop drawing
+SPINNER_GIVE_UP_SECONDS = 120
+
 
 def runtime_root():
     """Private directory for session scratch files.
@@ -183,10 +190,25 @@ def effective_username(host, credential=None):
             or str((host or {}).get('username') or '').strip())
 
 
-def build_ssh_argv(host, credential=None, ssh_options=None):
+def normalize_verbosity(value):
+    """ssh takes -v, -vv or -vvv; anything else means "quiet"."""
+    try:
+        level = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, min(MAX_VERBOSITY, level))
+
+
+def build_ssh_argv(host, credential=None, ssh_options=None, verbosity=0):
     """The ssh command line for a host - never contains a secret."""
     credential = credential or {}
     argv = ['ssh']
+
+    # -v is a flag rather than an "-o" option, so it can't come from the
+    # host's ssh_options list and gets its own setting
+    verbosity = normalize_verbosity(verbosity)
+    if verbosity:
+        argv.append('-' + 'v' * verbosity)
 
     port = host.get('port', 22)
     if port and int(port) != 22:
@@ -231,8 +253,59 @@ def secret_for(credential):
     return ''
 
 
+def _progress_script(host, credential, directory, verbosity):
+    """The banner and spinner the tab shows while ssh authenticates.
+
+    Authentication happens before the remote end paints anything, so without
+    this the tab just sits blank - for several seconds on a slow link, longer
+    behind a jump host. The spinner stops the moment ssh reports the session
+    is up (see ``connected_marker``), so it never fights the remote prompt for
+    the line.
+
+    Nothing here is drawn when the output is not a terminal, or when verbose
+    logging is on and the debug stream needs the screen to itself.
+    """
+    credential = credential or {}
+    login = effective_username(host, credential)
+    target = f"{login}@{host['hostname']}" if login else str(host['hostname'])
+    port = host.get('port', 22)
+    if port and int(port) != 22:
+        target += f":{port}"
+
+    label = str(host.get('name') or target)
+    auth = {'password': 'password', 'key': 'SSH key'}.get(credential.get('type'), 'no credential')
+
+    return (
+        f"marker={_shell_quote(Path(directory) / 'connected')}\n"
+        # Colours: 111 is the app's periwinkle, 245 a muted grey
+        f"printf '\\033[38;5;111m\\342\\227\\211\\033[0m %s \\033[2m%s\\033[0m\\n' "
+        f"{_shell_quote(label)} {_shell_quote(f'{target} - {auth}')}\n"
+        + ("printf '\\033[2m  verbose logging is on (-%s)\\033[0m\\n' "
+           f"{_shell_quote('v' * verbosity)}\n" if verbosity else "")
+        + "spin() {\n"
+        "  set -- '\\342\\240\\213' '\\342\\240\\231' '\\342\\240\\271' '\\342\\240\\270' "
+        "'\\342\\240\\274' '\\342\\240\\264' '\\342\\240\\246' '\\342\\240\\247' "
+        "'\\342\\240\\207' '\\342\\240\\217'\n"
+        "  n=0\n"
+        # Polled five times per frame: the sooner the line is given back after
+        # the session comes up, the smaller the chance of clearing a line the
+        # remote end has started writing on
+        f"  while [ ! -e \"$marker\" ] && [ $n -lt {SPINNER_GIVE_UP_SECONDS * 50} ]; do\n"
+        "    if [ $((n % 5)) -eq 0 ]; then\n"
+        "      frame=$1; shift; set -- \"$@\" \"$frame\"\n"
+        "      printf '\\r\\033[2K\\033[38;5;111m'\"$frame\"'\\033[0m \\033[2mconnecting"
+        "\\342\\200\\246 %ss\\033[0m' $((n / 50))\n"
+        "    fi\n"
+        "    n=$((n + 1))\n"
+        "    sleep 0.02\n"
+        "  done\n"
+        "  printf '\\r\\033[2K'\n"
+        "}\n"
+    )
+
+
 def prepare_session(host, credential=None, ssh_options=None, keep_shell=True,
-                    timeout=DEFAULT_TIMEOUT):
+                    timeout=DEFAULT_TIMEOUT, verbosity=0):
     """Create the scratch directory, scripts and secret channel for a session.
 
     Returns an :class:`SSHSession`. The caller launches ``session.command`` in
@@ -245,7 +318,19 @@ def prepare_session(host, credential=None, ssh_options=None, keep_shell=True,
     directory = root / secrets.token_hex(8)
     directory.mkdir(mode=0o700)
 
-    argv = build_ssh_argv(host, credential, ssh_options)
+    verbosity = normalize_verbosity(verbosity)
+
+    # ssh runs LocalCommand once the session is actually up, which is exactly
+    # when the spinner should stop. The marker lives in the session's own
+    # private directory and goes away with it.
+    connected_marker = directory / 'connected'
+    progress_options = [
+        'PermitLocalCommand=yes',
+        f"LocalCommand=/usr/bin/touch {_shell_quote(connected_marker)}",
+    ]
+
+    argv = build_ssh_argv(host, credential,
+                          list(ssh_options or []) + progress_options, verbosity)
     ssh_command = ' '.join(_shell_quote(part) for part in argv)
 
     secret = secret_for(credential)
@@ -292,13 +377,36 @@ def prepare_session(host, credential=None, ssh_options=None, keep_shell=True,
         'exec "${SHELL:-/bin/sh}" -l\n'
     ) if keep_shell else 'exit "$status"\n'
 
+    # The spinner would only get in the way of a debug stream, and there is
+    # nothing to animate when the output is not a terminal
+    spinner = (
+        'if [ -t 1 ]; then\n'
+        '  spin &\n'
+        '  spinner_pid=$!\n'
+        'fi\n'
+    ) if not verbosity else ''
+
+    # A spinner that stopped on its own already cleared its line. Clearing
+    # again here would wipe whatever the session left on the current line, so
+    # only do it when the connection never came up.
+    stop_spinner = (
+        'if [ -n "$spinner_pid" ]; then\n'
+        '  kill "$spinner_pid" 2>/dev/null\n'
+        '  wait "$spinner_pid" 2>/dev/null\n'
+        '  [ -e "$marker" ] || printf "\\r\\033[2K"\n'
+        'fi\n'
+    ) if not verbosity else ''
+
     launcher_path = directory / 'session.sh'
     _write_script(launcher_path, (
         "#!/bin/sh\n"
         "# Connectify session launcher - contains no secrets.\n"
+        f"{_progress_script(host, credential, directory, verbosity)}"
+        f"{spinner}"
         f"{askpass_setup}"
         f"{ssh_command}\n"
         "status=$?\n"
+        f"{stop_spinner}"
         f"rm -rf {_shell_quote(directory)}\n"
         f"{tail}"
     ))

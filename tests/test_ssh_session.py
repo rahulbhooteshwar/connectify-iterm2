@@ -85,6 +85,18 @@ def test_the_credentials_username_is_what_ssh_is_given():
     assert argv[-1] == "ubuntu@web.example.com"
 
 
+@pytest.mark.parametrize("level,flag", [(0, None), (1, '-v'), (2, '-vv'), (3, '-vvv'),
+                                        (9, '-vvv'), (-1, None), ("2", '-vv'), (None, None)])
+def test_verbosity_becomes_an_ssh_flag(level, flag):
+    """-v is a flag, so it cannot come from the host's -o options list."""
+    argv = ssh_session.build_ssh_argv(HOST, PASSWORD_CREDENTIAL, verbosity=level)
+
+    if flag is None:
+        assert not any(a.startswith('-v') for a in argv)
+    else:
+        assert argv[1] == flag, argv
+
+
 def test_no_username_anywhere_leaves_ssh_to_its_own_default():
     argv = ssh_session.build_ssh_argv({**HOST, "username": ""}, PASSWORD_CREDENTIAL)
     assert argv[-1] == "web.example.com"
@@ -171,6 +183,78 @@ def test_running_the_launcher_hands_the_environment_to_ssh_only(runtime, tmp_pat
     lines = seen.read_text().split()
     assert lines[0] == f"ssh:{session.directory / 'askpass.sh'}"
     assert lines[1] == "shell:unset"
+
+
+# --- what the tab shows while ssh authenticates -------------------------------
+
+def test_the_tab_gets_a_banner_and_a_spinner(runtime):
+    """Auth happens before the remote end paints, so the tab must say so."""
+    session = ssh_session.prepare_session(HOST, PASSWORD_CREDENTIAL)
+    try:
+        launcher = session.launcher.read_text()
+
+        assert 'prod-web' in launcher, "the host is named in the banner"
+        assert 'admin@web.example.com:2222' in launcher
+        assert 'connecting' in launcher
+        assert 'spin &' in launcher
+
+        # Only when the output is a terminal - nothing to animate otherwise
+        assert 'if [ -t 1 ]; then' in launcher
+
+        # ssh itself reports the session is up, which is when the spinner stops
+        assert 'PermitLocalCommand=yes' in launcher
+        assert str(session.directory / 'connected') in launcher
+    finally:
+        session.cleanup()
+
+
+def test_the_spinner_stands_aside_for_verbose_logs(runtime):
+    session = ssh_session.prepare_session(HOST, PASSWORD_CREDENTIAL, verbosity=3)
+    try:
+        launcher = session.launcher.read_text()
+
+        assert "'-vvv'" in launcher
+        assert 'spin &' not in launcher, "a spinner would fight the debug stream"
+        assert 'verbose logging is on' in launcher
+    finally:
+        session.cleanup()
+
+
+def test_the_spinner_stops_when_the_session_comes_up(runtime, tmp_path):
+    """Run the launcher for real against a stand-in ssh, on a pty."""
+    import pty
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake_ssh = bin_dir / "ssh"
+    fake_ssh.write_text(
+        '#!/bin/sh\n'
+        'for a in "$@"; do case "$a" in LocalCommand=*) cmd=${a#LocalCommand=} ;; esac; done\n'
+        'sleep 0.6\n'
+        'eval "$cmd"\n'          # ssh runs this once the session is up
+        'sleep 0.15\n'           # the remote end is a network away
+        'echo REMOTE-PROMPT\n'
+    )
+    fake_ssh.chmod(0o755)
+
+    session = ssh_session.prepare_session(HOST, PASSWORD_CREDENTIAL, keep_shell=False)
+    os.environ['PATH'] = f"{bin_dir}{os.pathsep}{os.environ['PATH']}"
+    try:
+        chunks = []
+        pty.spawn([str(session.launcher)], lambda fd: chunks.append(os.read(fd, 1024)) or chunks[-1])
+        output = b''.join(chunks).decode('utf-8', 'replace')
+    finally:
+        os.environ['PATH'] = os.environ['PATH'].split(os.pathsep, 1)[1]
+        session.cleanup()
+
+    assert 'prod-web' in output, "the banner was printed"
+    assert any(frame in output for frame in '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'), "the spinner animated"
+    assert 'connecting' in output
+
+    # The spinner cleared its own line before the session output arrived
+    spinner_end = output.rindex('connecting')
+    assert 'REMOTE-PROMPT' in output[spinner_end:]
+    assert '\x1b[2K' in output[spinner_end:output.index('REMOTE-PROMPT')]
 
 
 def test_the_launcher_is_valid_shell(runtime):

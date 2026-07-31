@@ -52,6 +52,17 @@ def test_group_hosts_with_no_groups_at_all():
 
 # --- pre-vault host fields ---------------------------------------------------
 
+def test_resolve_ssh_verbosity():
+    """A host's stored verbosity is what ssh gets, clamped to 0-3."""
+    from main import resolve_ssh_verbosity
+
+    assert resolve_ssh_verbosity({}) == 0
+    assert resolve_ssh_verbosity({"ssh_verbosity": 2}) == 2
+    assert resolve_ssh_verbosity({"ssh_verbosity": "3"}) == 3
+    assert resolve_ssh_verbosity({"ssh_verbosity": 99}) == 3
+    assert resolve_ssh_verbosity({"ssh_verbosity": "loud"}) == 0
+
+
 def test_password_hosts_learn_to_offer_keyboard_interactive(tmp_path):
     """Servers that only advertise keyboard-interactive used to be unreachable.
 

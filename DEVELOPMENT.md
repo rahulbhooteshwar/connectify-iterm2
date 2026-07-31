@@ -177,6 +177,13 @@ command line:
 - `build_ssh_argv()` - the ssh command line (no secrets, no sshpass)
 - `effective_username()` - the login to connect as: the credential's when it has
   one, the host's otherwise. The UI mirrors this so tiles show the same thing.
+- `normalize_verbosity()` - the host's `ssh_verbosity` (0-3) becomes ssh's
+  `-v`/`-vv`/`-vvv`, which is a flag and so cannot live in `ssh_options`
+- `_progress_script()` - the banner and spinner the tab shows while ssh
+  authenticates. ssh's `LocalCommand` touches a marker in the session directory
+  once the session is up, which is what stops the spinner; it is polled every
+  20ms so the line is handed back before the remote end writes to it. Skipped
+  when the output is not a terminal, and when verbose logging owns the screen.
 - `SecretChannel` - a FIFO in a private 0700 directory that hands the password
   or key passphrase to ssh's askpass helper, a bounded number of times and only
   for a limited window. The FIFO is replaced between hand-offs so a draining

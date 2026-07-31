@@ -87,6 +87,14 @@ def group_hosts(hosts):
     return ordered, ungrouped
 
 
+def resolve_ssh_verbosity(host):
+    """How chatty ssh should be for this host (0-3).
+
+    Separate from `ssh_options` because -v is a flag, not an `-o` option.
+    """
+    return ssh_session.normalize_verbosity(host.get('ssh_verbosity'))
+
+
 def resolve_ssh_options(host):
     """Resolve the list of SSH `-o` options for a host.
 
@@ -404,7 +412,9 @@ class SSHManager:
             raise ValueError(f"Password required for {host_name} but missing from the vault")
 
         session = ssh_session.prepare_session(
-            host, credential, ssh_options=resolve_ssh_options(host)
+            host, credential,
+            ssh_options=resolve_ssh_options(host),
+            verbosity=resolve_ssh_verbosity(host),
         )
 
         if self.debug:

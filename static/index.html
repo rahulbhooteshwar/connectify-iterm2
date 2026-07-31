@@ -1565,6 +1565,62 @@
       border-radius: 999px;
     }
 
+    .ssh-verbosity {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--spacing-md);
+      flex-wrap: wrap;
+      padding: 0.6rem 0.85rem 0.85rem;
+    }
+
+    .ssh-verbosity-label {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+      font-size: 0.85rem;
+      color: var(--text-primary);
+    }
+
+    .ssh-verbosity-label small {
+      color: var(--text-muted);
+      font-size: 0.72rem;
+    }
+
+    .verbosity-choices {
+      display: inline-flex;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+
+    .verbosity-choice {
+      padding: 0.3rem 0.7rem;
+      border: 0;
+      border-left: 1px solid var(--border-color);
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: inherit;
+      font-size: 0.75rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+
+    .verbosity-choice:first-child {
+      border-left: 0;
+    }
+
+    .verbosity-choice:hover {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+    }
+
+    .verbosity-choice.selected {
+      background: var(--primary-color);
+      color: #fff;
+    }
+
     .ssh-options-body {
       padding: 0.25rem 0.85rem 0.85rem;
       display: flex;
@@ -2208,6 +2264,21 @@
               <div class="ssh-options-body" id="sshOptionsBody">
                 <!-- SSH option checkboxes are rendered here -->
               </div>
+
+              <!-- -v is a flag rather than an "-o" option, so it gets its own
+                   control instead of a checkbox in the list above -->
+              <div class="ssh-verbosity">
+                <div class="ssh-verbosity-label">
+                  <span>Verbose logs</span>
+                  <small>ssh's own debug output, printed in the session tab</small>
+                </div>
+                <div class="verbosity-choices" id="sshVerbosity" role="radiogroup" aria-label="Verbose logs">
+                  <button type="button" class="verbosity-choice" data-level="0" title="No debug output">Off</button>
+                  <button type="button" class="verbosity-choice" data-level="1" title="Connection and authentication steps">-v</button>
+                  <button type="button" class="verbosity-choice" data-level="2" title="More detail again">-vv</button>
+                  <button type="button" class="verbosity-choice" data-level="3" title="Everything ssh knows">-vvv</button>
+                </div>
+              </div>
             </details>
           </div>
 
@@ -2492,6 +2563,9 @@
         this.passwordAuthFlag = 'PreferredAuthentications=password,keyboard-interactive';
         this.legacyPasswordAuthFlag = 'PreferredAuthentications=password';
 
+        // ssh -v/-vv/-vvv for the host being edited (0 = quiet)
+        this.sshVerbosity = 0;
+
         this.sshOptionDefs = [
           { flag: this.passwordAuthFlag, label: 'Prefer password authentication' },
           { flag: 'PubkeyAuthentication=no', label: 'Disable public key authentication' },
@@ -2742,6 +2816,14 @@
         if (this.elements.hostCredential) {
           this.elements.hostCredential.addEventListener('change', () => this.onCredentialChange());
         }
+        const verbosity = document.getElementById('sshVerbosity');
+        if (verbosity) {
+          verbosity.addEventListener('click', (e) => {
+            const choice = e.target.closest('.verbosity-choice');
+            if (choice) this.setSshVerbosity(choice.dataset.level);
+          });
+        }
+
         const hostUserInput = document.getElementById('hostUser');
         if (hostUserInput) {
           hostUserInput.addEventListener('input', () => this.updateUsernameHint());
@@ -4073,6 +4155,15 @@
         this.updateSshOptionsCount();
       }
 
+      setSshVerbosity(level) {
+        this.sshVerbosity = Math.max(0, Math.min(3, parseInt(level, 10) || 0));
+        document.querySelectorAll('#sshVerbosity .verbosity-choice').forEach(choice => {
+          choice.classList.toggle('selected',
+            parseInt(choice.dataset.level, 10) === this.sshVerbosity);
+        });
+        this.updateSshOptionsCount();
+      }
+
       getSelectedSshOptions() {
         if (!this.elements.sshOptionsBody) return [];
         return Array.from(this.elements.sshOptionsBody.querySelectorAll('.ssh-option-checkbox'))
@@ -4083,7 +4174,11 @@
       updateSshOptionsCount() {
         const count = this.getSelectedSshOptions().length;
         if (this.elements.sshOptionsCount) {
-          this.elements.sshOptionsCount.textContent = `${count} selected`;
+          // The section is collapsed by default, so say it here - verbose
+          // logging is not something to leave on by accident
+          this.elements.sshOptionsCount.textContent = this.sshVerbosity
+            ? `${count} selected - -${'v'.repeat(this.sshVerbosity)} logs on`
+            : `${count} selected`;
         }
       }
 
@@ -4643,6 +4738,7 @@
               ? host.ssh_options
               : (this.defaultSshOptions[credentialType || 'password'] || []);
             this.setSshOptions(savedOptions);
+            this.setSshVerbosity(host.ssh_verbosity || 0);
 
           }
         } else {
@@ -4657,6 +4753,7 @@
 
           // Pre-check the defaults for the selected credential's type
           this.setSshOptions(this.defaultSshOptions['password']);
+          this.setSshVerbosity(0);
         }
 
         // Collapse the advanced section by default each time the modal opens
@@ -4713,7 +4810,8 @@
           group: this.elements.hostGroup.value.trim(),
           theme: this.elements.hostTheme.value || 'default',
           tags: this.currentModalTags,
-          ssh_options: this.getSelectedSshOptions()
+          ssh_options: this.getSelectedSshOptions(),
+          ssh_verbosity: this.sshVerbosity
         };
 
         const originalName = this.elements.originalName.value;

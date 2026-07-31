@@ -204,6 +204,12 @@ Both are needed: many servers (anything authenticating through PAM) only offer
 *"Permission denied (keyboard-interactive)"* without ever prompting. Hosts saved
 by an earlier version are updated on startup.
 
+While ssh authenticates, the tab itself is not blank: it prints the host, the
+login and which credential is being used, then animates a spinner reading
+*connecting...* with the elapsed seconds. ssh tells Connectify the moment the
+session is actually up (via `LocalCommand`), so the spinner gives the line back
+before the remote prompt arrives.
+
 Connectify waits for iTerm2 to confirm the tab before reporting success, so the
 tile keeps its spinner until the session is really open and a failure is
 reported instead of being swallowed. Launches are serialized, so opening several
@@ -275,6 +281,8 @@ Configuration is stored at `~/.connectify/hosts.json`. On first run, a sample co
 | `group` | Group used to organize the host list | No |
 | `theme` | Tile theme: `default`, `red`, `green` or `orange` | No |
 | `tags` | Array of tags for search and filtering | No |
+| `ssh_options` | Extra `-o` options, e.g. `StrictHostKeyChecking=no` | No |
+| `ssh_verbosity` | ssh debug level: `0` (off) to `3` (`-vvv`) | No |
 
 ## Auto-Start on Login
 
@@ -385,6 +393,20 @@ Run the diagnostics:
 ```bash
 connectify doctor
 ```
+
+### Verbose logs
+
+Open a host's **Advanced SSH Options** and pick a level next to *Verbose logs*:
+`-v`, `-vv` or `-vvv`. That is ssh's own debug stream, and it prints straight
+into the session tab above the remote prompt - handy when a connection fails
+for reasons the error message does not explain (wrong key offered, host key
+mismatch, an option your `~/.ssh/config` sets). The setting is per host and
+survives a restart; the collapsed summary line says when it is on, so it is
+hard to leave running by accident. With verbose logging on the connecting
+spinner steps aside so it cannot overwrite the log.
+
+Note that `-v` is a flag, not an `-o` option, so it has its own control rather
+than a checkbox in the list above it.
 
 ### "Permission denied (keyboard-interactive)"
 

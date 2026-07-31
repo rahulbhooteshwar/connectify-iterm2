@@ -52,6 +52,14 @@ class HostModel(BaseModel):
     # "not configured" so the backend applies auth-method defaults; an empty
     # list means "no extra options".
     ssh_options: Optional[List[str]] = None
+    # ssh's own -v/-vv/-vvv. Not an "-o" option, so it can't live in the list
+    # above; 0 is quiet.
+    ssh_verbosity: int = 0
+
+    @field_validator('ssh_verbosity')
+    @classmethod
+    def _clean_verbosity(cls, value):
+        return ssh_session.normalize_verbosity(value)
 
     @field_validator('group')
     @classmethod
