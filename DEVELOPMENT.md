@@ -221,6 +221,9 @@ Single-page application with:
 - Real-time search and filtering (tags remain search/filter only)
 - The Vault page (toolbar lock icon): unlock, credential CRUD, host associations
 - One message style throughout: a slim pill at the bottom of the window
+- Each tile marks how its host authenticates with a small badge on the
+  connection line (key / password / no credential yet), resolved from the
+  vault's credential list once it is unlocked
 - Launching shows a spinner on the tile for as long as the launch actually
   takes - `POST /api/connect` only answers once iTerm2 has opened the tab
 - Responsive design

@@ -36,8 +36,6 @@ class HostModel(BaseModel):
     hostname: str
     username: str
     port: int = 22
-    auth_method: str = "password"
-    ssh_key_path: Optional[str] = None
     iterm_profile: str = "Default"
     # Name of the vault credential used to authenticate (empty = none yet)
     credential: str = ""
@@ -182,8 +180,7 @@ class APISSHManager:
                     detail=f"Credential '{credential_name}' for '{host['name']}' is not in the vault. "
                            f"Assign a credential to this host."
                 )
-        elif host.get('auth_method') == 'password' or host.get('ssh_key_path'):
-            # Pre-vault host that was never migrated
+        else:
             raise HTTPException(
                 status_code=400,
                 detail=f"'{host['name']}' has no credential yet. Edit the host and pick one from the vault."

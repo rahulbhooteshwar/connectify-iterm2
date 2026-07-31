@@ -645,7 +645,6 @@
     .host-tags-pill {
       width: 100%;
       text-align: left;
-      min-height: 2rem;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -671,14 +670,14 @@
     .host-connection-text {
       display: block;
       font-size: 0.8rem;
+      margin-top: 2px;
       color: var(--text-secondary);
       font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
       word-break: break-all;
       line-height: 1.2;
       text-align: center;
-      padding: 2px 8px;
+      padding: 0 8px;
       width: 100%;
-      margin-bottom: 2px;
     }
 
     .host-tile.list-view .host-connection-text {
@@ -688,7 +687,7 @@
       display: none !important;
     }
 
-    /* Auth method row removed - now using auth-indicator in tile-actions-col */
+    /* Auth method is shown as a small badge on the connection line */
 
     /* List View Overrides */
     .host-tile.list-view .tile-content {
@@ -795,8 +794,8 @@
     }
 
     .small-action-btn {
-      width: 32px;
-      height: 32px;
+      width: 30px;
+      height: 30px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -819,17 +818,23 @@
       border-color: var(--error-color);
     }
 
-    .auth-indicator {
-      width: 32px;
-      height: 32px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1rem;
-      background: var(--bg-secondary);
-      border: 1px solid var(--border-color);
-      border-radius: var(--radius-md);
-      color: var(--text-primary);
+    .credential-badge {
+      font-size: 0.7rem;
+      margin-right: 0.35rem;
+      vertical-align: baseline;
+      color: var(--text-muted);
+    }
+
+    .credential-badge.badge-key {
+      color: var(--theme-green);
+    }
+
+    .credential-badge.badge-password {
+      color: var(--theme-orange);
+    }
+
+    .credential-badge.badge-missing {
+      color: var(--error-color);
     }
 
     .launch-btn {
@@ -2968,6 +2973,9 @@
 
           this.showMiniToast(creating ? 'Vault created' : 'Vault unlocked', 'unlocked');
 
+          // Credentials drive the tile badges and the host form's picker
+          await this.loadCredentials();
+
           if (this.elements.vaultView.style.display !== 'none') {
             await this.renderVaultPage();
           }
@@ -2992,6 +3000,7 @@
         this.credentials = [];
         this.updateVaultButton();
         this.showMiniToast('Vault locked', 'locked');
+        if (this.activePage === 'hosts') this.renderHosts();
         if (this.elements.vaultView.style.display !== 'none') {
           await this.renderVaultPage();
         }
@@ -3049,6 +3058,8 @@
           }
           const data = await response.json();
           this.credentials = data.credentials || [];
+          // Tiles show each host's credential type, so repaint them
+          if (this.activePage === 'hosts') this.renderHosts();
           return this.credentials;
         } catch (error) {
           console.error('Error loading credentials:', error);
@@ -4082,8 +4093,8 @@
       }
 
       generateHostTileHTML(host) {
-        const authText = host.auth_method === 'key' ? '🔑' : '🌟';
-        const authTitle = host.auth_method === 'key' ? 'SSH Key Based' : 'Password Based Auth';
+        // How this host authenticates now comes from its vault credential
+        const credential = this.credentialBadge(host);
         // Tile colour comes from the theme picked on the host, not from its tags
         const hostTags = host.tags || [];
         const themeClass = this.getThemeClass(host);
@@ -4101,7 +4112,10 @@
 
                                 <div class="host-tags-pill">
                                     <div class="host-tags" style="background-color: ${tagColor}; color: white;">${tagsText}</div>
-                                    <div class="host-connection-text">${host.username}@${host.hostname}:${host.port}</div>
+                                    <div class="host-connection-text">
+                                        <i class="${credential.icon} credential-badge badge-${credential.kind}" title="${credential.title}"></i>
+                                        ${host.username}@${host.hostname}:${host.port}
+                                    </div>
                                 </div>
 
                                 <button class="launch-btn" onclick="event.stopPropagation(); app.connectToHost('${host.name}')" title="Launch SSH Session">
@@ -4110,9 +4124,6 @@
                             </div>
 
                             <div class="tile-actions-col">
-                                <div class="auth-indicator" title="${authTitle}">
-                                    ${authText}
-                                </div>
                                 <button class="small-action-btn" onclick="event.stopPropagation(); app.copyToClipboard('${host.hostname}', 'Hostname')" title="Copy Hostname">
                                     <i class="far fa-copy"></i>
                                 </button>
@@ -4139,6 +4150,31 @@
                         </div>
                     </div>
                 `;
+      }
+
+      /**
+       * A compact stand-in for the old auth indicator: one small glyph on the
+       * connection line saying how this host authenticates, and warning when
+       * it can't yet.
+       */
+      credentialBadge(host) {
+        const name = (host.credential || '').trim();
+
+        if (!name) {
+          return { icon: 'fas fa-triangle-exclamation', kind: 'missing',
+                   title: 'No credential assigned - edit this host to pick one' };
+        }
+
+        const credential = this.credentials.find(c => c.name === name);
+        if (!credential) {
+          // Vault locked (or the credential is gone): we know the name only
+          return { icon: 'fas fa-lock', kind: 'unknown',
+                   title: `Credential: ${this.escapeAttr(name)}` };
+        }
+
+        return credential.type === 'key'
+          ? { icon: 'fas fa-key', kind: 'key', title: `SSH key: ${this.escapeAttr(name)}` }
+          : { icon: 'fas fa-asterisk', kind: 'password', title: `Password: ${this.escapeAttr(name)}` };
       }
 
       getThemeClass(host) {
@@ -4305,10 +4341,11 @@
             this.updateHiddenTagInput();
 
             // Initialize SSH options: use the host's saved options when present,
-            // otherwise fall back to the defaults for its auth method.
+            // otherwise fall back to the defaults for its credential type.
+            const credentialType = (this.credentials.find(c => c.name === host.credential) || {}).type;
             const savedOptions = Array.isArray(host.ssh_options)
               ? host.ssh_options
-              : (this.defaultSshOptions[host.auth_method] || []);
+              : (this.defaultSshOptions[credentialType || 'password'] || []);
             this.setSshOptions(savedOptions);
 
           }
@@ -4363,8 +4400,6 @@
           username: document.getElementById('hostUser').value,
           port: parseInt(document.getElementById('hostPort').value),
           credential: this.elements.hostCredential.value,
-          // Kept in sync with the credential so SSH option defaults still apply
-          auth_method: credential ? credential.type : 'password',
           iterm_profile: document.getElementById('itermProfile').value,
           group: this.elements.hostGroup.value.trim(),
           theme: this.elements.hostTheme.value || 'default',
@@ -4577,17 +4612,11 @@
           item.style.padding = '0.5rem';
           item.style.borderBottom = '1px solid var(--border-color)';
 
-          // Check password status for password auth hosts
-          let passwordStatus = '';
-          if (host.auth_method === 'password') {
-            if (host.password && host.password !== 'your_password_here') {
-              passwordStatus = '<span style="color: var(--success-color); font-size: 0.75rem; margin-left: 0.5rem;"><i class="fas fa-check-circle"></i> Password provided</span>';
-            } else {
-              passwordStatus = '<span style="color: var(--warning-color); font-size: 0.75rem; margin-left: 0.5rem;"><i class="fas fa-exclamation-triangle"></i> No password</span>';
-            }
-          } else if (host.auth_method === 'key') {
-            passwordStatus = '<span style="color: var(--info-color); font-size: 0.75rem; margin-left: 0.5rem;"><i class="fas fa-key"></i> Key-based</span>';
-          }
+          // Imports carry a credential name, never a secret
+          const credentialName = (host.credential || '').trim();
+          const passwordStatus = credentialName
+            ? `<span style="color: var(--info-color); font-size: 0.75rem; margin-left: 0.5rem;"><i class="fas fa-key"></i> ${this.escapeHTML(credentialName)}</span>`
+            : '<span style="color: var(--warning-color); font-size: 0.75rem; margin-left: 0.5rem;"><i class="fas fa-exclamation-triangle"></i> No credential</span>';
 
           item.innerHTML = `
             <div style="flex: 1;">
