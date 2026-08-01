@@ -126,9 +126,39 @@ def test_text_fields_opt_out_of_autofill():
 
     for match in re.finditer(r'<input\b[^>]*>', html, re.S):
         markup = match.group(0)
-        if 'type="text"' not in markup and 'type="password"' not in markup:
+        if not any(f'type="{kind}"' in markup for kind in ('text', 'search', 'password')):
             continue
         assert 'autocomplete="off"' in markup, markup[:110]
+
+
+# Fields WebKit's AutoFill reads as a person or a place: it paints a contact
+# card on the name and a house on the hostname, and in iTerm2's embedded
+# browser they stay once drawn. Hiding the pseudo-element did not shift them,
+# so the field stops being the kind AutoFill looks at.
+SEARCH_TYPED = ('searchBox', 'hostName', 'hostAddress', 'hostUser',
+                'credentialName', 'credentialUsername', 'credentialDescription',
+                'credentialKeyPath', 'tagInput')
+
+# These two drive a dropdown where Escape means "close it"; WebKit also lets
+# Escape clear a search field, which would take the typed value with it
+KEEP_AS_TEXT = ('hostGroup', 'itermProfile')
+
+
+def test_identifier_fields_are_out_of_autofills_reach():
+    html = read_index()
+
+    for ident in SEARCH_TYPED:
+        field = re.search(r'<input[^>]*id="%s"[^>]*>' % ident, html)
+        assert field, f"{ident} is missing"
+        assert 'type="search"' in field.group(0), f"{ident} is still an AutoFill target"
+
+    for ident in KEEP_AS_TEXT:
+        field = re.search(r'<input[^>]*id="%s"[^>]*>' % ident, html, re.S)
+        assert field and 'type="text"' in field.group(0), \
+            f"{ident} drives a dropdown; Escape must not clear it"
+
+    assert 'input[type="search"] {' in html, "search styling has to be reset to ours"
+    assert '-webkit-appearance: none' in html
 
 
 def test_form_fields_do_not_autocapitalize():
@@ -136,7 +166,8 @@ def test_form_fields_do_not_autocapitalize():
     html = read_index()
 
     inputs = re.findall(r'<input\b[^>]*>', html, re.S)
-    typed = [i for i in inputs if 'type="text"' in i or 'type="password"' in i]
+    typed = [i for i in inputs
+             if any(f'type="{kind}"' in i for kind in ('text', 'search', 'password'))]
     assert typed, "there should be text inputs to check"
 
     for field in typed:

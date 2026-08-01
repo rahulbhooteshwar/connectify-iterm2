@@ -168,6 +168,14 @@ Nothing user-facing has to be renamed: the labels can go on saying *Name*,
 because the heuristic reads far more than the label and bending the copy
 around it would make the UI worse to read while still not being dependable.
 
+Hiding the pseudo-elements dealt with the key on password fields but not the
+contact card, so the fields that attract it - display name, hostname, username,
+credential name - are `type="search"` instead. AutoFill's heuristics do not run
+on a search field, and it behaves identically otherwise; the search styling is
+reset so nothing looks different. The group and profile pickers stay
+`type="text"`: they drive a dropdown where Escape means "close it", and WebKit
+also lets Escape clear a search field.
+
 Two details that matter if you touch this CSS:
 
 - **One rule per selector.** A browser that doesn't recognise one selector in a

@@ -484,6 +484,14 @@
       text-security: none;
     }
 
+    /* type="search" is used to keep AutoFill's heuristics away from these
+       fields (see the note above); this takes back the styling that comes
+       with it, so they look and behave like the text fields they replaced. */
+    input[type="search"] {
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
     .search-input {
       width: 100%;
       padding: var(--spacing-xs) var(--spacing-sm) var(--spacing-xs) 2.5rem;
@@ -2333,7 +2341,7 @@
       <div class="header-right">
         <div class="search-container">
           <i class="fas fa-search search-icon"></i>
-          <input type="text" id="searchBox" class="search-input" placeholder="Search hosts by name or tags..." autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+          <input type="search" id="searchBox" class="search-input" placeholder="Search hosts by name or tags..." autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
           <button id="clearSearch" class="clear-search-btn" title="Clear search">
             <i class="fas fa-times"></i>
           </button>
@@ -2438,7 +2446,7 @@
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Tags</label>
             <div class="tag-container" id="tagContainer">
               <!-- Pills will be inserted here -->
-              <input type="text" id="tagInput" class="tag-input" placeholder="Type and press Space/Enter to add..." autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
+              <input type="search" id="tagInput" class="tag-input" placeholder="Type and press Space/Enter to add..." autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
             </div>
             <div id="tagDropdown" class="tag-dropdown">
               <!-- Options will be populated here -->
@@ -2476,13 +2484,13 @@
 
           <div class="form-group" style="margin-bottom: 1rem;">
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Display Name</label>
-            <input type="text" id="hostName" class="search-input" style="width: 100%;" placeholder="Production DB" required autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
+            <input type="search" id="hostName" class="search-input" style="width: 100%;" placeholder="Production DB" required autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
           </div>
 
           <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; margin-bottom: 1rem;">
             <div class="form-group">
               <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Hostname / IP</label>
-              <input type="text" id="hostAddress" required class="search-input" style="width: 100%;" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
+              <input type="search" id="hostAddress" required class="search-input" style="width: 100%;" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
             </div>
             <div class="form-group">
               <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Port</label>
@@ -2492,7 +2500,7 @@
 
           <div class="form-group" style="margin-bottom: 1rem;">
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Username <span style="color: var(--text-muted); font-weight: 400;">(optional)</span></label>
-            <input type="text" id="hostUser" class="search-input" style="width: 100%;" placeholder="Leave empty to use the credential's username" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
+            <input type="search" id="hostUser" class="search-input" style="width: 100%;" placeholder="Leave empty to use the credential's username" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
             <small id="hostUserHint" class="profile-hint"></small>
           </div>
 
@@ -2596,12 +2604,12 @@
 
           <div class="form-group" style="margin-bottom: 1rem;">
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Name</label>
-            <input type="text" id="credentialName" class="search-input" style="width: 100%;" placeholder="prod-admin" required autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
+            <input type="search" id="credentialName" class="search-input" style="width: 100%;" placeholder="prod-admin" required autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
           </div>
 
           <div class="form-group" style="margin-bottom: 1rem;">
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Username <span style="color: var(--text-muted); font-weight: 400;">(optional)</span></label>
-            <input type="text" id="credentialUsername" class="search-input" style="width: 100%;" placeholder="ubuntu" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+            <input type="search" id="credentialUsername" class="search-input" style="width: 100%;" placeholder="ubuntu" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
             <small style="color: var(--text-muted); display: block; margin-top: 0.35rem;">
               Overrides the username on every host that uses this credential.
             </small>
@@ -2609,7 +2617,7 @@
 
           <div class="form-group" style="margin-bottom: 1rem;">
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Description <span style="color: var(--text-muted); font-weight: 400;">(optional)</span></label>
-            <input type="text" id="credentialDescription" class="search-input" style="width: 100%;" placeholder="Shared admin login for production" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
+            <input type="search" id="credentialDescription" class="search-input" style="width: 100%;" placeholder="Shared admin login for production" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
           </div>
 
           <div class="form-group" style="margin-bottom: 1rem;">
@@ -2633,7 +2641,7 @@
           <div id="credentialKeyFields" style="display: none;">
             <div class="form-group" style="margin-bottom: 1rem;">
               <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">SSH Key Path</label>
-              <input type="text" id="credentialKeyPath" class="search-input" style="width: 100%;" placeholder="~/.ssh/id_ed25519" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
+              <input type="search" id="credentialKeyPath" class="search-input" style="width: 100%;" placeholder="~/.ssh/id_ed25519" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
             </div>
             <div class="form-group" style="margin-bottom: 1rem;">
               <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Passphrase <span style="color: var(--text-muted); font-weight: 400;">(optional)</span></label>
