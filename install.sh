@@ -115,7 +115,11 @@ download() {
     curl -fsSL "$url" -o "$target" &
     local pid=$!
 
-    if [[ -t 1 ]]; then
+    # fd 2, not fd 1: this function's stdout is captured by the caller's
+    # $(download ...), so testing fd 1 always says "not a terminal" and the
+    # bar never draws. Everything on-screen here goes to stderr for the same
+    # reason.
+    if [[ -t 2 ]]; then
         while kill -0 "$pid" 2>/dev/null; do
             draw_bar "$(file_size "$target")" "$total" >&2
             sleep 0.1
@@ -127,7 +131,7 @@ download() {
         die "Could not download ${archive} from ${url}"
     fi
 
-    if [[ -t 1 ]]; then
+    if [[ -t 2 ]]; then
         draw_bar "$(file_size "$target")" "$(file_size "$target")" >&2
         printf "\n" >&2
     fi

@@ -129,6 +129,13 @@ def test_the_bootstrap_draws_its_own_progress_bar():
     assert '--progress-bar' not in code
 
     assert 'draw_bar()' in bootstrap
+
+    # The bar is drawn from inside download(), whose stdout the caller
+    # captures with $( ). Testing fd 1 for a terminal is therefore always
+    # false and the bar silently never appears - it has to test fd 2.
+    body = bootstrap[bootstrap.index('download() {'):bootstrap.index('\nmain() {')]
+    assert '-t 1' not in body, "stdout is captured here; the terminal test must be on fd 2"
+    assert body.count('-t 2') == 2
     assert '━' in bootstrap and '─' in bootstrap, "filled and empty read apart without colour"
     # BSD awk (what macOS ships) has no IGNORECASE
     assert 'IGNORECASE' not in code
