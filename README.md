@@ -204,11 +204,19 @@ Both are needed: many servers (anything authenticating through PAM) only offer
 *"Permission denied (keyboard-interactive)"* without ever prompting. Hosts saved
 by an earlier version are updated on startup.
 
-While ssh authenticates, the tab itself is not blank: it prints the host, the
-login and which credential is being used, then animates a spinner reading
-*connecting...* with the elapsed seconds. ssh tells Connectify the moment the
-session is actually up (via `LocalCommand`), so the spinner gives the line back
-before the remote prompt arrives.
+While ssh authenticates, the tab itself is not blank: it shows a card in the
+middle of the window with the host, the login and which credential is
+answering, bordered in that host's **tile theme colour**, with a spinner and
+the elapsed seconds. ssh tells Connectify the moment the session is actually up
+(via `LocalCommand`), and the card is erased completely - the session output
+then flows into a clean screen.
+
+The card is drawn with [Rich](https://github.com/Textualize/rich), which is
+already in the binary. It does *not* take over the terminal with an alternate
+screen: everything written to one is discarded on the way out, which would
+swallow ssh's own error output on a failed connection. If Rich cannot be
+reached (a source checkout without dependencies), the tab falls back to a
+one-line banner and spinner.
 
 Connectify waits for iTerm2 to confirm the tab before reporting success, so the
 tile keeps its spinner until the session is really open and a failure is

@@ -467,6 +467,13 @@ def main():
 
         sys.exit(installer.run_upgrade(options.version))
 
+    # Internal: the connecting card a session tab shows while ssh
+    # authenticates. Run by the session launcher, not by people, so it stays
+    # out of the usage text.
+    if command == 'session-splash':
+        import session_splash
+        sys.exit(session_splash.run(args[1:]))
+
     if command == 'profiles':
         parser = argparse.ArgumentParser(
             prog='connectify profiles',

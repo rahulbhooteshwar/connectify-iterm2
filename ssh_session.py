@@ -27,6 +27,7 @@ only ever reference the FIFO's path.
 
 import errno
 import os
+import sys
 import shutil
 import stat
 import subprocess
@@ -253,16 +254,43 @@ def secret_for(credential):
     return ''
 
 
+def splash_command():
+    """How to run the Rich connecting card, or None if it isn't reachable.
+
+    Installed, Connectify is a single binary and the server is running from
+    it, so ``sys.executable`` is the command that knows the subcommand. From a
+    source checkout it is this interpreter plus the CLI script.
+    """
+    # The card runs in this same interpreter, so its dependency can be
+    # checked here: without Rich the launcher should take the shell spinner
+    # rather than start something that will only print one plain line.
+    try:
+        import rich  # noqa: F401
+    except ImportError:
+        return None
+
+    if getattr(sys, 'frozen', False):
+        return [sys.executable, 'session-splash']
+
+    script = Path(__file__).resolve().parent / 'connectify.py'
+    if script.exists():
+        return [sys.executable, str(script), 'session-splash']
+    return None
+
+
 def _progress_script(host, credential, directory, verbosity):
-    """The banner and spinner the tab shows while ssh authenticates.
+    """What the tab shows while ssh authenticates.
 
     Authentication happens before the remote end paints anything, so without
     this the tab just sits blank - for several seconds on a slow link, longer
-    behind a jump host. The spinner stops the moment ssh reports the session
-    is up (see ``connected_marker``), so it never fights the remote prompt for
-    the line.
+    behind a jump host.
 
-    Nothing here is drawn when the output is not a terminal, or when verbose
+    Two ways of saying so: a centred Rich card in the host's theme colour
+    (`session_splash.py`), and a one-line shell spinner for when that binary
+    cannot be reached. Both stop the moment ssh reports the session is up (see
+    ``connected_marker``), so neither fights the remote prompt for the screen.
+
+    Nothing is drawn when the output is not a terminal, or when verbose
     logging is on and the debug stream needs the screen to itself.
     """
     credential = credential or {}
@@ -273,13 +301,29 @@ def _progress_script(host, credential, directory, verbosity):
         target += f":{port}"
 
     label = str(host.get('name') or target)
-    auth = {'password': 'password', 'key': 'SSH key'}.get(credential.get('type'), 'no credential')
+    kind = {'password': 'password', 'key': 'SSH key'}.get(credential.get('type'), 'no credential')
+    name = str(credential.get('name') or '').strip()
+    auth = f"{kind} · {name}" if name else kind
 
-    return (
+    splash = splash_command()
+    splash_argv = ''
+    if splash:
+        splash_argv = ' '.join(_shell_quote(part) for part in splash + [
+            '--name', label,
+            '--target', target,
+            '--auth', auth,
+            '--theme', str(host.get('theme') or 'default'),
+            '--marker', str(Path(directory) / 'connected'),
+        ])
+
+    preamble = (
         f"marker={_shell_quote(Path(directory) / 'connected')}\n"
-        # Colours: 111 is the app's periwinkle, 245 a muted grey
-        f"printf '\\033[38;5;111m\\342\\227\\211\\033[0m %s \\033[2m%s\\033[0m\\n' "
+        f"splash_bin={_shell_quote(splash[0] if splash else '')}\n"
+        # Colours: 111 is the app's periwinkle
+        + "banner() {\n"
+        f"  printf '\\033[38;5;111m\\342\\227\\211\\033[0m %s \\033[2m%s\\033[0m\\n' "
         f"{_shell_quote(label)} {_shell_quote(f'{target} - {auth}')}\n"
+        + "}\n"
         + ("printf '\\033[2m  verbose logging is on (-%s)\\033[0m\\n' "
            f"{_shell_quote('v' * verbosity)}\n" if verbosity else "")
         + "spin() {\n"
@@ -303,6 +347,8 @@ def _progress_script(host, credential, directory, verbosity):
         "}\n"
     )
 
+    return preamble, splash_argv
+
 
 def prepare_session(host, credential=None, ssh_options=None, keep_shell=True,
                     timeout=DEFAULT_TIMEOUT, verbosity=0):
@@ -319,6 +365,7 @@ def prepare_session(host, credential=None, ssh_options=None, keep_shell=True,
     directory.mkdir(mode=0o700)
 
     verbosity = normalize_verbosity(verbosity)
+    progress_preamble, splash_argv = _progress_script(host, credential, directory, verbosity)
 
     # ssh runs LocalCommand once the session is actually up, which is exactly
     # when the spinner should stop. The marker lives in the session's own
@@ -377,22 +424,40 @@ def prepare_session(host, credential=None, ssh_options=None, keep_shell=True,
         'exec "${SHELL:-/bin/sh}" -l\n'
     ) if keep_shell else 'exit "$status"\n'
 
-    # The spinner would only get in the way of a debug stream, and there is
-    # nothing to animate when the output is not a terminal
-    spinner = (
-        'if [ -t 1 ]; then\n'
-        '  spin &\n'
-        '  spinner_pid=$!\n'
-        'fi\n'
-    ) if not verbosity else ''
+    # Nothing to draw when the output is not a terminal, and a debug stream
+    # wants the screen to itself. The card is preferred; the shell spinner is
+    # what is left if the binary that draws it cannot be run.
+    if verbosity:
+        spinner = ''
+    elif splash_argv:
+        spinner = (
+            'if [ -t 1 ]; then\n'
+            '  if [ -x "$splash_bin" ]; then\n'
+            f'    {splash_argv} &\n'
+            '  else\n'
+            '    banner\n'
+            '    spin &\n'
+            '  fi\n'
+            '  progress_pid=$!\n'
+            'fi\n'
+        )
+    else:
+        spinner = (
+            'if [ -t 1 ]; then\n'
+            '  banner\n'
+            '  spin &\n'
+            '  progress_pid=$!\n'
+            'fi\n'
+        )
 
-    # A spinner that stopped on its own already cleared its line. Clearing
-    # again here would wipe whatever the session left on the current line, so
-    # only do it when the connection never came up.
+    # Both clean up after themselves when they stop on their own - the card
+    # erases what it drew, the spinner clears its line. Clearing again here
+    # would wipe whatever the session has left on the current line, so only do
+    # it when the connection never came up.
     stop_spinner = (
-        'if [ -n "$spinner_pid" ]; then\n'
-        '  kill "$spinner_pid" 2>/dev/null\n'
-        '  wait "$spinner_pid" 2>/dev/null\n'
+        'if [ -n "$progress_pid" ]; then\n'
+        '  kill "$progress_pid" 2>/dev/null\n'
+        '  wait "$progress_pid" 2>/dev/null\n'
         '  [ -e "$marker" ] || printf "\\r\\033[2K"\n'
         'fi\n'
     ) if not verbosity else ''
@@ -401,7 +466,7 @@ def prepare_session(host, credential=None, ssh_options=None, keep_shell=True,
     _write_script(launcher_path, (
         "#!/bin/sh\n"
         "# Connectify session launcher - contains no secrets.\n"
-        f"{_progress_script(host, credential, directory, verbosity)}"
+        f"{progress_preamble}"
         f"{spinner}"
         f"{askpass_setup}"
         f"{ssh_command}\n"

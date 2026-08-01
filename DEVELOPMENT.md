@@ -170,6 +170,14 @@ The SSH engine behind the web UI:
   locked vault with `401 {"code": "vault_locked"}`, which the UI turns into the
   unlock dialog (and retries the original request afterwards).
 
+### 2b-2. session_splash.py - The Connecting Card
+
+Rich `Live(transient=True)` drawing a bordered, centred panel while ssh
+authenticates, then erasing it. Deliberately not `screen=True`: an alternate
+screen discards its contents on exit, taking ssh's error output with it.
+Exits on the marker file, on SIGTERM (the launcher kills it when ssh exits -
+the signal handler lets the context manager erase first), or on timeout.
+
 ### 2c. ssh_session.py - Launching Sessions
 
 Builds everything a session needs without ever putting a secret on disk or on a
