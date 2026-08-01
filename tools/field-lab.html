@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Connectify field lab</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0; padding: 24px 20px 60px;
+    background: #0f1117; color: #e6e6e6;
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  h1 { font-size: 1.1rem; margin: 0 0 4px; }
+  p.lede { color: #9aa0ad; margin: 0 0 22px; max-width: 62ch; }
+  .row {
+    display: grid; grid-template-columns: 2.2rem 1fr 15rem;
+    gap: 12px; align-items: center;
+    padding: 9px 10px; border-bottom: 1px solid #1e2230;
+  }
+  .row:hover { background: #141824; }
+  .n { color: #6b7280; font: 12px ui-monospace, Menlo, monospace; text-align: right; }
+  label { display: block; font-size: 12px; color: #c7ccd6; margin-bottom: 3px; }
+  input, .fake {
+    width: 100%; box-sizing: border-box;
+    padding: 7px 10px; border: 1px solid #2a3040; border-radius: 4px;
+    background: #171b26; color: #fff; font: inherit;
+  }
+  .fake { min-height: 34px; }
+  .what { color: #7e8695; font: 12px ui-monospace, Menlo, monospace; }
+  h2 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: .08em;
+    color: #7c85f7; margin: 26px 0 6px; padding-top: 14px;
+    border-top: 1px solid #232838;
+  }
+  .note { color: #9aa0ad; font-size: 12px; margin: 4px 0 10px; max-width: 70ch; }
+  code { background: #1b2030; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<h1>Connectify field lab</h1>
+<p class="lede">
+  Every row is one input. Click into each, and note the number of any row where
+  an icon appears inside the field - a person, a house, a key, anything.
+  Say which numbers misbehave and whether the icon shows up straight away or
+  only once focused; that pins down what the browser is reacting to.
+</p>
+
+<h2>1. Does the label text matter?</h2>
+<p class="note">Same input every time. Only the visible label changes.</p>
+
+<div class="row"><div class="n">1</div>
+  <div><label for="f1">Display Name</label><input type="text" id="f1"></div>
+  <div class="what">label "Display Name"</div></div>
+
+<div class="row"><div class="n">2</div>
+  <div><label for="f2">Title</label><input type="text" id="f2"></div>
+  <div class="what">label "Title"</div></div>
+
+<div class="row"><div class="n">3</div>
+  <div><label for="f3">Hostname / IP</label><input type="text" id="f3"></div>
+  <div class="what">label "Hostname / IP"</div></div>
+
+<div class="row"><div class="n">4</div>
+  <div><label for="f4">Endpoint</label><input type="text" id="f4"></div>
+  <div class="what">label "Endpoint"</div></div>
+
+<div class="row"><div class="n">5</div>
+  <div><label for="f5">&nbsp;</label><input type="text" id="f5"></div>
+  <div class="what">no label text at all</div></div>
+
+<h2>2. Does the id or name matter?</h2>
+<p class="note">All labelled "Field", so only the attribute differs.</p>
+
+<div class="row"><div class="n">6</div>
+  <div><label for="hostName">Field</label><input type="text" id="hostName"></div>
+  <div class="what">id="hostName"</div></div>
+
+<div class="row"><div class="n">7</div>
+  <div><label for="hostAddress">Field</label><input type="text" id="hostAddress"></div>
+  <div class="what">id="hostAddress"</div></div>
+
+<div class="row"><div class="n">8</div>
+  <div><label for="f8">Field</label><input type="text" id="f8" name="name"></div>
+  <div class="what">name="name"</div></div>
+
+<div class="row"><div class="n">9</div>
+  <div><label for="f9">Field</label><input type="text" id="f9" name="address"></div>
+  <div class="what">name="address"</div></div>
+
+<div class="row"><div class="n">10</div>
+  <div><label for="f10">Field</label><input type="text" id="f10" placeholder="Production DB"></div>
+  <div class="what">placeholder only</div></div>
+
+<h2>3. Does the input type matter?</h2>
+<p class="note">All labelled "Display Name" - the worst case from section 1.</p>
+
+<div class="row"><div class="n">11</div>
+  <div><label for="f11">Display Name</label><input type="text" id="f11"></div>
+  <div class="what">type="text"</div></div>
+
+<div class="row"><div class="n">12</div>
+  <div><label for="f12">Display Name</label><input type="search" id="f12"></div>
+  <div class="what">type="search" <em>(what Connectify ships now)</em></div></div>
+
+<div class="row"><div class="n">13</div>
+  <div><label for="f13">Display Name</label><input type="url" id="f13"></div>
+  <div class="what">type="url"</div></div>
+
+<div class="row"><div class="n">14</div>
+  <div><label for="f14">Display Name</label><input type="text" id="f14" inputmode="text" enterkeyhint="done"></div>
+  <div class="what">type="text" + inputmode</div></div>
+
+<div class="row"><div class="n">15</div>
+  <div><label for="f15">Display Name</label><div class="fake" id="f15" contenteditable="true" role="textbox"></div></div>
+  <div class="what">contenteditable, not an input</div></div>
+
+<h2>4. Does autocomplete change anything?</h2>
+<p class="note">All type="text", labelled "Display Name".</p>
+
+<div class="row"><div class="n">16</div>
+  <div><label for="f16">Display Name</label><input type="text" id="f16" autocomplete="off"></div>
+  <div class="what">autocomplete="off"</div></div>
+
+<div class="row"><div class="n">17</div>
+  <div><label for="f17">Display Name</label><input type="text" id="f17" autocomplete="new-password"></div>
+  <div class="what">autocomplete="new-password"</div></div>
+
+<div class="row"><div class="n">18</div>
+  <div><label for="f18">Display Name</label><input type="text" id="f18" autocomplete="one-time-code"></div>
+  <div class="what">autocomplete="one-time-code"</div></div>
+
+<div class="row"><div class="n">19</div>
+  <div><label for="f19">Display Name</label><input type="text" id="f19" autocomplete="nope-not-a-real-token"></div>
+  <div class="what">an invalid autocomplete token</div></div>
+
+<div class="row"><div class="n">20</div>
+  <div><label for="f20">Display Name</label><input type="text" id="f20" aria-label="Display Name" title="Display Name"></div>
+  <div class="what">aria-label + title as well</div></div>
+
+<h2>5. Inside a form, which is how the real dialog is built</h2>
+
+<form autocomplete="off" onsubmit="return false">
+  <div class="row"><div class="n">21</div>
+    <div><label for="f21">Display Name</label><input type="text" id="f21" autocomplete="off"></div>
+    <div class="what">in a form, autocomplete off</div></div>
+
+  <div class="row"><div class="n">22</div>
+    <div><label for="f22">Display Name</label><input type="search" id="f22" autocomplete="off"></div>
+    <div class="what">in a form, type="search"</div></div>
+
+  <div class="row"><div class="n">23</div>
+    <div><label for="f23">Hostname / IP</label><input type="search" id="f23" autocomplete="off"></div>
+    <div class="what">in a form, hostname wording</div></div>
+</form>
+
+<h2>6. With the decorations hidden, exactly as Connectify does it</h2>
+<p class="note">
+  Same fields, plus the CSS that is supposed to remove the buttons. If these
+  are clean and the ones above are not, the CSS works and something else is
+  reaching them; if they still show icons, the CSS is being ignored.
+</p>
+
+<style>
+  .hidden-decorations input::-webkit-contacts-auto-fill-button,
+  .hidden-decorations input::-webkit-credentials-auto-fill-button,
+  .hidden-decorations input::-webkit-credit-card-auto-fill-button,
+  .hidden-decorations input::-webkit-caps-lock-indicator {
+    display: none !important; visibility: hidden !important;
+    pointer-events: none !important; position: absolute !important;
+    right: 0; width: 0 !important; max-width: 0 !important;
+    height: 0 !important; opacity: 0 !important; -webkit-appearance: none;
+  }
+</style>
+
+<div class="hidden-decorations">
+  <div class="row"><div class="n">24</div>
+    <div><label for="f24">Display Name</label><input type="text" id="f24"></div>
+    <div class="what">type="text", decorations hidden</div></div>
+
+  <div class="row"><div class="n">25</div>
+    <div><label for="f25">Hostname / IP</label><input type="text" id="f25"></div>
+    <div class="what">hostname wording, decorations hidden</div></div>
+</div>
+
+<h2>What the browser says about itself</h2>
+<pre id="env" class="what" style="white-space: pre-wrap; padding: 10px 12px;"></pre>
+
+<script>
+  const supports = (prop, value) => window.CSS && CSS.supports && CSS.supports(prop, value);
+  document.getElementById('env').textContent = [
+    'userAgent: ' + navigator.userAgent,
+    '-webkit-text-security supported: ' + supports('-webkit-text-security', 'disc'),
+    '::-webkit-contacts-auto-fill-button rule kept: ' + [...document.styleSheets]
+      .flatMap(s => { try { return [...s.cssRules]; } catch (e) { return []; } })
+      .some(r => (r.selectorText || '').includes('contacts-auto-fill-button')),
+  ].join('\n');
+</script>
+
+</body>
+</html>
