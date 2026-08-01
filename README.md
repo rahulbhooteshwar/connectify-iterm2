@@ -226,6 +226,17 @@ sessions at once queues them rather than having them race inside iTerm2.
 The same mechanism answers **SSH key passphrase** prompts, so passphrase-protected
 keys work - store the passphrase alongside the key path in its credential.
 
+### Trusting a new host
+
+`SSH_ASKPASS_REQUIRE=force` routes *every* ssh prompt through the helper -
+including the "are you sure you want to continue connecting" question for a
+host that isn't in your `known_hosts` yet. That one is a decision, not a
+secret, so Connectify never answers it for you: the connecting card steps
+aside, ssh's question is shown in the tab with the key fingerprint, and you
+type `yes` to trust it. Anything else (including a bare Enter) cancels the
+connection. With no terminal to ask, the helper refuses rather than sending
+the password to a yes/no prompt.
+
 This needs OpenSSH 8.4+ for `SSH_ASKPASS_REQUIRE` (macOS Monterey and later).
 On something older, ssh simply prompts for the password in the tab as usual.
 

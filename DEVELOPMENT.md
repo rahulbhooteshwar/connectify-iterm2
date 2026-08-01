@@ -192,6 +192,11 @@ command line:
   once the session is up, which is what stops the spinner; it is polled every
   20ms so the line is handed back before the remote end writes to it. Skipped
   when the output is not a terminal, and when verbose logging owns the screen.
+- The askpass helper inspects the prompt ssh passes it. Host-key confirmation
+  questions (`authenticity`, `yes/no`, `fingerprint`) are put to the user on
+  `/dev/tty` after touching a `yield` file so the connecting card stops
+  drawing; everything else is served from the FIFO. Answering a trust prompt
+  with the password would both fail the connection and leak the secret.
 - `SecretChannel` - a FIFO in a private 0700 directory that hands the password
   or key passphrase to ssh's askpass helper, a bounded number of times and only
   for a limited window. The FIFO is replaced between hand-offs so a draining

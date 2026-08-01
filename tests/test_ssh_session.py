@@ -185,6 +185,88 @@ def test_running_the_launcher_hands_the_environment_to_ssh_only(runtime, tmp_pat
     assert lines[1] == "shell:unset"
 
 
+# --- trust decisions are the user's, not the helper's -------------------------
+
+AUTHENTICITY_PROMPT = (
+    "The authenticity of host 'web.example.com (10.0.0.9)' can't be established.\n"
+    "ED25519 key fingerprint is SHA256:AbCdEf.\n"
+    "Are you sure you want to continue connecting (yes/no/[fingerprint])? "
+)
+
+
+def ask_helper_on_a_terminal(helper, prompt, typed):
+    """Run the askpass helper with a controlling terminal and answer it."""
+    import pty
+
+    pid, fd = pty.fork()
+    if pid == 0:                                   # child: becomes the helper
+        os.execv('/bin/sh', ['/bin/sh', str(helper), prompt])
+
+    time.sleep(0.9)                                # it pauses for the card
+    os.write(fd, typed)
+
+    output = b''
+    deadline = time.time() + 10
+    while time.time() < deadline:
+        try:
+            chunk = os.read(fd, 1024)
+        except OSError:
+            break
+        if not chunk:
+            break
+        output += chunk
+        if os.waitpid(pid, os.WNOHANG)[0]:
+            break
+    os.close(fd)
+    return output.decode('utf-8', 'replace')
+
+
+def test_an_unknown_host_asks_the_user_instead_of_answering_with_the_secret(runtime):
+    """ssh routes the yes/no question through askpass too, forced by
+    SSH_ASKPASS_REQUIRE. Answering it with the password would fail the
+    connection and put the secret where it was never meant to go."""
+    session = ssh_session.prepare_session(HOST, PASSWORD_CREDENTIAL)
+    helper = session.directory / 'askpass.sh'
+    try:
+        output = ask_helper_on_a_terminal(helper, AUTHENTICITY_PROMPT, b"yes\n")
+
+        assert SECRET not in output, "the password must never answer a trust prompt"
+        assert 'known_hosts' in output, "the user is told what is being asked"
+        assert 'ED25519 key fingerprint' in output, "and sees ssh's own question"
+        assert 'yes' in output, "their answer goes back to ssh"
+
+        # The card is told to stand aside before the question is printed
+        assert (session.directory / 'yield').exists()
+    finally:
+        session.cleanup()
+
+
+def test_a_password_prompt_still_comes_from_the_fifo(runtime):
+    """The trust check must not get in the way of the normal path."""
+    session = ssh_session.prepare_session(HOST, PASSWORD_CREDENTIAL)
+    try:
+        answer = subprocess.run([str(session.directory / 'askpass.sh'), "admin@web's password: "],
+                                capture_output=True, text=True, timeout=30)
+        assert answer.stdout.strip() == SECRET
+        assert not (session.directory / 'yield').exists()
+    finally:
+        session.cleanup()
+
+
+def test_with_no_terminal_to_ask_the_helper_refuses(runtime):
+    session = ssh_session.prepare_session(HOST, PASSWORD_CREDENTIAL)
+    try:
+        # setsid detaches from the controlling terminal, so /dev/tty is gone
+        answer = subprocess.run(['setsid', str(session.directory / 'askpass.sh'),
+                                 AUTHENTICITY_PROMPT],
+                                capture_output=True, text=True, timeout=30,
+                                stdin=subprocess.DEVNULL)
+        assert SECRET not in answer.stdout
+        assert answer.returncode != 0, "refusing beats guessing"
+    finally:
+        session.cleanup()
+
+
 # --- what the tab shows while ssh authenticates -------------------------------
 
 def test_the_tab_gets_a_banner_and_a_spinner(runtime):

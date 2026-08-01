@@ -314,10 +314,12 @@ def _progress_script(host, credential, directory, verbosity):
             '--auth', auth,
             '--theme', str(host.get('theme') or 'default'),
             '--marker', str(Path(directory) / 'connected'),
+            '--yield-on', str(Path(directory) / 'yield'),
         ])
 
     preamble = (
         f"marker={_shell_quote(Path(directory) / 'connected')}\n"
+        f"yield_file={_shell_quote(Path(directory) / 'yield')}\n"
         f"splash_bin={_shell_quote(splash[0] if splash else '')}\n"
         # Colours: 111 is the app's periwinkle
         + "banner() {\n"
@@ -334,7 +336,8 @@ def _progress_script(host, credential, directory, verbosity):
         # Polled five times per frame: the sooner the line is given back after
         # the session comes up, the smaller the chance of clearing a line the
         # remote end has started writing on
-        f"  while [ ! -e \"$marker\" ] && [ $n -lt {SPINNER_GIVE_UP_SECONDS * 50} ]; do\n"
+        f"  while [ ! -e \"$marker\" ] && [ ! -e \"$yield_file\" ] "
+        f"&& [ $n -lt {SPINNER_GIVE_UP_SECONDS * 50} ]; do\n"
         "    if [ $((n % 5)) -eq 0 ]; then\n"
         "      frame=$1; shift; set -- \"$@\" \"$frame\"\n"
         "      printf '\\r\\033[2K\\033[38;5;111m'\"$frame\"'\\033[0m \\033[2mconnecting"
@@ -371,6 +374,9 @@ def prepare_session(host, credential=None, ssh_options=None, keep_shell=True,
     # when the spinner should stop. The marker lives in the session's own
     # private directory and goes away with it.
     connected_marker = directory / 'connected'
+    # Touched by the askpass helper when it needs the terminal to ask the user
+    # a question, so the connecting card stops drawing over it
+    yield_file = directory / 'yield'
     progress_options = [
         'PermitLocalCommand=yes',
         f"LocalCommand=/usr/bin/touch {_shell_quote(connected_marker)}",
@@ -388,11 +394,47 @@ def prepare_session(host, credential=None, ssh_options=None, keep_shell=True,
         channel = SecretChannel(directory, secret, timeout=timeout)
         askpass_path = directory / 'askpass.sh'
 
-        # The helper holds no secret - just the path of the FIFO to read from
+        # The helper holds no secret - just the path of the FIFO to read from.
+        #
+        # SSH_ASKPASS_REQUIRE=force sends *every* prompt here, including the
+        # "are you sure you want to continue connecting" question for a host
+        # that is not in known_hosts. Answering that with the password would
+        # both fail the connection and put the secret somewhere it was never
+        # meant to go, so trust decisions are handed to the person at the
+        # terminal instead.
         _write_script(askpass_path, (
             "#!/bin/sh\n"
-            "# Connectify askpass helper: reads one secret from a private FIFO.\n"
+            "# Connectify askpass helper: secrets come from a private FIFO,\n"
+            "# trust decisions come from the user.\n"
             f"fifo={_shell_quote(channel.path)}\n"
+            f"yield={_shell_quote(yield_file)}\n"
+            "prompt=\"$1\"\n"
+            "\n"
+            "case \"$prompt\" in\n"
+            "  *authenticity*|*yes/no*|*fingerprint*|*\"key verification\"*)\n"
+            "    # Not a secret - a question. Let the connecting card get out\n"
+            "    # of the way before writing to the terminal.\n"
+            "    : > \"$yield\" 2>/dev/null\n"
+            "    sleep 0.3\n"
+            # Opening it is the only honest test: /dev/tty can be readable and
+            # writable as a file and still have no terminal behind it
+            "    printf '' > /dev/tty 2>/dev/null || exit 1\n"
+            "    {\n"
+            "      printf '\\n\\033[38;5;214m\\342\\232\\240\\033[0m  "
+            "\\033[1mThis host is not in your known_hosts yet\\033[0m\\n\\n'\n"
+            "      printf '%s\\n\\n' \"$prompt\"\n"
+            "      printf '\\033[2mType \\033[0myes\\033[2m to trust it, "
+            "anything else to cancel: \\033[0m'\n"
+            "    } > /dev/tty\n"
+            "    read reply < /dev/tty || exit 1\n"
+            # A bare Enter means "I did not agree", and saying so beats ssh
+            # asking the same question again
+            "    [ -n \"$reply\" ] || reply=no\n"
+            "    printf '%s\\n' \"$reply\"\n"
+            "    exit 0\n"
+            "    ;;\n"
+            "esac\n"
+            "\n"
             "n=0\n"
             "while [ $n -lt 100 ]; do\n"
             "  [ -p \"$fifo\" ] && exec /bin/cat \"$fifo\"\n"

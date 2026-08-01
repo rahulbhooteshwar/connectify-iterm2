@@ -146,34 +146,42 @@ jobs:
           tag_name: v${{ needs.prepare.outputs.version }}
           name: v${{ needs.prepare.outputs.version }}
           files: artifacts/*.tar.gz
+          # GitHub writes the "what changed" section from the commits since
+          # the last tag, so this only has to carry what is true of every
+          # release. Anything version-specific belongs in the commits.
+          generate_release_notes: true
           body: |
-            # Connectify - SSH Session Manager for macOS
+            **Connectify** manages your SSH sessions from a web UI and opens
+            each one in its own iTerm2 tab.
 
-            ## Requirements
-
-            - macOS with [iTerm2](https://iterm2.com/index.html) (required)
-            - [iTerm2 browser plugin](https://iterm2.com/browser-plugin.html)
-              (optional - only for the bundled `connectify-UI` profile)
-
-            Builds are provided for both **Apple Silicon** (`arm64`) and
-            **Intel** (`amd64`); the installer picks the right one.
-
-            ## Installation
+            ## Install
 
             ```bash
             curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/connectify-iterm2/main/install.sh | sh
             ```
 
-            ## What's in it
+            Already installed? `connectify upgrade` does the same thing.
 
-            - **Encrypted credentials vault** - SSH passwords and key passphrases
-              in an AES-256-GCM file unlocked by your passcode, not the Keychain
+            Builds are provided for **Apple Silicon** (`arm64`) and **Intel**
+            (`amd64`); the installer picks the right one. Requires
+            [iTerm2](https://iterm2.com/index.html). The
+            [browser plugin](https://iterm2.com/browser-plugin.html) is optional
+            and only used by the bundled `connectify-UI` profile.
+
+            ## What it does
+
+            - **Encrypted credentials vault** - passwords and key passphrases in
+              an AES-256-GCM file unlocked by your passcode, not the Keychain. A
+              credential can carry the username it logs in with, so a fleet
+              sharing one login is one entry.
             - **No sshpass** - secrets reach ssh through OpenSSH's own askpass
               mechanism over a private FIFO: never on disk, never on a command
-              line, never in your shell history
-            - **Web UI** for hosts, groups, per-host tile themes and profiles
+              line, never in your shell history. Trusting an unknown host is
+              asked of you, never answered automatically.
+            - **Hosts, groups and tile themes** in the web UI, with per-host
+              iTerm2 profiles and optional verbose SSH logging.
             - **Bundled iTerm2 profiles** (PERSONAL / NON-PROD / PROD / UI)
-              installed for you
+              installed for you.
 
             ## Upgrading from 1.x
 
@@ -181,20 +189,12 @@ jobs:
             start Connectify removes the old `auth_method`, `ssh_key_path` and
             `password` fields from `hosts.json`; create your credentials on the
             Vault page and assign one to each host. The interactive CLI is gone -
-            hosts are managed in the web UI, and `connectify` now covers
-            `ui start|stop|restart|status|logs`, `profiles`, `doctor` and
-            `version`.
+            hosts are managed in the web UI, and `connectify` covers
+            `ui start|stop|restart|status|logs`, `profiles`, `doctor`,
+            `upgrade` and `version`.
 
-            ## Usage
-
-            ```bash
-            connectify ui start           # Start the web UI server (background)
-            connectify ui status          # Check if it is running
-            connectify doctor             # Diagnostics
-            connectify --help             # Show all commands
-            ```
-
-            See the [README](https://github.com/rahulbhooteshwar/connectify-iterm2) for full documentation.
+            Full documentation is in the
+            [README](https://github.com/rahulbhooteshwar/connectify-iterm2).
           draft: false
           prerelease: false
         env:

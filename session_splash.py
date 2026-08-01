@@ -51,6 +51,8 @@ def build_parser():
     parser.add_argument('--auth', default='', help='How the session authenticates')
     parser.add_argument('--theme', default='default', help='Tile theme: red/green/orange/default')
     parser.add_argument('--marker', required=True, help='File that appears once connected')
+    parser.add_argument('--yield-on', dest='yield_on', default=None,
+                        help='File that appears when something else needs the terminal')
     parser.add_argument('--timeout', type=float, default=DEFAULT_TIMEOUT,
                         help='Give up drawing after this many seconds')
     return parser
@@ -59,6 +61,9 @@ def build_parser():
 def run(argv=None):
     args = build_parser().parse_args(argv)
     marker = Path(args.marker)
+    # The askpass helper touches this when it has to ask the user whether to
+    # trust an unknown host: the card has to stop drawing over the question
+    yielded = Path(args.yield_on) if args.yield_on else None
 
     try:
         from rich.align import Align
@@ -112,7 +117,7 @@ def run(argv=None):
     with Live(card(0), console=console, refresh_per_second=12.5,
               transient=True, screen=False) as live:
         while time.time() - started < args.timeout:
-            if marker.exists():
+            if marker.exists() or (yielded is not None and yielded.exists()):
                 break
             live.update(card(time.time() - started))
             time.sleep(POLL_SECONDS)
