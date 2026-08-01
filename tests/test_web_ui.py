@@ -426,3 +426,52 @@ def test_a_collapsed_group_shows_its_initial_and_its_name_on_hover():
         "take the initial codepoint-wise - half a surrogate pair renders as a box"
     assert 'title={collapsed ? `${name} (${count})` : undefined}' in app, \
         "collapsed, the tooltip is the only place the name is left"
+
+
+# --- groups ------------------------------------------------------------------
+
+def test_the_emoji_field_takes_whatever_the_system_picker_inserts():
+    """macOS's own emoji picker (Control-Command-Space) inserts into whatever
+    text field has focus - there is no web API to open it directly, so the
+    icon field has to be a real, focusable input rather than a custom widget
+    that only reacts to clicks."""
+    picker = read(UI_SRC, 'components', 'EmojiPicker.tsx')
+    assert 'id={id}' in picker
+    assert "value={value}" in picker
+    assert 'onChange={(e) => onChange(' in picker
+
+
+def test_only_one_grapheme_is_kept_per_icon():
+    """A family emoji is several codepoints; slicing by character would leave
+    a fragment that renders as something else. Intl.Segmenter finds the real
+    boundary."""
+    picker = read(UI_SRC, 'components', 'EmojiPicker.tsx')
+    assert 'Intl.Segmenter' in picker or 'Segmenter' in picker
+
+
+def test_the_emoji_picker_carries_no_network_dependency():
+    """Bundled emoji pickers commonly fetch images from a CDN, which breaks
+    offline use and iTerm2's locked-down browser alike - the whole reason a
+    custom picker exists instead of a library."""
+    for path, text in source_files():
+        if 'emoji' not in path.lower():
+            continue
+        for url in re.findall(r'https?://[^\s"\')]+', text):
+            raise AssertionError(f"{path} references {url}")
+
+
+def test_group_rename_and_icon_go_through_one_endpoint():
+    """A group is a label repeated on every host that carries it - renaming
+    it has to be a single request the backend applies atomically, not the UI
+    looping over hosts and calling updateHost per host."""
+    api = read(UI_SRC, 'lib', 'api.ts')
+    assert "/api/groups/${encodeURIComponent(name)}" in api
+    assert "method: 'PUT'" in api
+
+
+def test_group_order_is_persisted_through_the_api_not_local_storage_alone():
+    """The ask was for the order to persist under ~/.connectify - that only
+    happens if the sidebar actually calls the ordering endpoint rather than
+    keeping the arrangement in the browser alone."""
+    app = read(UI_SRC, 'App.tsx')
+    assert 'api.setGroupOrder(' in app

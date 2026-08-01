@@ -22,6 +22,7 @@ import uvicorn
 
 import iterm_profiles
 import ssh_session
+from groups import GroupStore
 import vault as vault_module
 from main import (
     DEFAULT_HOST_THEME,
@@ -114,9 +115,20 @@ class ImportRequest(BaseModel):
     hosts: List[HostCreate]
 
 
+class GroupUpdateRequest(BaseModel):
+    """A rename, an icon, or both. Omitting a field leaves it alone."""
+    name: Optional[str] = None
+    emoji: Optional[str] = None
+
+
+class GroupOrderRequest(BaseModel):
+    groups: List[str]
+
+
 class APISSHManager:
     def __init__(self, config_file="~/.connectify/hosts.json"):
         self.ssh_manager = SSHManager(config_file)
+        self.group_store = GroupStore(config_file)
         self.all_hosts = []
         self.refresh_hosts_data()
 
@@ -135,10 +147,53 @@ class APISSHManager:
         return hosts
 
     def get_unique_groups(self):
-        """Get all group names currently in use, for the group picker"""
+        """Group names in use, in the order the user arranged them"""
         groups = {normalize_group(host.get('group')) for host in self.all_hosts}
         groups.discard('')
-        return sorted(groups, key=str.lower)
+        return sorted(groups, key=self.group_store.order_key)
+
+    def get_group_metadata(self):
+        """Every group in use, in order, with the icon it was given"""
+        groups = {normalize_group(host.get('group')) for host in self.all_hosts}
+        groups.discard('')
+        return self.group_store.metadata(groups)
+
+    def rename_group(self, old_name, new_name, emoji=None):
+        """Rename a group across every host that uses it.
+
+        The group only exists as a label repeated on its hosts, so renaming it
+        means rewriting each of them - and carrying its icon and position over,
+        which would otherwise be lost with the old name.
+        """
+        old_name = normalize_group(old_name)
+        new_name = normalize_group(new_name)
+        if not old_name:
+            raise ValueError("The group to rename must be named")
+        if not new_name:
+            raise ValueError("A group needs a name")
+
+        in_use = {normalize_group(h.get('group')) for h in self.all_hosts}
+        if old_name not in in_use:
+            raise ValueError(f"No group called '{old_name}'")
+        if new_name != old_name and new_name in in_use:
+            raise ValueError(
+                f"'{new_name}' already exists - rename it or pick another name")
+
+        moved = 0
+        if new_name != old_name:
+            for host in self.all_hosts:
+                if normalize_group(host.get('group')) == old_name:
+                    host['group'] = new_name
+                    moved += 1
+            self.ssh_manager.save_config()
+            self.refresh_hosts_data()
+            self.group_store.rename(old_name, new_name)
+
+        if emoji is not None:
+            self.group_store.set_emoji(new_name, emoji)
+
+        return {'name': new_name, 'emoji': self.group_store.emoji_for(new_name),
+                'hosts_updated': moved}
 
     def get_unique_tags(self):
         """Get all unique tags from hosts"""
@@ -165,12 +220,14 @@ class APISSHManager:
         as-is instead of inventing a bucket for them.
         """
         hosts = self.get_hosts_data(search_term, tag_filter)
-        groups, ungrouped_hosts = group_hosts(hosts)
+        groups, ungrouped_hosts = group_hosts(hosts, self.group_store.order_key)
 
         return {
             "groups": groups,
             "ungrouped_hosts": ungrouped_hosts,
-            "total_hosts": len(hosts)
+            "total_hosts": len(hosts),
+            # so the list can show each group's icon without a second request
+            "group_meta": self.get_group_metadata(),
         }
 
     def connect_to_host(self, host_name: str, vault_key=None):
@@ -659,13 +716,54 @@ async def delete_credential(name: str, key=Depends(get_vault_key)):
 
 @app.get("/api/groups")
 async def get_groups():
-    """Get all group names in use, so the form can offer them"""
+    """Group names in use, in the user's order, with their icons"""
     try:
         api_manager.refresh_hosts_data()
         return {
             "success": True,
-            "groups": api_manager.get_unique_groups()
+            "groups": api_manager.get_unique_groups(),
+            "group_meta": api_manager.get_group_metadata(),
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/groups/order")
+async def set_group_order(request: GroupOrderRequest):
+    """Persist the order the groups are arranged in.
+
+    Ahead of /api/groups/{name} in the file on purpose: FastAPI matches routes
+    in order, and "order" would otherwise be read as a group named "order".
+    """
+    try:
+        api_manager.group_store.set_order(request.groups)
+        api_manager.refresh_hosts_data()
+        return {
+            "success": True,
+            "group_meta": api_manager.get_group_metadata(),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/groups/{name}")
+async def update_group(name: str, request: GroupUpdateRequest):
+    """Rename a group and/or set its icon.
+
+    A group is only a label repeated across hosts, so renaming rewrites every
+    host that carries it - which is what makes this an endpoint rather than
+    something the browser could do host by host.
+    """
+    try:
+        api_manager.refresh_hosts_data()
+        result = api_manager.rename_group(
+            name,
+            request.name if request.name is not None else name,
+            request.emoji,
+        )
+        return {"success": True, **result}
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

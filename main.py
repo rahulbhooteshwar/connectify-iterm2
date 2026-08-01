@@ -67,12 +67,14 @@ def normalize_group(value):
     return str(value or '').strip()
 
 
-def group_hosts(hosts):
+def group_hosts(hosts, order_key=None):
     """Split hosts into ``(groups, ungrouped)``.
 
-    ``groups`` maps group name -> hosts, ordered alphabetically
-    (case-insensitive). Hosts without a group are returned separately and
-    rendered as-is by the callers.
+    ``groups`` maps group name -> hosts. ``order_key`` decides the order they
+    come back in - the user's arrangement, when there is one. Without it they
+    are alphabetical (case-insensitive), which is what an unconfigured install
+    gets. Hosts without a group are returned separately and rendered as-is by
+    the callers.
     """
     groups = {}
     ungrouped = []
@@ -84,7 +86,8 @@ def group_hosts(hosts):
         else:
             ungrouped.append(host)
 
-    ordered = {name: groups[name] for name in sorted(groups, key=str.lower)}
+    key = order_key or (lambda name: name.lower())
+    ordered = {name: groups[name] for name in sorted(groups, key=key)}
     return ordered, ungrouped
 
 

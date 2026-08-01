@@ -3,6 +3,7 @@ import {
   Github, KeyRound, Lock, LockOpen, Moon, PanelLeftClose, PanelLeftOpen, Server, Sun, Unplug,
 } from 'lucide-react'
 import { useStore, type Toast } from './store'
+import * as api from './lib/api'
 import { cn } from './components/ui'
 import { HostsPage } from './pages/HostsPage'
 import { VaultPage } from './pages/VaultPage'
@@ -38,10 +39,33 @@ function Sidebar({ page, setPage, groupFilter, setGroupFilter }: {
 }) {
   const {
     hostsByGroup, hosts, vaultUnlocked, lockVault, openGate, dark, setDark,
-    sidebarCollapsed: collapsed, toggleSidebar,
+    sidebarCollapsed: collapsed, toggleSidebar, reloadHosts, toast,
   } = useStore()
-  const groups = hostsByGroup ? Object.entries(hostsByGroup.groups) : []
+  const counts = new Map(
+    hostsByGroup ? Object.entries(hostsByGroup.groups).map(([name, hosts]) => [name, hosts.length]) : [],
+  )
+  // group_meta is the arranged order; fall back to whatever the host list gave
+  // us, so an older backend still renders something sensible
+  const meta = hostsByGroup?.group_meta
+    ?? [...counts.keys()].map((name) => ({ name, emoji: '' }))
+  const groups = meta.filter((g) => counts.has(g.name))
   const ungrouped = hostsByGroup?.ungrouped_hosts.length ?? 0
+
+  const [dragging, setDragging] = React.useState<string | null>(null)
+  const [dropTarget, setDropTarget] = React.useState<string | null>(null)
+
+  const reorder = async (from: string, to: string) => {
+    if (from === to) return
+    const names = groups.map((g) => g.name)
+    const next = names.filter((n) => n !== from)
+    next.splice(next.indexOf(to), 0, from)
+    try {
+      await api.setGroupOrder(next)
+      await reloadHosts()
+    } catch {
+      toast('Could not save the new order', 'error')
+    }
+  }
 
   return (
     <aside
@@ -93,14 +117,25 @@ function Sidebar({ page, setPage, groupFilter, setGroupFilter }: {
               Groups
             </div>
           )}
-          {groups.map(([name, members]) => (
+          {groups.map(({ name, emoji }) => (
             <GroupItem
               key={name}
               name={name}
-              count={members.length}
-              color={themeById(members[0]?.theme).color}
+              emoji={emoji}
+              count={counts.get(name) ?? 0}
+              color={themeById(hostsByGroup?.groups[name]?.[0]?.theme).color}
               active={groupFilter === name}
               collapsed={collapsed}
+              dragging={dragging === name}
+              dropTarget={dropTarget === name}
+              onDragStart={() => setDragging(name)}
+              onDragOver={() => setDropTarget(name)}
+              onDragEnd={() => { setDragging(null); setDropTarget(null) }}
+              onDrop={() => {
+                if (dragging) reorder(dragging, name)
+                setDragging(null)
+                setDropTarget(null)
+              }}
               onClick={() => {
                 setPage('hosts')
                 setGroupFilter(groupFilter === name ? null : name)
@@ -110,6 +145,7 @@ function Sidebar({ page, setPage, groupFilter, setGroupFilter }: {
           {ungrouped > 0 && (
             <GroupItem
               name="Ungrouped"
+              emoji=""
               count={ungrouped}
               // the neutral theme's own grey: --muted-foreground flips with the
               // colour scheme, which left a dark initial on dark grey in light mode
@@ -203,13 +239,23 @@ function NavItem({ active, onClick, icon, label, badge, hint, collapsed }: {
   )
 }
 
-function GroupItem({ name, count, color, active, onClick, collapsed }: {
+function GroupItem({
+  name, emoji, count, color, active, onClick, collapsed,
+  dragging, dropTarget, onDragStart, onDragOver, onDragEnd, onDrop,
+}: {
   name: string
+  emoji: string
   count: number
   color: string
   active: boolean
   onClick: () => void
   collapsed?: boolean
+  dragging?: boolean
+  dropTarget?: boolean
+  onDragStart?: () => void
+  onDragOver?: () => void
+  onDragEnd?: () => void
+  onDrop?: () => void
 }) {
   // Array.from, not [0]: an emoji or an accented letter is more than one UTF-16
   // unit, and half of one renders as a replacement character.
@@ -221,24 +267,43 @@ function GroupItem({ name, count, color, active, onClick, collapsed }: {
       onClick={onClick}
       aria-label={`${name} (${count})`}
       title={collapsed ? `${name} (${count})` : undefined}
+      // Ungrouped is not a group and has no place in the arrangement, so it is
+      // the one item here that cannot be picked up
+      draggable={Boolean(onDragStart)}
+      onDragStart={(e) => {
+        // some text is required or Safari refuses to start the drag
+        e.dataTransfer.setData('text/plain', name)
+        e.dataTransfer.effectAllowed = 'move'
+        onDragStart?.()
+      }}
+      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; onDragOver?.() }}
+      onDragEnd={() => onDragEnd?.()}
+      onDrop={(e) => { e.preventDefault(); onDrop?.() }}
       className={cn(
         'flex w-full items-center rounded-lg text-[13px] cursor-pointer',
         'transition-colors duration-150',
         collapsed ? 'justify-center px-0 py-2' : 'gap-2 px-2.5 py-1.5',
         active ? 'bg-accent text-accent-foreground' : 'hover:bg-muted hover:text-foreground',
+        dragging && 'opacity-40',
+        // where it will land, drawn as a line above the item under the pointer
+        dropTarget && !dragging && 'ring-1 ring-inset ring-ring',
       )}
     >
       {collapsed ? (
-        // Collapsed there is no room for the name, and nine coloured dots say
-        // nothing about which group is which. An initial does, and the tooltip
-        // carries the rest.
+        // Collapsed there is no room for the name. The icon says which group
+        // this is; without one, its initial does, and the tooltip has the rest.
         <span
           aria-hidden
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold uppercase leading-none"
-          style={{ background: color, color: '#0b0d12' }}
+          className={cn(
+            'flex h-6 w-6 shrink-0 items-center justify-center rounded-full leading-none',
+            emoji ? 'text-sm' : 'text-[11px] font-semibold uppercase',
+          )}
+          style={emoji ? undefined : { background: color, color: '#0b0d12' }}
         >
-          {initial}
+          {emoji || initial}
         </span>
+      ) : emoji ? (
+        <span aria-hidden className="w-2 shrink-0 text-center text-[13px] leading-none">{emoji}</span>
       ) : (
         <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />
       )}

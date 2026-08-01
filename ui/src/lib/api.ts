@@ -6,7 +6,9 @@
  * store turns that into the unlock dialog and retries.
  */
 
-import type { Credential, FullCredential, Host, HostsPayload, ItermProfile, VaultStatus } from './types'
+import type {
+  Credential, FullCredential, GroupMeta, Host, HostsPayload, ItermProfile, VaultStatus,
+} from './types'
 
 let vaultToken: string | null = null
 
@@ -75,6 +77,21 @@ export const importHosts = (hosts: unknown[]) =>
 
 export const fetchTags = () => request<{ tags: string[] }>('/api/tags').then((r) => r.tags)
 export const fetchGroups = () => request<{ groups: string[] }>('/api/groups').then((r) => r.groups)
+
+/** Rename a group and/or set its icon. The rename rewrites every host in it,
+ * which is why it is one request rather than a loop over hosts here. */
+export const updateGroup = (name: string, changes: { name?: string; emoji?: string }) =>
+  request<{ name: string; emoji: string; hosts_updated: number }>(
+    `/api/groups/${encodeURIComponent(name)}`,
+    { method: 'PUT', body: JSON.stringify(changes) },
+  )
+
+/** Persist the order the groups were dragged into. */
+export const setGroupOrder = (groups: string[]) =>
+  request<{ group_meta: GroupMeta[] }>('/api/groups/order', {
+    method: 'PUT',
+    body: JSON.stringify({ groups }),
+  }).then((r) => r.group_meta)
 export const fetchProfiles = () =>
   request<{ profiles: ItermProfile[] }>('/api/profiles').then((r) => r.profiles)
 

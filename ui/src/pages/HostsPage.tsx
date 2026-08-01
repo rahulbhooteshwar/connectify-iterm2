@@ -10,9 +10,16 @@ import { themeById } from '../lib/themes'
 import { Badge, Button, cn, Input, Spinner } from '../components/ui'
 import { HostDialog } from '../components/HostDialog'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { GroupDialog } from '../components/GroupDialog'
 import { ImportDialog, ExportDialog } from '../components/TransferDialogs'
 
 type LaunchState = 'connecting' | 'launched' | undefined
+
+/** A group's icon and a trailing space, or nothing at all. */
+function groupIcon(payload: { group_meta?: { name: string; emoji: string }[] } | null, name: string) {
+  const emoji = payload?.group_meta?.find((g) => g.name === name)?.emoji
+  return emoji ? `${emoji} ` : ''
+}
 
 export function HostsPage({ groupFilter, clearGroupFilter }: {
   groupFilter: string | null
@@ -26,6 +33,8 @@ export function HostsPage({ groupFilter, clearGroupFilter }: {
   const [launching, setLaunching] = React.useState<Record<string, LaunchState>>({})
   const [editing, setEditing] = React.useState<Host | null | 'new'>(null)
   const [deleting, setDeleting] = React.useState<Host | null>(null)
+  const [editingGroup, setEditingGroup] =
+    React.useState<{ name: string; emoji: string; count: number } | null>(null)
   const [importing, setImporting] = React.useState(false)
   const [exporting, setExporting] = React.useState(false)
 
@@ -42,9 +51,13 @@ export function HostsPage({ groupFilter, clearGroupFilter }: {
 
   const sections = React.useMemo(() => {
     if (!hostsByGroup) return []
-    const all: { name: string | null; hosts: Host[] }[] = [
-      ...Object.entries(hostsByGroup.groups).map(([name, hosts]) => ({ name, hosts })),
-      { name: null, hosts: hostsByGroup.ungrouped_hosts },
+    // The backend already returns the groups in the arranged order; group_meta
+    // carries each one's icon alongside it.
+    const icons = new Map((hostsByGroup.group_meta ?? []).map((g) => [g.name, g.emoji]))
+    const all: { name: string | null; emoji: string; hosts: Host[] }[] = [
+      ...Object.entries(hostsByGroup.groups)
+        .map(([name, hosts]) => ({ name, emoji: icons.get(name) ?? '', hosts })),
+      { name: null, emoji: '', hosts: hostsByGroup.ungrouped_hosts },
     ]
     return all
       .filter((section) => groupFilter === null
@@ -126,7 +139,7 @@ export function HostsPage({ groupFilter, clearGroupFilter }: {
         {groupFilter && (
           <Badge className="border-primary/40 bg-accent text-accent-foreground">
             <FolderOpen size={11} />
-            {groupFilter === UNGROUPED ? 'Ungrouped' : groupFilter}
+            {groupFilter === UNGROUPED ? 'Ungrouped' : `${groupIcon(hostsByGroup, groupFilter)}${groupFilter}`}
             <button type="button" aria-label="Clear group filter" onClick={clearGroupFilter} className="cursor-pointer hover:text-foreground">
               <X size={11} />
             </button>
@@ -183,11 +196,31 @@ export function HostsPage({ groupFilter, clearGroupFilter }: {
           <div className="space-y-6">
             {sections.map((section) => (
               <section key={section.name ?? '·ungrouped'} className="animate-fade-up">
-                <div className="mb-2.5 flex items-baseline gap-2">
+                <div className="group/section mb-2.5 flex items-center gap-2">
+                  {section.emoji && (
+                    <span aria-hidden className="text-sm leading-none">{section.emoji}</span>
+                  )}
                   <h2 className="text-[13px] font-semibold uppercase tracking-wider text-muted-foreground">
                     {section.name ?? 'Ungrouped'}
                   </h2>
                   <span className="text-[11px] tabular-nums text-muted-foreground/70">{section.hosts.length}</span>
+                  {/* Ungrouped is not a group - there is no name to change and
+                      no icon to give it, so it gets no pencil. */}
+                  {section.name && (
+                    <Button
+                      size="icon" variant="ghost"
+                      aria-label={`Edit group ${section.name}`}
+                      title="Rename or set an icon"
+                      className="opacity-0 transition-opacity group-hover/section:opacity-100 focus-visible:opacity-100"
+                      onClick={() => setEditingGroup({
+                        name: section.name as string,
+                        emoji: section.emoji,
+                        count: section.hosts.length,
+                      })}
+                    >
+                      <Pencil size={12} />
+                    </Button>
+                  )}
                 </div>
                 {/* Fixed column counts rather than auto-fill: auto-fill keeps
                     empty tracks at the end of a row, which is what left a 32in
@@ -227,6 +260,14 @@ export function HostsPage({ groupFilter, clearGroupFilter }: {
           destructive
           onConfirm={confirmDelete}
           onClose={() => setDeleting(null)}
+        />
+      )}
+      {editingGroup && (
+        <GroupDialog
+          group={editingGroup.name}
+          emoji={editingGroup.emoji}
+          hostCount={editingGroup.count}
+          onClose={() => setEditingGroup(null)}
         />
       )}
       {importing && <ImportDialog onClose={() => setImporting(false)} />}

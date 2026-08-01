@@ -42,10 +42,18 @@ export interface ItermProfile {
   is_default: boolean
 }
 
+export interface GroupMeta {
+  name: string
+  /** optional icon, shown before the name wherever the group is rendered */
+  emoji: string
+}
+
 export interface HostsPayload {
   groups: Record<string, Host[]>
   ungrouped_hosts: Host[]
   total_hosts: number
+  /** groups in the order the user arranged them, with their icons */
+  group_meta?: GroupMeta[]
 }
 
 export interface VaultStatus {
