@@ -618,4 +618,4 @@ For development questions:
 
 ---
 
-Built with ❤️ by RB (Rahul Bhooteshwar)
+Built with ❤️ by RB

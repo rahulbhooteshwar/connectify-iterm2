@@ -3,7 +3,7 @@
 Connectify - SSH Session Manager for iTerm2
 A utility to manage and launch SSH sessions with credential storage and iTerm2 profile support
 
-Built with ❤️ by RB (Rahul Bhooteshwar)
+Built with ❤️ by RB
 """
 
 import json

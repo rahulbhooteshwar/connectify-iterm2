@@ -159,7 +159,7 @@ function Sidebar({ page, setPage, groupFilter, setGroupFilter }: {
         </a>
         {!collapsed && (
           <div className="px-2.5 pt-1.5 text-[10px] text-muted-foreground">
-            Built with ❤️ by RB (Rahul Bhooteshwar)
+            Built with ❤️ by RB
           </div>
         )}
       </div>
