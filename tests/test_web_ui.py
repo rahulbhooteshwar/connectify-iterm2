@@ -395,3 +395,24 @@ def test_no_source_file_hides_a_control_character():
                 continue
             assert ord(char) >= 0x20, \
                 f"{path} contains a raw control character (0x{ord(char):02x})"
+
+def test_a_field_caption_never_wraps_its_control():
+    """A <label> forwards clicks to its first labelable descendant. Wrapping a
+    field built from several controls therefore fired the first button from
+    anywhere in it: clicking one tag's X deleted that tag and the first one,
+    and clicking the caption deleted a tag on its own.
+    """
+    ui = read(UI_SRC, 'components', 'ui.tsx')
+    field = ui[ui.index('export function Field'):]
+    field = field[:field.index('/** A masked secret field')]
+
+    assert '{children}' in field
+    caption = field.index('htmlFor={htmlFor}')
+    children = field.index('{children}')
+    assert caption < children, "the caption must be a sibling of the control"
+    assert '<label' in field and 'htmlFor={htmlFor}' in field, \
+        "a caption that names one control should still be a real label"
+
+    # the wrapper itself has to be a plain element
+    wrapper = field[field.index('return ('):field.index('{children}')]
+    assert '<label className' not in wrapper, "Field still wraps its children in a label"

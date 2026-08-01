@@ -69,21 +69,37 @@ export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttribute
   },
 )
 
-export function Field({ label, hint, optional, children }: {
+/** Caption + control + hint.
+ *
+ * The caption is a <label> only when it is told which control it names. It
+ * must never wrap the control instead: a label forwards clicks to its first
+ * labelable descendant, so on a field built from several controls - the tag
+ * row, the theme dots - clicking anywhere in it, caption included, fired the
+ * first button. Deleting one tag deleted two.
+ */
+export function Field({ label, hint, optional, htmlFor, children }: {
   label: string
   hint?: React.ReactNode
   optional?: boolean
+  /** id of the single control this names; omit for composite fields */
+  htmlFor?: string
   children: React.ReactNode
 }) {
+  const caption = (
+    <>
+      {label}
+      {optional && <span className="ml-1 font-normal text-muted-foreground">(optional)</span>}
+    </>
+  )
+
   return (
-    <label className="block space-y-1.5">
-      <span className="text-[13px] font-medium text-foreground">
-        {label}
-        {optional && <span className="ml-1 font-normal text-muted-foreground">(optional)</span>}
-      </span>
+    <div className="block space-y-1.5">
+      {htmlFor
+        ? <label htmlFor={htmlFor} className="block text-[13px] font-medium text-foreground">{caption}</label>
+        : <span className="block text-[13px] font-medium text-foreground">{caption}</span>}
       {children}
       {hint && <span className="block text-xs leading-relaxed text-muted-foreground">{hint}</span>}
-    </label>
+    </div>
   )
 }
 

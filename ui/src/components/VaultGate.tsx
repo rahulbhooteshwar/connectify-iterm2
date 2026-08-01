@@ -47,12 +47,13 @@ export function VaultGate() {
                 <ShieldCheck size={28} />
               </div>
             </div>
-            <Field label="Passcode">
+            <Field label="Passcode" htmlFor="vaultPasscode">
               <SecretInput id="vaultPasscode" value={passcode} onChange={setPasscode} autoFocus />
             </Field>
             {creating && (
               <Field
                 label="Confirm passcode"
+                htmlFor="vaultPasscodeConfirm"
                 hint="There is no recovery - if you forget this passcode the credentials are gone."
               >
                 <SecretInput id="vaultPasscodeConfirm" value={confirm} onChange={setConfirm} />

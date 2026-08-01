@@ -111,27 +111,27 @@ export function HostDialog({ host, onClose }: { host: Host | null; onClose: () =
       <DialogContent title={host ? 'Edit host' : 'Add host'} wide>
         <DialogBody className="space-y-4">
           <div className="grid grid-cols-[1fr_7rem] gap-3">
-            <Field label="Title">
+            <Field label="Title" htmlFor="hostTitle">
               <Input id="hostTitle" value={title} onChange={(e) => setTitle(e.target.value)}
                 placeholder="Production DB" autoFocus />
             </Field>
-            <Field label="Port">
+            <Field label="Port" htmlFor="hostPort">
               <Input id="hostPort" type="number" value={port} min={1} max={65535}
                 onChange={(e) => setPort(e.target.value)} />
             </Field>
           </div>
 
-          <Field label="Endpoint">
+          <Field label="Endpoint" htmlFor="hostEndpoint">
             <Input id="hostEndpoint" value={endpoint} onChange={(e) => setEndpoint(e.target.value)}
               placeholder="db.internal.example.com or 10.0.0.42" />
           </Field>
 
-          <Field label="Login" optional hint={loginHint}>
+          <Field label="Login" optional hint={loginHint} htmlFor="hostLogin">
             <Input id="hostLogin" value={login} onChange={(e) => setLogin(e.target.value)}
               placeholder="Leave empty to use the credential's login" />
           </Field>
 
-          <Field label="Credential" hint={
+          <Field label="Credential" htmlFor="hostCredential" hint={
             credential
               ? credential.type === 'key' ? `SSH key: ${credential.ssh_key_path || '(no path)'}` : 'Password credential'
               : credentialName ? 'This credential is not in the vault - add it or pick another.'
@@ -159,7 +159,7 @@ export function HostDialog({ host, onClose }: { host: Host | null; onClose: () =
           </Field>
 
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Group" optional>
+            <Field label="Group" optional htmlFor="hostGroup">
               <Combobox
                 id="hostGroup"
                 value={group}
@@ -169,7 +169,7 @@ export function HostDialog({ host, onClose }: { host: Host | null; onClose: () =
                 emptyText="New group - created on save"
               />
             </Field>
-            <Field label="iTerm profile" hint={
+            <Field label="iTerm profile" htmlFor="itermProfile" hint={
               !profileKnown
                 ? `'${profile}' is not in iTerm2 any more - the session will fall back to the default profile.`
                 : `${profiles.length} profile(s) available`
@@ -206,7 +206,7 @@ export function HostDialog({ host, onClose }: { host: Host | null; onClose: () =
             </div>
           </Field>
 
-          <Field label="Tags" optional>
+          <Field label="Tags" optional htmlFor="tagInput">
             <div className="flex min-h-9 flex-wrap items-center gap-1.5 rounded-lg border border-input bg-card px-2 py-1.5 focus-within:border-ring">
               {tags.map((t) => (
                 <Badge key={t} className="bg-muted">

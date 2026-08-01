@@ -222,13 +222,13 @@ function ChangePasscodeDialog({ onClose }: { onClose: () => void }) {
       <DialogContent title="Change passcode"
         description="Re-encrypts the vault. Every other open page is locked out and needs the new passcode.">
         <DialogBody className="space-y-4">
-          <Field label="Current passcode">
+          <Field label="Current passcode" htmlFor="vaultPasscodeCurrent">
             <SecretInput id="vaultPasscodeCurrent" value={current} onChange={setCurrent} autoFocus />
           </Field>
-          <Field label="New passcode">
+          <Field label="New passcode" htmlFor="vaultPasscodeNew">
             <SecretInput id="vaultPasscodeNew" value={next} onChange={setNext} />
           </Field>
-          <Field label="Confirm new passcode"
+          <Field label="Confirm new passcode" htmlFor="vaultPasscodeNewConfirm"
             hint="There is no recovery - if you forget this passcode the credentials are gone.">
             <SecretInput id="vaultPasscodeNewConfirm" value={confirm} onChange={setConfirm} />
           </Field>

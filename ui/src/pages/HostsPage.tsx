@@ -189,8 +189,13 @@ export function HostsPage({ groupFilter, clearGroupFilter }: {
                   </h2>
                   <span className="text-[11px] tabular-nums text-muted-foreground/70">{section.hosts.length}</span>
                 </div>
+                {/* Fixed column counts rather than auto-fill: auto-fill keeps
+                    empty tracks at the end of a row, which is what left a 32in
+                    monitor showing four narrow cards and a band of empty space.
+                    These stretch to the width available, and stop at four so a
+                    card never grows absurd. */}
                 <div className={view === 'grid'
-                  ? 'grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]'
+                  ? 'grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4'
                   : 'space-y-2'}>
                   {section.hosts.map((host) => (
                     <HostTile
@@ -262,19 +267,30 @@ function HostTile({ host, list, state, onLaunch, onEdit, onDelete, onCopy }: {
   const login = effectiveLogin(host, credentials)
   const port = host.port && host.port !== 22 ? `:${host.port}` : ''
   const target = `${login ? `${login}@` : ''}${host.hostname}${port}`
+  const address = `${host.hostname}${port}`
   const connectionString = `${login ? `${login}@` : ''}${host.hostname}`
 
-  const credentialBadge = !host.credential ? (
-    <Badge className="border-destructive/40 text-destructive"><TriangleAlert size={10} /> no credential</Badge>
-  ) : !vaultUnlocked || !credential ? (
-    <Badge title={`Credential: ${host.credential}`}><KeyRound size={10} /> {host.credential}</Badge>
-  ) : credential.type === 'key' ? (
-    <Badge className="border-success/40 text-success" title={`SSH key: ${credential.name}`}>
-      <KeyRound size={10} /> {credential.name}
-    </Badge>
-  ) : (
-    <Badge className="border-warning/40 text-warning" title={`Password: ${credential.name}`}>
-      <SquareAsterisk size={10} /> {credential.name}
+  // How this host authenticates, as one mark. The name is worth knowing but not
+  // worth a line of every tile, so it lives in the tooltip.
+  const indicator = (() => {
+    if (!host.credential) {
+      return { icon: <TriangleAlert size={12} />, tone: 'border-destructive/40 text-destructive',
+               tip: 'No credential - this host cannot connect yet' }
+    }
+    if (!vaultUnlocked || !credential) {
+      return { icon: <KeyRound size={12} />, tone: '',
+               tip: `${host.credential} - unlock the vault for details` }
+    }
+    return credential.type === 'key'
+      ? { icon: <KeyRound size={12} />, tone: 'border-success/40 text-success',
+          tip: `SSH key: ${credential.name}` }
+      : { icon: <SquareAsterisk size={12} />, tone: 'border-warning/40 text-warning',
+          tip: `Password: ${credential.name}` }
+  })()
+
+  const credentialBadge = (
+    <Badge className={cn('px-1.5', indicator.tone)} title={indicator.tip} aria-label={indicator.tip}>
+      {indicator.icon}
     </Badge>
   )
 
@@ -335,13 +351,28 @@ function HostTile({ host, list, state, onLaunch, onEdit, onDelete, onCopy }: {
 
   return (
     <div
-      className="group relative flex flex-col gap-2.5 overflow-hidden rounded-xl border border-border bg-card p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg animate-fade-up"
-      style={{ boxShadow: `inset 0 3px 0 0 ${theme.color}` }}
+      className={cn(
+        'group tile relative flex flex-col gap-2 overflow-hidden rounded-xl border border-border',
+        'bg-card p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg',
+        'animate-fade-up',
+      )}
+      style={{
+        boxShadow: `inset 0 3px 0 0 ${theme.color}`,
+        ['--tile-tint' as string]: theme.strong,
+        ['--tile-tint-fade' as string]: theme.soft,
+      }}
     >
       {actions}
       <div className="min-w-0">
         <div className="truncate text-sm font-semibold" title={host.name}>{host.name}</div>
-        <div className="mt-0.5 truncate font-mono text-xs text-muted-foreground" title={target}>{target}</div>
+        {/* the address on its own line - the login has its own below, so a long
+            hostname gets the whole width before it has to ellipsise */}
+        <div className="mt-0.5 truncate font-mono text-xs text-muted-foreground" title={address}>
+          {address}
+        </div>
+      </div>
+      <div className="min-w-0 truncate font-mono text-[11px] text-muted-foreground/80" title={login || undefined}>
+        {login || <span className="not-italic text-destructive/80">no login</span>}
       </div>
       <div className="flex flex-wrap items-center gap-1.5">
         {credentialBadge}

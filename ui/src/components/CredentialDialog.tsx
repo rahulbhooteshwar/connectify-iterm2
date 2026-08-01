@@ -79,12 +79,13 @@ export function CredentialDialog({ credentialName, onClose, onSaved }: {
           <>
             <DialogBody className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Title">
+                <Field label="Title" htmlFor="credentialTitle">
                   <Input id="credentialTitle" value={title} onChange={(e) => setTitle(e.target.value)}
                     placeholder="prod-admin" autoFocus={!credentialName} />
                 </Field>
-                <Field label="Type">
+                <Field label="Type" htmlFor="credentialType">
                   <select
+                    id="credentialType"
                     value={type}
                     onChange={(e) => setType(e.target.value as 'password' | 'key')}
                     className="h-9 w-full cursor-pointer rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:outline-none focus:border-ring"
@@ -95,28 +96,28 @@ export function CredentialDialog({ credentialName, onClose, onSaved }: {
                 </Field>
               </div>
 
-              <Field label="Login" optional
+              <Field label="Login" optional htmlFor="credentialLogin"
                 hint="Overrides the login on every host that uses this credential.">
                 <Input id="credentialLogin" value={loginName} onChange={(e) => setLoginName(e.target.value)}
                   placeholder="ubuntu" />
               </Field>
 
-              <Field label="Description" optional>
+              <Field label="Description" optional htmlFor="credentialDescription">
                 <Input id="credentialDescription" value={description} onChange={(e) => setDescription(e.target.value)}
                   placeholder="Shared admin login for production" />
               </Field>
 
               {type === 'password' ? (
-                <Field label="Password">
+                <Field label="Password" htmlFor="credentialPassword">
                   <SecretInput id="credentialPassword" value={password} onChange={setPassword} />
                 </Field>
               ) : (
                 <>
-                  <Field label="SSH key path">
+                  <Field label="SSH key path" htmlFor="credentialKeyPath">
                     <Input id="credentialKeyPath" value={keyPath} onChange={(e) => setKeyPath(e.target.value)}
                       placeholder="~/.ssh/id_ed25519" />
                   </Field>
-                  <Field label="Passphrase" optional>
+                  <Field label="Passphrase" optional htmlFor="credentialPassphrase">
                     <SecretInput id="credentialPassphrase" value={passphrase} onChange={setPassphrase} />
                   </Field>
                 </>

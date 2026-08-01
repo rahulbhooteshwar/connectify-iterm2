@@ -149,3 +149,22 @@ input::-webkit-search-results-decoration { display: none !important; -webkit-app
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in, .animate-fade-up, .animate-zoom-in, .animate-toast-in { animation: none; }
 }
+
+/* A tile lights up in its own theme colour on hover. The tint is set per tile
+   as --tile-tint, so one rule covers all nine themes. */
+.tile {
+  transition: background-image 200ms ease, transform 200ms ease, box-shadow 200ms ease;
+}
+
+.tile:hover {
+  background-image: linear-gradient(
+    135deg,
+    var(--tile-tint) 0%,
+    var(--tile-tint-fade) 55%,
+    transparent 100%
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile { transition: none; }
+}
