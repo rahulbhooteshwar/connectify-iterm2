@@ -258,7 +258,7 @@
        text field itself, one of those is used instead, so there is no
        password field for a password manager to decorate at all. See
        maskSecretFields(). */
-    /* the contact card on anything read as a person */
+    /* a person: name, address, phone */
     input::-webkit-contacts-auto-fill-button {
       display: none !important;
       visibility: hidden !important;
@@ -273,8 +273,23 @@
       -webkit-appearance: none;
     }
 
-    /* the key on password fields */
+    /* a saved password */
     input::-webkit-credentials-auto-fill-button {
+      display: none !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+      position: absolute !important;
+      right: 0;
+      width: 0 !important;
+      max-width: 0 !important;
+      height: 0 !important;
+      max-height: 0 !important;
+      opacity: 0 !important;
+      -webkit-appearance: none;
+    }
+
+    /* a saved card */
+    input::-webkit-credit-card-auto-fill-button {
       display: none !important;
       visibility: hidden !important;
       pointer-events: none !important;
@@ -290,6 +305,21 @@
 
     /* Safari's suggested password */
     input::-webkit-strong-password-auto-fill-button {
+      display: none !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+      position: absolute !important;
+      right: 0;
+      width: 0 !important;
+      max-width: 0 !important;
+      height: 0 !important;
+      max-height: 0 !important;
+      opacity: 0 !important;
+      -webkit-appearance: none;
+    }
+
+    /* and its confirmation field */
+    input::-webkit-strong-confirmation-password-auto-fill-button {
       display: none !important;
       visibility: hidden !important;
       pointer-events: none !important;
@@ -332,6 +362,116 @@
       opacity: 0 !important;
       -webkit-appearance: none;
     }
+
+    /* the datalist arrow */
+    input::-webkit-list-button {
+      display: none !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+      position: absolute !important;
+      right: 0;
+      width: 0 !important;
+      max-width: 0 !important;
+      height: 0 !important;
+      max-height: 0 !important;
+      opacity: 0 !important;
+      -webkit-appearance: none;
+    }
+
+    /* the clear cross */
+    input::-webkit-clear-button {
+      display: none !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+      position: absolute !important;
+      right: 0;
+      width: 0 !important;
+      max-width: 0 !important;
+      height: 0 !important;
+      max-height: 0 !important;
+      opacity: 0 !important;
+      -webkit-appearance: none;
+    }
+
+    /* the date picker */
+    input::-webkit-calendar-picker-indicator {
+      display: none !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+      position: absolute !important;
+      right: 0;
+      width: 0 !important;
+      max-width: 0 !important;
+      height: 0 !important;
+      max-height: 0 !important;
+      opacity: 0 !important;
+      -webkit-appearance: none;
+    }
+
+    /* search field furniture */
+    input::-webkit-search-cancel-button {
+      display: none !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+      position: absolute !important;
+      right: 0;
+      width: 0 !important;
+      max-width: 0 !important;
+      height: 0 !important;
+      max-height: 0 !important;
+      opacity: 0 !important;
+      -webkit-appearance: none;
+    }
+
+    /* search field furniture */
+    input::-webkit-search-decoration {
+      display: none !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+      position: absolute !important;
+      right: 0;
+      width: 0 !important;
+      max-width: 0 !important;
+      height: 0 !important;
+      max-height: 0 !important;
+      opacity: 0 !important;
+      -webkit-appearance: none;
+    }
+
+    /* search field furniture */
+    input::-webkit-search-results-button {
+      display: none !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+      position: absolute !important;
+      right: 0;
+      width: 0 !important;
+      max-width: 0 !important;
+      height: 0 !important;
+      max-height: 0 !important;
+      opacity: 0 !important;
+      -webkit-appearance: none;
+    }
+
+    /* search field furniture */
+    input::-webkit-search-results-decoration {
+      display: none !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+      position: absolute !important;
+      right: 0;
+      width: 0 !important;
+      max-width: 0 !important;
+      height: 0 !important;
+      max-height: 0 !important;
+      opacity: 0 !important;
+      -webkit-appearance: none;
+    }
+
+    /* Deliberately NOT hiding ::-webkit-textfield-decoration-container: the
+       field's own text is laid out inside it, so collapsing it renders a
+       number input blank - value present, nothing drawn. Each button above is
+       hidden individually instead. */
 
     .masked-input {
       -webkit-text-security: disc;
@@ -2291,7 +2431,7 @@
     <div id="hostModal" class="connection-overlay">
       <div class="connection-modal" style="max-width: 600px; text-align: left;">
         <h3 id="modalTitle" style="margin-bottom: 1.5rem;">Add New Host</h3>
-        <form id="hostForm">
+        <form id="hostForm" autocomplete="off">
           <input type="hidden" id="originalName">
 
           <div class="form-group" style="margin-bottom: 1.5rem; position: relative;">
@@ -2428,7 +2568,7 @@
         <p id="vaultUnlockHint" style="color: var(--text-secondary); margin-bottom: 1.25rem; font-size: 0.9rem;">
           Enter your passcode to unlock the credentials vault.
         </p>
-        <form id="vaultUnlockForm">
+        <form id="vaultUnlockForm" autocomplete="off">
           <div class="form-group" style="margin-bottom: 1rem;">
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Passcode</label>
             <input type="password" id="vaultPasscode" class="search-input masked-input" style="width: 100%;" autocomplete="off" required autocapitalize="off" autocorrect="off" spellcheck="false">
@@ -2451,7 +2591,7 @@
     <div id="credentialModal" class="connection-overlay">
       <div class="connection-modal" style="max-width: 680px; width: min(680px, 92vw); text-align: left;">
         <h3 id="credentialModalTitle" style="margin-bottom: 1.5rem;">Add Credential</h3>
-        <form id="credentialForm">
+        <form id="credentialForm" autocomplete="off">
           <input type="hidden" id="credentialOriginalName">
 
           <div class="form-group" style="margin-bottom: 1rem;">

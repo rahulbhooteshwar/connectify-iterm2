@@ -80,9 +80,18 @@ def test_the_plain_text_swap_is_gated_on_support():
 AUTOFILL_BUTTONS = (
     '::-webkit-contacts-auto-fill-button',
     '::-webkit-credentials-auto-fill-button',
+    '::-webkit-credit-card-auto-fill-button',
     '::-webkit-strong-password-auto-fill-button',
+    '::-webkit-strong-confirmation-password-auto-fill-button',
     '::-webkit-strong-password-and-generate-button',
     '::-webkit-caps-lock-indicator',
+    '::-webkit-list-button',
+    '::-webkit-clear-button',
+    '::-webkit-calendar-picker-indicator',
+    '::-webkit-search-cancel-button',
+    '::-webkit-search-decoration',
+    '::-webkit-search-results-button',
+    '::-webkit-search-results-decoration',
 )
 
 
@@ -99,6 +108,16 @@ def test_webkits_autofill_buttons_are_hidden_one_rule_at_a_time():
         assert pseudo in html, f"{pseudo} is not hidden"
         rule = re.search(r'input%s\s*,' % re.escape(pseudo), html)
         assert rule is None, f"{pseudo} shares a selector list; split it out"
+
+
+def test_the_decoration_container_is_left_alone():
+    """Collapsing it renders a number input blank - the field's own text is
+    laid out inside that container, so the port would show nothing while
+    holding 22. The buttons are hidden one by one instead."""
+    html = read_index()
+
+    rule = re.search(r'input::-webkit-textfield-decoration-container\s*\{', html)
+    assert rule is None, "hiding this container blanks number fields"
 
 
 def test_text_fields_opt_out_of_autofill():
