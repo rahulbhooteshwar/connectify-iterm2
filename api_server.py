@@ -833,7 +833,7 @@ async def export_template():
         "_note": "'credential' is the name of a credential in the Connectify vault - "
                  "create it on the Vault page (secrets are never part of an import or "
                  "export). 'group' is optional; hosts without one are listed ungrouped. "
-                 "'theme' is one of default, red, green, orange."
+                 "'theme' is one of default, red, orange, amber, green, teal, blue, violet, pink."
     }
 
     return JSONResponse(
@@ -888,6 +888,17 @@ async def import_hosts(import_data: ImportRequest):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/sw.js", include_in_schema=False)
+async def service_worker():
+    """The PWA service worker.
+
+    Served from the root rather than /static because a worker can only
+    control pages inside its own scope - registered under /static it could
+    never control "/", and the app would not be installable.
+    """
+    return FileResponse(static_dir / "sw.js", media_type="application/javascript")
 
 
 @app.get("/api/health")

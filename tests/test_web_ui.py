@@ -1,81 +1,163 @@
-"""Properties of the single-page UI that are worth pinning down."""
+"""Properties of the React UI that are worth pinning down.
 
+The UI is a Vite build now, so there are two things to check: the source in
+``ui/`` (where the rules about labels, ids and masking actually live) and the
+build output in ``static/`` (what FastAPI serves and PyInstaller bundles).
+"""
+
+import json
 import os
 import re
+import sys
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-INDEX = os.path.join(REPO_ROOT, 'static', 'index.html')
+sys.path.append(REPO_ROOT)
+
+STATIC = os.path.join(REPO_ROOT, 'static')
+UI_SRC = os.path.join(REPO_ROOT, 'ui', 'src')
 
 
-def read_index():
-    with open(INDEX, encoding='utf-8') as f:
+def read(*parts):
+    with open(os.path.join(*parts), encoding='utf-8') as f:
         return f.read()
 
 
-SECRET_FIELDS = ('vaultPasscode', 'vaultPasscodeConfirm',
-                 'credentialPassword', 'credentialPassphrase')
+def read_index():
+    return read(STATIC, 'index.html')
 
 
-def test_secret_fields_are_masked_and_undecorated():
-    """iTerm2's embedded browser floats an AutoFill key over password fields.
-
-    Two defences, and both have to stay: hide the decorations, and swap in a
-    text field the browser masks itself so there is nothing to decorate.
-    """
-    html = read_index()
-
-    assert '::-webkit-credentials-auto-fill-button' in html
-    assert '-webkit-text-security: disc' in html
-    assert 'maskSecretFields' in html
-    assert 'this.maskSecretFields();' in html, "run before anything can be typed"
+def read_css():
+    return read(UI_SRC, 'index.css')
 
 
-def test_every_secret_field_is_masked_by_the_markup_itself():
-    """No window, however short, where a keystroke could be read.
-
-    The mask is a class in the HTML rather than something JavaScript adds
-    later, so it applies as the field is parsed - and the field starts as a
-    password input, which is masked even if the stylesheet never loads.
-    """
-    html = read_index()
-
-    for ident in SECRET_FIELDS:
-        field = re.search(r'<input[^>]*id="%s"[^>]*>' % ident, html)
-        assert field, f"{ident} is missing"
-        markup = field.group(0)
-        assert 'masked-input' in markup, f"{ident} is not masked in the markup"
-        assert 'type="password"' in markup, f"{ident} must start as a password field"
+def source_files():
+    """Every .ts/.tsx file under ui/src, as (relative path, text)."""
+    out = []
+    for root, _dirs, files in os.walk(UI_SRC):
+        for name in sorted(files):
+            if name.endswith(('.ts', '.tsx')):
+                path = os.path.join(root, name)
+                out.append((os.path.relpath(path, REPO_ROOT), read(path)))
+    assert out, "no UI sources found"
+    return out
 
 
-def test_no_secret_field_is_left_as_a_plain_input():
-    """Anything that takes a secret has to be in the masked set above."""
-    html = read_index()
+def built_bundles():
+    """The hashed JS/CSS the built index.html pulls in."""
+    index = read_index()
+    names = re.findall(r'/static/(assets/[^"\']+)', index)
+    assert names, "index.html references no build assets"
+    return [(name, read(STATIC, *name.split('/'))) for name in names]
 
-    for match in re.finditer(r'<input\b[^>]*>', html, re.S):
-        markup = match.group(0)
-        looks_secret = any(word in markup.lower()
-                           for word in ('passcode', 'password', 'passphrase'))
-        if not looks_secret or 'placeholder' in markup and 'id=' not in markup:
+
+# --- the build --------------------------------------------------------------
+
+def test_the_ui_is_built_into_static():
+    """PyInstaller bundles static/ verbatim - if it is stale or missing, the
+    packaged app ships the wrong UI, and nothing else here would notice."""
+    for name in ('index.html', 'manifest.webmanifest', 'sw.js', 'favicon.svg'):
+        assert os.path.isfile(os.path.join(STATIC, name)), f"static/{name} is missing"
+    assert built_bundles()
+
+
+def test_every_static_reference_resolves():
+    """A path that 404s in the packaged app is invisible until someone runs it."""
+    for name, _text in built_bundles():
+        pass  # built_bundles() already opened them
+
+    index = read_index()
+    for ref in set(re.findall(r'"(/static/[^"]+)"', index)):
+        path = os.path.join(STATIC, *ref[len('/static/'):].split('/'))
+        assert os.path.isfile(path), f"{ref} is referenced but not built"
+
+
+def test_nothing_is_loaded_from_a_cdn():
+    """The app runs on a laptop that may be offline, or on a locked-down
+    network. Every byte has to come out of the bundle."""
+    index = read_index()
+    for url in re.findall(r'(?:src|href)="(https?://[^"]+)"', index):
+        raise AssertionError(f"index.html loads {url} from the network")
+
+    for name, text in built_bundles():
+        if not name.endswith('.css'):
             continue
-        assert 'masked-input' in markup, f"unmasked secret field: {markup[:110]}"
+        for url in re.findall(r'url\(["\']?(https?://[^)"\']+)', text):
+            raise AssertionError(f"{name} loads {url} from the network")
+
+
+def test_fonts_are_bundled():
+    """Montserrat is served from static/, not from Google Fonts."""
+    css = read_css()
+    assert '@font-face' in css
+    for url in re.findall(r"url\(['\"]?([^)'\"]+)", css):
+        assert url.startswith('/static/'), f"font {url} is not bundled"
+        path = os.path.join(STATIC, *url[len('/static/'):].split('/'))
+        assert os.path.isfile(path), f"font {url} is missing from the build"
+
+
+# --- secrets ----------------------------------------------------------------
+
+SECRET_IDS = ('vaultPasscode', 'vaultPasscodeConfirm', 'vaultPasscodeCurrent',
+              'vaultPasscodeNew', 'vaultPasscodeNewConfirm',
+              'credentialPassword', 'credentialPassphrase')
+
+
+def test_every_secret_field_uses_the_masked_input():
+    """One component owns masking, so there is no second path to get it wrong."""
+    for path, text in source_files():
+        for match in re.finditer(r'<(\w+)\s[^>]*id="([^"]+)"', text, re.S):
+            component, ident = match.group(1), match.group(2)
+            if ident in SECRET_IDS:
+                assert component == 'SecretInput', \
+                    f"{path}: {ident} is a <{component}>, not a SecretInput"
+
+
+def test_secret_fields_are_masked_before_the_stylesheet_loads():
+    """The field starts masked by the element itself - type=password when the
+    browser cannot mask text, and the CSS mask on top either way. No window,
+    however short, where a keystroke could be read."""
+    ui = read(UI_SRC, 'components', 'ui.tsx')
+    body = ui[ui.index('export function SecretInput'):]
+    body = body[:body.index('// --- Badge')]
+
+    assert "revealed ? 'text' : cssMasking ? 'text' : 'password'" in body, \
+        "SecretInput must fall back to type=password"
+    assert "'masked-input" in body, "SecretInput must carry the CSS mask"
+    assert '-webkit-text-security: disc' in read_css()
 
 
 def test_the_plain_text_swap_is_gated_on_support():
-    """Without -webkit-text-security a text field shows the passcode in clear.
+    """Without -webkit-text-security a text field shows the passcode in clear,
+    so the swap must never happen unsupported."""
+    ui = read(UI_SRC, 'components', 'ui.tsx')
+    body = ui[ui.index('export function SecretInput'):]
+    body = body[:body.index('// --- Badge')]
 
-    The swap must therefore never happen unsupported - this test exists so
-    that check cannot quietly disappear.
-    """
-    html = read_index()
-    body = html[html.index('maskSecretFields(root = document) {'):]
-    body = body[:body.index('\n      }')]
+    assert "CSS.supports?.('-webkit-text-security', 'disc')" in body
 
-    assert "CSS.supports('-webkit-text-security', 'disc')" in body
-    assert 'if (!supported) return false;' in body
+    guard = body.index("CSS.supports?.('-webkit-text-security', 'disc')")
+    swap = body.index("cssMasking ? 'text'")
+    assert swap > guard, "the swap happens after the check"
 
-    guard = body.index('if (!supported) return false;')
-    assert body.index("input.type = 'text'") > guard, "the swap happens after the check"
 
+def test_no_secret_ever_reaches_local_storage():
+    """Passcodes and the vault token live in memory for exactly as long as the
+    tab does. Anything persisted survives the process and the screen lock."""
+    for path, text in source_files():
+        for match in re.finditer(r'(localStorage|sessionStorage)\.setItem\(([^)]*)', text):
+            payload = match.group(2).lower()
+            for word in ('pass', 'secret', 'token', 'credential'):
+                assert word not in payload, \
+                    f"{path}: {match.group(1)} stores {match.group(2).strip()}"
+
+
+def test_the_vault_token_is_module_state_only():
+    api = read(UI_SRC, 'lib', 'api.ts')
+    assert 'let vaultToken' in api, "the token should be a module-level variable"
+    assert 'Storage' not in api, "the token must never be persisted"
+
+
+# --- WebKit AutoFill --------------------------------------------------------
 
 AUTOFILL_BUTTONS = (
     '::-webkit-contacts-auto-fill-button',
@@ -102,33 +184,31 @@ def test_webkits_autofill_buttons_are_hidden_one_rule_at_a_time():
     selector in a list throws the whole list away, which would take the
     others with it.
     """
-    html = read_index()
+    css = read_css()
 
     for pseudo in AUTOFILL_BUTTONS:
-        assert pseudo in html, f"{pseudo} is not hidden"
-        rule = re.search(r'input%s\s*,' % re.escape(pseudo), html)
-        assert rule is None, f"{pseudo} shares a selector list; split it out"
+        assert pseudo in css, f"{pseudo} is not hidden"
+        assert re.search(r'%s\s*,' % re.escape(pseudo), css) is None, \
+            f"{pseudo} shares a selector list; split it out"
+
+
+def test_the_autofill_rules_survive_into_the_build():
+    """Tailwind's build could in principle drop them; it must not."""
+    css = ''.join(text for name, text in built_bundles() if name.endswith('.css'))
+    assert css, "no stylesheet was built"
+
+    for pseudo in AUTOFILL_BUTTONS:
+        assert pseudo in css, f"{pseudo} did not survive the build"
+    assert '-webkit-text-security' in css
 
 
 def test_the_decoration_container_is_left_alone():
     """Collapsing it renders a number input blank - the field's own text is
     laid out inside that container, so the port would show nothing while
     holding 22. The buttons are hidden one by one instead."""
-    html = read_index()
-
-    rule = re.search(r'input::-webkit-textfield-decoration-container\s*\{', html)
-    assert rule is None, "hiding this container blanks number fields"
-
-
-def test_text_fields_opt_out_of_autofill():
-    """Less to tempt the heuristics with in the first place."""
-    html = read_index()
-
-    for match in re.finditer(r'<input\b[^>]*>', html, re.S):
-        markup = match.group(0)
-        if not any(f'type="{kind}"' in markup for kind in ('text', 'search', 'password')):
-            continue
-        assert 'autocomplete="off"' in markup, markup[:110]
+    css = read_css()
+    assert re.search(r'::-webkit-textfield-decoration-container\s*\{', css) is None, \
+        "hiding this container blanks number fields"
 
 
 # Measured in iTerm2's browser (Safari 26.5 WebKit) with tools/field-lab.html:
@@ -139,55 +219,124 @@ def test_text_fields_opt_out_of_autofill():
 # "Hostname / IP" did not.
 FORBIDDEN_IN_IDS = ('name', 'address', 'user', 'phone', 'email')
 
-# The ids of every field the user types into
+# Every field the user types into, under the wording that measured clean
 INPUT_IDS = ('searchBox', 'tagInput', 'hostTitle', 'hostEndpoint', 'hostLogin',
-             'hostGroup', 'itermProfile', 'hostPort', 'credentialTitle',
-             'credentialLogin', 'credentialDescription', 'credentialKeyPath')
+             'hostPort', 'hostGroup', 'hostCredential', 'itermProfile',
+             'credentialTitle', 'credentialLogin', 'credentialDescription',
+             'credentialKeyPath', 'vaultPasscode')
 
 
 def test_no_field_id_reads_as_a_person_or_a_place():
-    html = read_index()
-
-    for match in re.finditer(r'<input\b[^>]*>', html, re.S):
-        markup = match.group(0)
-        if 'type="hidden"' in markup:
-            continue          # nothing is drawn, so there is nothing to decorate
-
-        ident = re.search(r'\bid="([^"]+)"', markup)
-        if not ident:
-            continue
-        ident = ident.group(1)
-        lowered = ident.lower()
-        for word in FORBIDDEN_IN_IDS:
-            assert word not in lowered, \
-                f'id="{ident}" contains "{word}" - AutoFill decorates it'
+    for path, text in source_files():
+        for ident in re.findall(r'\bid="([^"]+)"', text):
+            lowered = ident.lower()
+            for word in FORBIDDEN_IN_IDS:
+                assert word not in lowered, \
+                    f'{path}: id="{ident}" contains "{word}" - AutoFill decorates it'
 
 
 def test_no_visible_label_reads_as_a_person_or_a_place():
-    html = read_index()
+    """<Field label="..."> is the only thing that renders a <label>."""
+    for path, text in source_files():
+        for label in re.findall(r'<Field\s[^>]*label="([^"]+)"', text, re.S):
+            lowered = label.lower()
+            assert 'name' not in lowered, f"{path}: label {label!r} draws a contact card"
+            assert 'host' not in lowered, f"{path}: label {label!r} draws a house"
+            assert 'user' not in lowered, f"{path}: label {label!r} draws a contact card"
 
-    labels = re.findall(r'<label[^>]*>(.*?)</label>', html, re.S)
-    for label in labels:
-        text = re.sub(r'<[^>]+>', '', label).lower()
-        assert 'name' not in text, f"label {text.strip()!r} draws a contact card"
-        assert 'hostname' not in text, f"label {text.strip()!r} draws a house"
+
+def test_placeholders_do_not_read_as_a_person_or_a_place():
+    for path, text in source_files():
+        for placeholder in re.findall(r'placeholder="([^"]+)"', text):
+            lowered = placeholder.lower()
+            assert 'name' not in lowered, f"{path}: placeholder {placeholder!r}"
 
 
-def test_the_fields_are_present_under_their_new_ids():
-    html = read_index()
-
+def test_the_fields_are_present_under_their_safe_ids():
+    sources = ''.join(text for _path, text in source_files())
     for ident in INPUT_IDS:
-        assert re.search(r'<input[^>]*id="%s"' % ident, html), f"{ident} is missing"
+        assert f'id="{ident}"' in sources, f"{ident} is missing"
 
 
-def test_form_fields_do_not_autocapitalize():
-    """Hostnames and usernames are identifiers, not prose."""
-    html = read_index()
+def test_the_shared_input_opts_out_of_autofill_and_autocapitalisation():
+    """Hostnames and logins are identifiers, not prose - and the fewer hints
+    AutoFill gets, the less it decorates. The shared Input sets all of it, so
+    no caller can forget."""
+    ui = read(UI_SRC, 'components', 'ui.tsx')
+    body = ui[ui.index('export const Input ='):]
+    body = body[:body.index('export function Field')]
 
-    inputs = re.findall(r'<input\b[^>]*>', html, re.S)
-    typed = [i for i in inputs
-             if any(f'type="{kind}"' in i for kind in ('text', 'search', 'password'))]
-    assert typed, "there should be text inputs to check"
+    for attr in ('autoComplete="off"', 'autoCapitalize="off"',
+                 'autoCorrect="off"', 'spellCheck={false}'):
+        assert attr in body, f"the shared Input does not set {attr}"
 
-    for field in typed:
-        assert 'autocapitalize="off"' in field, field[:120]
+
+def test_every_input_in_the_app_opts_out():
+    """A handful of fields are hand-rolled rather than going through Input -
+    the tag box, the combobox. They need the same four attributes, or the
+    defences apply to some fields and not others."""
+    for path, text in source_files():
+        for element in re.findall(r'<input\b.*?/>', text, re.S):
+            if re.search(r'type="(checkbox|radio|file)"', element):
+                continue          # nothing is typed, so there is nothing to fill
+            for attr in ('autoComplete="off"', 'autoCapitalize="off"',
+                         'autoCorrect="off"', 'spellCheck={false}'):
+                assert attr in element, \
+                    f"{path}: an <input> is missing {attr}"
+
+
+def test_the_body_opts_out_of_autocapitalisation():
+    index = read_index()
+    body = re.search(r'<body[^>]*>', index).group(0)
+    assert 'autocapitalize="off"' in body
+    assert 'autocorrect="off"' in body
+
+
+# --- themes -----------------------------------------------------------------
+
+def test_the_tile_themes_match_the_backend():
+    """hosts.json stores these ids and main.py validates them; a theme the UI
+    offers but the backend rejects fails only when a user picks it."""
+    import main
+
+    themes = read(UI_SRC, 'lib', 'themes.ts')
+    ids = re.findall(r"\{\s*id:\s*'([^']+)'", themes)
+    assert ids, "no themes found in ui/src/lib/themes.ts"
+    assert ids == list(main.HOST_THEMES), \
+        f"UI themes {ids} != backend {list(main.HOST_THEMES)}"
+
+
+# --- PWA --------------------------------------------------------------------
+
+def test_the_service_worker_never_caches_the_api():
+    """Cached host data would be stale the moment anything changed, and a
+    cached /api/vault response would outlive the lock."""
+    sw = read(REPO_ROOT, 'static', 'sw.js')
+    assert "startsWith('/static/assets/')" in sw, \
+        "the service worker must only cache hashed build assets"
+
+    code = re.sub(r'/\*.*?\*/|//[^\n]*', '', sw, flags=re.S)
+    assert '/api' not in code, "the service worker touches the API"
+    assert code.count("startsWith(") == 1, \
+        "only one path prefix may be cached"
+
+
+def test_the_service_worker_is_served_from_the_root():
+    """A worker served from /static/ can only control /static/ - it would
+    never see the app shell, and the PWA would not install."""
+    import api_server
+
+    routes = {getattr(r, 'path', None) for r in api_server.app.routes}
+    assert '/sw.js' in routes, "the service worker needs a root-scoped route"
+
+
+def test_the_manifest_installs_the_whole_app():
+    manifest = json.loads(read(STATIC, 'manifest.webmanifest'))
+    assert manifest['start_url'] == '/'
+    assert manifest['scope'] == '/'
+    assert manifest['display'] == 'standalone'
+    for icon in manifest['icons']:
+        src = icon['src']
+        assert src.startswith('/static/'), src
+        path = os.path.join(STATIC, *src[len('/static/'):].split('/'))
+        assert os.path.isfile(path), f"{src} is missing from the build"

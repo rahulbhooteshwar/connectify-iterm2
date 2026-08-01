@@ -50,8 +50,9 @@ DEFAULT_SSH_OPTIONS = {
 }
 
 
-# Tile themes offered in the UI. "default" is the neutral grey/black tile.
-HOST_THEMES = ['default', 'red', 'green', 'orange']
+# Tile themes offered in the UI. "default" is the neutral tile. This list and
+# ui/src/lib/themes.ts must agree - there is a test that compares them.
+HOST_THEMES = ['default', 'red', 'orange', 'amber', 'green', 'teal', 'blue', 'violet', 'pink']
 DEFAULT_HOST_THEME = 'default'
 
 

@@ -66,6 +66,13 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
       - name: Install uv
         run: |
           curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -87,6 +94,14 @@ jobs:
           BUILD_DATE = "${{ needs.prepare.outputs.build_date }}"
           EOF
           cat version.py
+
+      # static/ is committed so a source checkout runs without Node, but the
+      # published binary is built from ui/ so it can never ship a stale bundle
+      - name: Build the interface
+        run: |
+          npm ci
+          npm run build
+        working-directory: ui
 
       - name: Build executable
         run: uv run pyinstaller connectify.spec
