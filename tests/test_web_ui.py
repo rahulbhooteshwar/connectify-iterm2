@@ -472,6 +472,50 @@ def test_the_emoji_dataset_is_bundled_not_fetched():
     assert "@emoji-mart/data" in picker
 
 
+def test_the_emoji_picker_escapes_the_dialogs_scroll_container():
+    """Rendered in place, the panel was clipped by the dialog body's
+    `overflow-y: auto` - and no z-index lifts a box out of an ancestor that
+    clips it. It has to be portalled out and positioned itself."""
+    picker = read(UI_SRC, 'components', 'EmojiMartPicker.tsx')
+
+    assert 'createPortal(' in picker, "the panel must be portalled out of the scroll container"
+    assert 'getBoundingClientRect()' in picker, "a portalled panel has to position itself"
+
+
+def test_the_panel_is_positioned_against_its_containing_block():
+    """The dialog is centred with a CSS transform, and a transformed ancestor
+    becomes the containing block for `position: fixed` children - so "fixed"
+    inside one is fixed to *it*, not the window. Viewport coordinates have to
+    be rebased onto the container, or the panel lands somewhere else."""
+    picker = read(UI_SRC, 'components', 'EmojiMartPicker.tsx')
+
+    assert 'container.getBoundingClientRect()' in picker, \
+        "coordinates must be rebased onto the positioned container"
+    assert "position.fixed ? 'fixed' : 'absolute'" in picker, \
+        "fixed only when anchored to the viewport itself"
+
+
+def test_the_pickers_hard_coded_height_is_overridden():
+    """emoji-mart ships `height: 435px` on its own host element, which is
+    taller than the space under a field in an 85vh dialog. Document styles
+    beat a shadow-DOM :host rule, which is how this is bounded."""
+    css = read_css()
+    picker = read(UI_SRC, 'components', 'EmojiMartPicker.tsx')
+
+    assert '.emoji-popover em-emoji-picker' in css, "nothing overrides the picker's own height"
+    assert '--emoji-picker-height' in css and '--emoji-picker-height' in picker, \
+        "the measured height has to reach the picker element"
+
+
+def test_clicking_the_panel_does_not_dismiss_the_dialog_under_it():
+    """Portalled out, the panel is outside the dialog in the DOM - Radix would
+    otherwise read a click on an emoji as a click outside and close the form."""
+    ui = read(UI_SRC, 'components', 'ui.tsx')
+    content = ui[ui.index('export function DialogContent'):ui.index('export function DialogBody')]
+
+    assert 'emoji-popover' in content, "interactions inside the panel must not count as outside"
+
+
 def test_the_emoji_picker_is_code_split():
     """emoji-mart plus its dataset is real weight - nobody looking at a host
     list should pay for it until they actually open a picker."""

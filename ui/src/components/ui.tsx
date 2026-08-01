@@ -201,7 +201,13 @@ export function DialogContent({ title, description, wide, dismissable = true, ch
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/55 backdrop-blur-[2px] animate-fade-in" />
       <DialogPrimitive.Content
-        onInteractOutside={(e) => { if (!dismissable) e.preventDefault() }}
+        onInteractOutside={(e) => {
+          if (!dismissable) { e.preventDefault(); return }
+          // A portalled popover (the emoji picker) lives outside this content
+          // in the DOM but is very much "inside" as far as the user is
+          // concerned - clicking an emoji must not dismiss the dialog under it.
+          if ((e.target as Element | null)?.closest?.('.emoji-popover')) e.preventDefault()
+        }}
         onEscapeKeyDown={(e) => {
           if (!dismissable) { e.preventDefault(); return }
           // Radix listens for Escape on the document in the capture phase, so a

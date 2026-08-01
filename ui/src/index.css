@@ -168,3 +168,18 @@ input::-webkit-search-results-decoration { display: none !important; -webkit-app
 @media (prefers-reduced-motion: reduce) {
   .tile { transition: none; }
 }
+
+
+/* emoji-mart sizes its own host element with `height: 435px; width: min-content`
+   in a shadow-DOM `:host` rule. Document styles beat `:host`, so this is how the
+   panel is told to be the size the viewport actually has room for - see
+   EmojiMartPicker, which measures that and passes it down. */
+.emoji-popover em-emoji-picker {
+  height: var(--emoji-picker-height, 100%);
+  min-height: 0;
+  width: 100%;
+  /* the wrapper already rounds and shadows the panel; the picker drawing its
+     own 10px radius inside our 12px one leaves a visible double edge */
+  --border-radius: 0;
+  --shadow: none;
+}
