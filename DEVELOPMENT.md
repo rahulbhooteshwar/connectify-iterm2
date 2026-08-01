@@ -215,6 +215,9 @@ Writes, loads and inspects the `com.connectify.ui` LaunchAgent:
   the server, and launchd would restart the launcher every ten seconds for
   ever - wrong, and the exact shape endpoint security tools flag as malicious
   persistence
+- `enable_shell()` / `disable_shell()` are the no-persistence alternative: a
+  block between markers in the user's shell profile, removed again byte for
+  byte. For managed Macs where a LaunchAgent is flagged whatever it contains
 
 `setup-autostart.sh` is a shim over the command, kept for the curl|bash URL
 that used to be the documented way to do this.

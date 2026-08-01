@@ -125,3 +125,102 @@ def test_it_is_macos_only(agent, monkeypatch):
     assert not ok
     assert 'macOS' in message
     assert 'not applicable' in autostart.describe()
+
+
+# --- the shell-profile alternative -------------------------------------------
+#
+# A LaunchAgent is persistence, and endpoint security watches persistence. On a
+# managed Mac the way through is often to not persist at all: start the server
+# from the shell profile instead, so there is no login hook to flag.
+
+@pytest.fixture
+def rc(tmp_path, monkeypatch):
+    profile = tmp_path / ".zshrc"
+    monkeypatch.setenv('SHELL', '/bin/zsh')
+    monkeypatch.setattr(autostart, 'shell_profile', lambda: profile)
+    return profile
+
+
+ORIGINAL_RC = 'export PATH=/usr/local/bin:$PATH\nalias ll="ls -la"\n'
+
+
+def test_enable_shell_adds_a_marked_block(rc):
+    rc.write_text(ORIGINAL_RC)
+
+    ok, message = autostart.enable_shell()
+
+    assert ok, message
+    text = rc.read_text()
+    assert autostart.BEGIN_MARK in text and autostart.END_MARK in text
+    assert 'connectify ui start' in text
+    assert ORIGINAL_RC in text, "what was already there is left alone"
+    # Backgrounded: `ui start` waits for the server, and a terminal should not
+    assert '&)' in text or '&\n' in text
+
+
+def test_enabling_twice_does_not_stack_up(rc):
+    rc.write_text(ORIGINAL_RC)
+
+    autostart.enable_shell()
+    first = rc.read_text()
+    autostart.enable_shell()
+
+    assert rc.read_text().count(autostart.BEGIN_MARK) == 1
+    assert rc.read_text() == first
+
+
+def test_disable_shell_puts_the_file_back(rc):
+    rc.write_text(ORIGINAL_RC)
+    autostart.enable_shell()
+
+    ok, message = autostart.disable_shell()
+
+    assert ok, message
+    assert rc.read_text() == ORIGINAL_RC, "byte for byte, including the trailing newline"
+
+
+def test_disable_shell_when_it_was_never_enabled(rc):
+    rc.write_text(ORIGINAL_RC)
+
+    ok, message = autostart.disable_shell()
+
+    assert ok
+    assert rc.read_text() == ORIGINAL_RC
+
+
+def test_enable_shell_creates_the_file_if_there_is_none(rc):
+    assert not rc.exists()
+
+    ok, _ = autostart.enable_shell()
+
+    assert ok and rc.exists()
+    assert autostart.BEGIN_MARK in rc.read_text()
+
+
+def test_status_reports_the_shell_route(rc):
+    rc.write_text(ORIGINAL_RC)
+    autostart.enable_shell()
+
+    assert autostart.shell_status()['configured'] is True
+    assert str(rc) in autostart.shell_status()['profile']
+
+
+def test_fish_gets_fish_syntax(tmp_path, monkeypatch):
+    profile = tmp_path / "config.fish"
+    monkeypatch.setenv('SHELL', '/opt/homebrew/bin/fish')
+    monkeypatch.setattr(autostart, 'shell_profile', lambda: profile)
+
+    autostart.enable_shell()
+    text = profile.read_text()
+
+    assert 'if command -v connectify' in text and text.count('end') >= 1
+    assert '&&' not in text, "fish does not take &&"
+
+
+def test_an_unfamiliar_shell_says_what_to_add_by_hand(monkeypatch):
+    monkeypatch.setenv('SHELL', '/usr/bin/ksh')
+
+    ok, message = autostart.enable_shell()
+
+    assert not ok
+    assert 'connectify ui start' in message, "tell them the line rather than just failing"

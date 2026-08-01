@@ -309,26 +309,39 @@ def describe_openssh():
             f"terminal instead of being supplied automatically")
 
 
-def handle_autostart_command(action):
-    """connectify autostart [status|enable|disable]"""
+def handle_autostart_command(action, use_shell=False):
+    """connectify autostart [status|enable|disable] [--shell]"""
     import autostart
 
     state = autostart.status()
+    shell = state.get('shell') or {}
 
     if action == 'status':
         print(f"Auto-start: {autostart.describe(state)}")
         if state['configured']:
             print(f"  LaunchAgent : {state['plist']}")
-            print(f"  Runs        : {state['program']} ui start")
+            print(f"  Runs        : {state['program']} --silent")
             print(f"  Logs        : {autostart.STDOUT_LOG}")
-        elif state['supported']:
-            print("  Enable it with: connectify autostart enable")
+        if shell.get('configured'):
+            print(f"  Shell       : started from {shell['profile']}")
+        if not state['configured'] and not shell.get('configured') and state['supported']:
+            print("  Enable with          : connectify autostart enable")
+            print("  Or, where security software objects to LaunchAgents:")
+            print("                         connectify autostart enable --shell")
         return 0
 
-    ok, message = autostart.enable() if action == 'enable' else autostart.disable()
+    if use_shell:
+        ok, message = (autostart.enable_shell() if action == 'enable'
+                       else autostart.disable_shell())
+    else:
+        ok, message = autostart.enable() if action == 'enable' else autostart.disable()
+
     print(f"{'✅' if ok else '❌'} {message}")
 
-    if ok and action == 'enable':
+    if ok and action == 'enable' and use_shell:
+        print("   Open a new terminal, or run 'connectify ui start' now.")
+        print("   Remove it again with: connectify autostart disable --shell")
+    elif ok and action == 'enable':
         print(f"   The web UI will be at http://localhost:{UI_PORT} after every login.")
         print("   Turn it off again with: connectify autostart disable")
 
@@ -456,6 +469,8 @@ This command exists to run that server and to diagnose problems.
   connectify autostart          Is the server set to start at login?
   connectify autostart enable   Start the web UI automatically at login
   connectify autostart disable  Stop doing that
+     ... --shell on either uses your shell profile instead of a LaunchAgent,
+     which is what to do when security software objects to one
 
   connectify doctor             Full diagnostics (server, iTerm2, config, vault)
   connectify upgrade            Download and install the latest release
@@ -514,7 +529,11 @@ def main():
         parser.add_argument('autostart_command', nargs='?', default='status',
                             choices=['enable', 'disable', 'status'],
                             help='Action (default: status)')
-        sys.exit(handle_autostart_command(parser.parse_args(args[1:]).autostart_command))
+        parser.add_argument('--shell', action='store_true',
+                            help='Use your shell profile instead of a LaunchAgent '
+                                 '(no login hook for security software to flag)')
+        options = parser.parse_args(args[1:])
+        sys.exit(handle_autostart_command(options.autostart_command, options.shell))
 
     if command == 'profiles':
         parser = argparse.ArgumentParser(

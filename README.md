@@ -164,11 +164,7 @@ of them are hidden: contacts, credentials, credit card, strong-password,
 caps-lock, the datalist arrow and the search-field furniture. On top of that
 every text field, and every form, carries `autocomplete="off"`.
 
-Nothing user-facing has to be renamed: the labels can go on saying *Name*,
-because the heuristic reads far more than the label and bending the copy
-around it would make the UI worse to read while still not being dependable.
-
-Measured in iTerm2's browser (Safari 26.5) with `tools/field-lab.html`, which
+None of which was enough on its own. Measured in iTerm2's browser (Safari 26.5) with `tools/field-lab.html`, which
 varies one thing at a time across 25 fields. The result: **the visible label
 and the element id are what AutoFill reads**. Nothing else moved it - not
 `type="search"`, not any `autocomplete` value, not hiding the pseudo-elements,
@@ -382,13 +378,33 @@ server starts once at login and nothing resurrects it behind your back, so
 `connectify ui stop` keeps meaning what it says. The trade-off is that a
 crashed server stays down until you start it again.
 
-If your Mac is managed and the agent is still flagged, what your IT team
-needs is the LaunchAgent path above, the binary it runs
-(`~/.local/bin/connectify` → `~/.local/lib/connectify/connectify`), the
-release it came from and its SHA-256 - published as a digest on every
+### When security software objects
+
+A LaunchAgent *is* persistence, and endpoint protection watches persistence -
+reasonably, since that is where malware lives. Connectify's binaries are also
+not yet signed with an Apple Developer ID, and they run from a hidden
+directory in your home folder. On a managed Mac that combination can be
+enough to be flagged (SentinelOne files it under *persistence deception*).
+
+The way through is usually to not persist at all:
+
+```bash
+connectify autostart enable --shell     # start it from your shell profile
+connectify autostart disable --shell    # and take it back out
+```
+
+That adds four marked lines to your `~/.zshrc` (or `~/.bash_profile`, or
+`config.fish`) which start the server in the background the first time you
+open a terminal. `connectify ui start` returns immediately if the server is
+already up, so it costs nothing after the first one. No LaunchAgent, no login
+hook, nothing for security software to take an interest in. Removing it
+restores the file exactly as it was.
+
+If you would rather keep the LaunchAgent, what your IT team needs to allowlist
+it is the plist path above, the binary it runs (`~/.local/bin/connectify` →
+`~/.local/lib/connectify/connectify`), the release it came from and its
+SHA-256 - published as a digest on every
 [release](https://github.com/rahulbhooteshwar/connectify-iterm2/releases).
-The binaries are not yet signed with an Apple Developer ID, which is the
-other reason an EDR looks twice at them.
 
 Installing, upgrading and `connectify doctor` all report where you stand, and
 say what to run if it isn't on. One case is handled for you: a LaunchAgent that

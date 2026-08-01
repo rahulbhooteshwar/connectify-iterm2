@@ -31,6 +31,20 @@ LOG_DIR = Path("~/Library/Logs/Connectify").expanduser()
 STDOUT_LOG = str(LOG_DIR / "autostart.log")
 STDERR_LOG = str(LOG_DIR / "autostart.error.log")
 
+# The shell-profile alternative. No login hook at all: the server comes up the
+# first time you open a terminal. On a managed Mac that is often the difference
+# between working and being quarantined - endpoint security watches LaunchAgents
+# closely, and rightly, because that is where persistence lives.
+BEGIN_MARK = "# >>> connectify autostart >>>"
+END_MARK = "# <<< connectify autostart <<<"
+
+SHELL_PROFILES = {
+    'zsh': "~/.zshrc",
+    # macOS terminals open login shells, which read this one
+    'bash': "~/.bash_profile",
+    'fish': "~/.config/fish/config.fish",
+}
+
 
 def connectify_binary():
     """The command launchd should run, as an absolute path.
@@ -50,6 +64,101 @@ def connectify_binary():
         return str(Path(sys.executable).resolve())
 
     return None
+
+
+def shell_name():
+    """Which shell the user is in, as far as $SHELL knows."""
+    return Path(os.environ.get('SHELL', '')).name or None
+
+
+def shell_profile():
+    """The rc file to write into, or None for a shell we don't know."""
+    profile = SHELL_PROFILES.get(shell_name())
+    return Path(profile).expanduser() if profile else None
+
+
+def _shell_block():
+    """The lines we manage, between markers so they can be taken out again."""
+    note = ("# Starts the Connectify web UI in the background if it is not already\n"
+            "# running. Remove with: connectify autostart disable --shell")
+
+    if shell_name() == 'fish':
+        body = ("if command -v connectify >/dev/null 2>&1\n"
+                "    connectify ui start >/dev/null 2>&1 &\n"
+                "end")
+    else:
+        # Backgrounded: `ui start` waits for the server to answer, and no one
+        # wants their terminal to pause for that
+        body = "command -v connectify >/dev/null 2>&1 && (connectify ui start >/dev/null 2>&1 &)"
+
+    return f"{BEGIN_MARK}\n{note}\n{body}\n{END_MARK}\n"
+
+
+def _without_block(text):
+    """The file's contents with any block we previously wrote removed."""
+    if BEGIN_MARK not in text:
+        return text, False
+
+    before, rest = text.split(BEGIN_MARK, 1)
+    after = rest.split(END_MARK, 1)[1] if END_MARK in rest else ''
+    return (before.rstrip('\n') + ('\n' if before.strip() else '')
+            + after.lstrip('\n'), True)
+
+
+def shell_status():
+    """Whether the rc file currently starts the server."""
+    profile = shell_profile()
+    if not profile:
+        return {'supported': False, 'configured': False, 'profile': None}
+
+    try:
+        configured = BEGIN_MARK in profile.read_text(encoding='utf-8')
+    except (OSError, UnicodeDecodeError):
+        configured = False
+
+    return {'supported': True, 'configured': configured, 'profile': str(profile)}
+
+
+def enable_shell():
+    """Add the block to the shell profile. Returns (ok, message)."""
+    profile = shell_profile()
+    if not profile:
+        return False, (f"Don't know where {shell_name() or 'this shell'} keeps its "
+                       f"startup file. Add this line to it yourself:\n"
+                       f"    connectify ui start >/dev/null 2>&1 &")
+
+    try:
+        existing = profile.read_text(encoding='utf-8') if profile.exists() else ''
+        cleaned, _ = _without_block(existing)
+        if cleaned and not cleaned.endswith('\n'):
+            cleaned += '\n'
+
+        profile.parent.mkdir(parents=True, exist_ok=True)
+        profile.write_text(cleaned + ('\n' if cleaned else '') + _shell_block(),
+                           encoding='utf-8')
+    except OSError as e:
+        return False, f"Could not write {profile}: {e}"
+
+    return True, (f"Added to {profile} - the web UI will start with your first "
+                  f"terminal. No LaunchAgent, so nothing to flag as persistence.")
+
+
+def disable_shell():
+    """Take the block back out. Returns (ok, message)."""
+    profile = shell_profile()
+    if not profile or not profile.exists():
+        return True, "Nothing to remove"
+
+    try:
+        text = profile.read_text(encoding='utf-8')
+        cleaned, found = _without_block(text)
+        if not found:
+            return True, f"{profile} does not start Connectify"
+        profile.write_text(cleaned, encoding='utf-8')
+    except (OSError, UnicodeDecodeError) as e:
+        return False, f"Could not edit {profile}: {e}"
+
+    return True, f"Removed from {profile}"
 
 
 def _launchctl(*args, check=False):
@@ -95,6 +204,7 @@ def status():
         # A LaunchAgent pointing at a binary that has moved will fail silently
         # at every login, so it is worth calling out
         'stale': bool(program and not Path(program).exists()),
+        'shell': shell_status(),
     }
 
 
@@ -102,9 +212,13 @@ def describe(state=None):
     """One line for the diagnostics and the installer."""
     state = state or status()
 
+    shell = state.get('shell') or {}
+
     if not state['supported']:
         return "not applicable on this platform"
     if not state['configured']:
+        if shell.get('configured'):
+            return f"started from {shell['profile']} (no LaunchAgent)"
         return "not set up - run 'connectify autostart enable'"
     if state['stale']:
         return (f"points at {state['program']}, which no longer exists - "
