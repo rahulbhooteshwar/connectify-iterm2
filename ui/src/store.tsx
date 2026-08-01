@@ -46,6 +46,8 @@ interface StoreShape {
   setDark: (dark: boolean) => void
   view: 'grid' | 'list'
   setView: (view: 'grid' | 'list') => void
+  sidebarCollapsed: boolean
+  toggleSidebar: () => void
 }
 
 const StoreContext = React.createContext<StoreShape | null>(null)
@@ -74,6 +76,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [dark, setDarkState] = React.useState(() => document.documentElement.classList.contains('dark'))
   const [view, setViewState] = React.useState<'grid' | 'list'>(
     () => (localStorage.getItem('connectify-view') === 'list' ? 'list' : 'grid'),
+  )
+  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(
+    () => localStorage.getItem('connectify-sidebar') === 'collapsed',
   )
 
   const hosts = React.useMemo(() => {
@@ -165,6 +170,30 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('connectify-view', value)
   }, [])
 
+  const toggleSidebar = React.useCallback(() => {
+    setSidebarCollapsed((collapsed) => {
+      localStorage.setItem('connectify-sidebar', collapsed ? 'expanded' : 'collapsed')
+      return !collapsed
+    })
+  }, [])
+
+  // ⌘B / Ctrl+B toggles the sidebar, the way editors do it. Ignored while the
+  // caret is in a field, where ⌘B may mean something to the browser and Ctrl+B
+  // moves the caret back a character.
+  React.useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'b' && e.key !== 'B') return
+      if (!e.metaKey && !e.ctrlKey) return
+      if (e.altKey) return
+      const active = document.activeElement
+      if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) return
+      e.preventDefault()
+      toggleSidebar()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [toggleSidebar])
+
   // Boot: load everything, then ask for the passcode up front - the vault is
   // locked whenever the app is opened, so get it out of the way immediately.
   React.useEffect(() => {
@@ -190,7 +219,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     hosts, hostsByGroup, credentials, tags, groups, profiles,
     reloadHosts, reloadCredentials, reloadProfiles,
     vaultExists, vaultUnlocked, gateOpen, openGate, closeGate, submitPasscode, lockVault, withVault,
-    toasts, toast, dark, setDark, view, setView,
+    toasts, toast, dark, setDark, view, setView, sidebarCollapsed, toggleSidebar,
   }
 
   return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>

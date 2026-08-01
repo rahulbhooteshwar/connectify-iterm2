@@ -76,3 +76,8 @@ export function effectiveLogin(host: Host, credentials: Credential[]): string {
   const cred = credentials.find((c) => c.name === host.credential)
   return (cred?.username || '').trim() || (host.username || '').trim()
 }
+
+/** The sidebar's "Ungrouped" filter. A NUL cannot be typed into the group
+ * field, so this can never collide with a real group name - and written as an
+ * escape it keeps the source plain text. */
+export const UNGROUPED = '\u0000ungrouped'

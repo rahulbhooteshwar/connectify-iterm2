@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import { useStore } from '../store'
 import * as api from '../lib/api'
-import { effectiveLogin, type Host } from '../lib/types'
+import { effectiveLogin, UNGROUPED, type Host } from '../lib/types'
 import { themeById } from '../lib/themes'
 import { Badge, Button, cn, Input, Spinner } from '../components/ui'
 import { HostDialog } from '../components/HostDialog'
@@ -48,7 +48,7 @@ export function HostsPage({ groupFilter, clearGroupFilter }: {
     ]
     return all
       .filter((section) => groupFilter === null
-        || (groupFilter === ' ungrouped' ? section.name === null : section.name === groupFilter))
+        || (groupFilter === UNGROUPED ? section.name === null : section.name === groupFilter))
       .map((section) => ({ ...section, hosts: section.hosts.filter(matches) }))
       .filter((section) => section.hosts.length > 0)
   }, [hostsByGroup, matches, groupFilter])
@@ -126,7 +126,7 @@ export function HostsPage({ groupFilter, clearGroupFilter }: {
         {groupFilter && (
           <Badge className="border-primary/40 bg-accent text-accent-foreground">
             <FolderOpen size={11} />
-            {groupFilter === ' ungrouped' ? 'Ungrouped' : groupFilter}
+            {groupFilter === UNGROUPED ? 'Ungrouped' : groupFilter}
             <button type="button" aria-label="Clear group filter" onClick={clearGroupFilter} className="cursor-pointer hover:text-foreground">
               <X size={11} />
             </button>

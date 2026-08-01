@@ -340,3 +340,58 @@ def test_the_manifest_installs_the_whole_app():
         assert src.startswith('/static/'), src
         path = os.path.join(STATIC, *src[len('/static/'):].split('/'))
         assert os.path.isfile(path), f"{src} is missing from the build"
+
+# --- the sidebar ------------------------------------------------------------
+
+def test_the_sidebar_collapse_is_remembered():
+    """A window that opens with the sidebar back out every time is worse than
+    not having the toggle at all."""
+    store = read(UI_SRC, 'store.tsx')
+
+    assert "localStorage.getItem('connectify-sidebar')" in store, \
+        "the collapsed state is not read back at startup"
+    assert "localStorage.setItem('connectify-sidebar'" in store, \
+        "the collapsed state is never saved"
+
+
+def test_the_sidebar_has_a_keyboard_shortcut():
+    """Cmd+B on macOS, Ctrl+B elsewhere - and never while the caret is in a
+    field, where the browser and the caret have their own claim on it."""
+    store = read(UI_SRC, 'store.tsx')
+    handler = store[store.index('const onKeyDown = (e: KeyboardEvent)'):]
+    handler = handler[:handler.index('window.addEventListener')]
+
+    assert "e.key !== 'b'" in handler
+    assert 'e.metaKey' in handler and 'e.ctrlKey' in handler
+    assert 'HTMLInputElement' in handler, "the shortcut must yield to text fields"
+
+
+# --- filters ----------------------------------------------------------------
+
+def test_the_ungrouped_filter_uses_one_shared_sentinel():
+    """The sidebar sets this filter and the hosts page reads it. Two hand-typed
+    copies drifted apart once already - a filter that could never match, so
+    clicking Ungrouped showed nothing at all."""
+    types = read(UI_SRC, 'lib', 'types.ts')
+    assert 'export const UNGROUPED' in types, "the sentinel should live in one place"
+
+    for name in (('App.tsx',), ('pages', 'HostsPage.tsx')):
+        text = read(UI_SRC, *name)
+        path = '/'.join(name)
+        assert 'UNGROUPED' in text, f"{path} does not use the sentinel"
+
+        literal = re.search(r"groupFilter\s*===\s*'", text)
+        assert literal is None, \
+            f"{path} compares groupFilter to a hand-typed string"
+
+
+def test_no_source_file_hides_a_control_character():
+    """The sentinel above was once a raw NUL byte pasted into the source: it
+    made grep call the file binary and hid the mismatch that broke the filter.
+    Escapes are fine; the byte itself is not."""
+    for path, text in source_files():
+        for char in text:
+            if char in '\t\n\r':
+                continue
+            assert ord(char) >= 0x20, \
+                f"{path} contains a raw control character (0x{ord(char):02x})"
