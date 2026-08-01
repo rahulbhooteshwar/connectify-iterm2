@@ -77,6 +77,41 @@ def test_the_plain_text_swap_is_gated_on_support():
     assert body.index("input.type = 'text'") > guard, "the swap happens after the check"
 
 
+AUTOFILL_BUTTONS = (
+    '::-webkit-contacts-auto-fill-button',
+    '::-webkit-credentials-auto-fill-button',
+    '::-webkit-strong-password-auto-fill-button',
+    '::-webkit-strong-password-and-generate-button',
+    '::-webkit-caps-lock-indicator',
+)
+
+
+def test_webkits_autofill_buttons_are_hidden_one_rule_at_a_time():
+    """WebKit draws a contact card on fields it reads as a person's name and a
+    key on password fields, and in iTerm2's embedded browser they never go
+    away. Each is hidden by its own rule: a browser that does not know one
+    selector in a list throws the whole list away, which would take the
+    others with it.
+    """
+    html = read_index()
+
+    for pseudo in AUTOFILL_BUTTONS:
+        assert pseudo in html, f"{pseudo} is not hidden"
+        rule = re.search(r'input%s\s*,' % re.escape(pseudo), html)
+        assert rule is None, f"{pseudo} shares a selector list; split it out"
+
+
+def test_text_fields_opt_out_of_autofill():
+    """Less to tempt the heuristics with in the first place."""
+    html = read_index()
+
+    for match in re.finditer(r'<input\b[^>]*>', html, re.S):
+        markup = match.group(0)
+        if 'type="text"' not in markup and 'type="password"' not in markup:
+            continue
+        assert 'autocomplete="off"' in markup, markup[:110]
+
+
 def test_form_fields_do_not_autocapitalize():
     """Hostnames and usernames are identifiers, not prose."""
     html = read_index()

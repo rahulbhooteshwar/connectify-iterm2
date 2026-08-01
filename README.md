@@ -152,6 +152,25 @@ or handed to the browser, so a reload, a second tab or a restart all start
 locked. Pressing **Lock** does the same on demand. Reading, editing and
 connecting all require it to be unlocked.
 
+### Why fields have no AutoFill icons
+
+WebKit draws its own buttons inside form fields: a **contact card** on
+anything its heuristics read as a person (a field labelled *Name*, a
+placeholder mentioning one) and a **key** on password fields. They are painted
+over the input, and in iTerm2's embedded browser they stay there once drawn.
+
+The fix is to hide the pseudo-elements WebKit uses for them -
+`::-webkit-contacts-auto-fill-button`, `::-webkit-credentials-auto-fill-button`
+and friends - plus `autocomplete="off"` on every text field so the heuristics
+have less to go on. Nothing user-facing has to be renamed: the labels can go
+on saying *Name*, because the heuristic reads more than the label and working
+around it in the copy would make the UI worse to read while still not being
+reliable.
+
+Each pseudo-element is hidden in its own rule rather than a shared selector
+list, because a browser that doesn't recognise one selector in a list discards
+the whole list - which would take the others down with it.
+
 ### Passcode and password fields
 
 The vault passcode, credential passwords and key passphrases are masked with

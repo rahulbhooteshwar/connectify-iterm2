@@ -246,18 +246,20 @@
       z-index: 1;
     }
 
-    /* Secret fields.
-       Safari (and iTerm2's embedded browser with it) paints an AutoFill key
-       on top of every password field, and in the embedded browser it never
-       goes away. Two defences: hide the decorations, and - where the browser
-       can mask a plain text field itself - use one of those instead, so there
-       is no password field for a password manager to decorate at all. See
+    /* AutoFill decorations.
+       WebKit paints its own buttons inside form fields: a key on password
+       fields, and a contact card on anything its heuristics read as a person
+       (a field called "Name", a placeholder mentioning one). They are drawn
+       over the input and, in iTerm2's embedded browser, they never go away.
+       Hiding the pseudo-elements is the supported way to be rid of them -
+       nothing about the field's own name or label has to change.
+
+       Secret fields get a second defence: where the browser can mask a plain
+       text field itself, one of those is used instead, so there is no
+       password field for a password manager to decorate at all. See
        maskSecretFields(). */
-    input[type="password"]::-webkit-credentials-auto-fill-button,
-    input[type="password"]::-webkit-strong-password-auto-fill-button,
-    input[type="password"]::-webkit-strong-password-and-generate-button,
-    input[type="password"]::-webkit-caps-lock-indicator,
-    input[type="password"]::-webkit-textfield-decoration-container {
+    /* the contact card on anything read as a person */
+    input::-webkit-contacts-auto-fill-button {
       display: none !important;
       visibility: hidden !important;
       pointer-events: none !important;
@@ -271,9 +273,66 @@
       -webkit-appearance: none;
     }
 
-    /* Applies to the field as it is parsed, so there is no moment - however
-       brief - where anything typed into it could be read. Harmless on a
-       password field, which the browser is masking anyway. */
+    /* the key on password fields */
+    input::-webkit-credentials-auto-fill-button {
+      display: none !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+      position: absolute !important;
+      right: 0;
+      width: 0 !important;
+      max-width: 0 !important;
+      height: 0 !important;
+      max-height: 0 !important;
+      opacity: 0 !important;
+      -webkit-appearance: none;
+    }
+
+    /* Safari's suggested password */
+    input::-webkit-strong-password-auto-fill-button {
+      display: none !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+      position: absolute !important;
+      right: 0;
+      width: 0 !important;
+      max-width: 0 !important;
+      height: 0 !important;
+      max-height: 0 !important;
+      opacity: 0 !important;
+      -webkit-appearance: none;
+    }
+
+    /* and its generate variant */
+    input::-webkit-strong-password-and-generate-button {
+      display: none !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+      position: absolute !important;
+      right: 0;
+      width: 0 !important;
+      max-width: 0 !important;
+      height: 0 !important;
+      max-height: 0 !important;
+      opacity: 0 !important;
+      -webkit-appearance: none;
+    }
+
+    /* the caps-lock warning */
+    input::-webkit-caps-lock-indicator {
+      display: none !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+      position: absolute !important;
+      right: 0;
+      width: 0 !important;
+      max-width: 0 !important;
+      height: 0 !important;
+      max-height: 0 !important;
+      opacity: 0 !important;
+      -webkit-appearance: none;
+    }
+
     .masked-input {
       -webkit-text-security: disc;
       text-security: disc;
@@ -2239,7 +2298,7 @@
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Tags</label>
             <div class="tag-container" id="tagContainer">
               <!-- Pills will be inserted here -->
-              <input type="text" id="tagInput" class="tag-input" placeholder="Type and press Space/Enter to add..." autocapitalize="off" autocorrect="off" spellcheck="false">
+              <input type="text" id="tagInput" class="tag-input" placeholder="Type and press Space/Enter to add..." autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
             </div>
             <div id="tagDropdown" class="tag-dropdown">
               <!-- Options will be populated here -->
@@ -2277,13 +2336,13 @@
 
           <div class="form-group" style="margin-bottom: 1rem;">
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Display Name</label>
-            <input type="text" id="hostName" class="search-input" style="width: 100%;" placeholder="Production DB" required autocapitalize="off" autocorrect="off" spellcheck="false">
+            <input type="text" id="hostName" class="search-input" style="width: 100%;" placeholder="Production DB" required autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
           </div>
 
           <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; margin-bottom: 1rem;">
             <div class="form-group">
               <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Hostname / IP</label>
-              <input type="text" id="hostAddress" required class="search-input" style="width: 100%;" autocapitalize="off" autocorrect="off" spellcheck="false">
+              <input type="text" id="hostAddress" required class="search-input" style="width: 100%;" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
             </div>
             <div class="form-group">
               <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Port</label>
@@ -2293,7 +2352,7 @@
 
           <div class="form-group" style="margin-bottom: 1rem;">
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Username <span style="color: var(--text-muted); font-weight: 400;">(optional)</span></label>
-            <input type="text" id="hostUser" class="search-input" style="width: 100%;" placeholder="Leave empty to use the credential's username" autocapitalize="off" autocorrect="off" spellcheck="false">
+            <input type="text" id="hostUser" class="search-input" style="width: 100%;" placeholder="Leave empty to use the credential's username" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
             <small id="hostUserHint" class="profile-hint"></small>
           </div>
 
@@ -2397,7 +2456,7 @@
 
           <div class="form-group" style="margin-bottom: 1rem;">
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Name</label>
-            <input type="text" id="credentialName" class="search-input" style="width: 100%;" placeholder="prod-admin" required autocapitalize="off" autocorrect="off" spellcheck="false">
+            <input type="text" id="credentialName" class="search-input" style="width: 100%;" placeholder="prod-admin" required autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
           </div>
 
           <div class="form-group" style="margin-bottom: 1rem;">
@@ -2410,7 +2469,7 @@
 
           <div class="form-group" style="margin-bottom: 1rem;">
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Description <span style="color: var(--text-muted); font-weight: 400;">(optional)</span></label>
-            <input type="text" id="credentialDescription" class="search-input" style="width: 100%;" placeholder="Shared admin login for production" autocapitalize="off" autocorrect="off" spellcheck="false">
+            <input type="text" id="credentialDescription" class="search-input" style="width: 100%;" placeholder="Shared admin login for production" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
           </div>
 
           <div class="form-group" style="margin-bottom: 1rem;">
@@ -2434,7 +2493,7 @@
           <div id="credentialKeyFields" style="display: none;">
             <div class="form-group" style="margin-bottom: 1rem;">
               <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">SSH Key Path</label>
-              <input type="text" id="credentialKeyPath" class="search-input" style="width: 100%;" placeholder="~/.ssh/id_ed25519" autocapitalize="off" autocorrect="off" spellcheck="false">
+              <input type="text" id="credentialKeyPath" class="search-input" style="width: 100%;" placeholder="~/.ssh/id_ed25519" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
             </div>
             <div class="form-group" style="margin-bottom: 1rem;">
               <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Passphrase <span style="color: var(--text-muted); font-weight: 400;">(optional)</span></label>
