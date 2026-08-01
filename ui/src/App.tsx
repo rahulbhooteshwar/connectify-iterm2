@@ -4,6 +4,16 @@ import {
 } from 'lucide-react'
 import { useStore, type Toast } from './store'
 import * as api from './lib/api'
+import {
+  DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import { restrictToParentElement, restrictToVerticalAxis } from '@dnd-kit/modifiers'
+import {
+  SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { cn, Tooltip, TooltipProvider } from './components/ui'
 import { HostsPage } from './pages/HostsPage'
 import { VaultPage } from './pages/VaultPage'
@@ -18,7 +28,7 @@ export default function App() {
   const [groupFilter, setGroupFilter] = React.useState<string | null>(null)
 
   return (
-    <TooltipProvider delayDuration={0}>
+    <TooltipProvider delayDuration={0} disableHoverableContent>
     <div className="flex h-full overflow-hidden">
       <Sidebar page={page} setPage={setPage} groupFilter={groupFilter} setGroupFilter={setGroupFilter} />
       <main className="flex min-w-0 flex-1 flex-col">
@@ -54,75 +64,35 @@ function Sidebar({ page, setPage, groupFilter, setGroupFilter }: {
   const ungrouped = hostsByGroup?.ungrouped_hosts.length ?? 0
 
   // --- drag to reorder ------------------------------------------------------
-  // Pointer Events rather than native HTML5 drag-and-drop: the native drag
-  // session is a browser/OS-level feature that iTerm2's embedded WebKit view
-  // does not reliably provide - dragstart fires but nothing visibly happens,
-  // and drop can silently no-op. Pointer Events are just mouse/touch tracking,
-  // universally supported, and give full control over the reorder itself.
-  const itemRefs = React.useRef(new Map<string, HTMLElement>())
-  const dragPointerId = React.useRef<number | null>(null)
-  const movedPastThreshold = React.useRef(false)
-  const dragStartY = React.useRef(0)
-  const [draggingName, setDraggingName] = React.useState<string | null>(null)
-  const [liveOrder, setLiveOrder] = React.useState<string[] | null>(null)
-
-  const committedOrder = groups.map((g) => g.name)
-  const displayOrder = liveOrder ?? committedOrder
-  const displayGroups = displayOrder
+  // dnd-kit rather than hand-rolled pointer maths: it animates the neighbours
+  // out of the way as you drag, which is most of what makes a reorder feel
+  // like one. It is pointer-event based, so unlike native HTML5 drag-and-drop
+  // it works in iTerm2's embedded WebKit view.
+  const [pending, setPending] = React.useState<string[] | null>(null)
+  const committed = groups.map((g) => g.name)
+  const order = pending ?? committed
+  const shown = order
     .map((name) => groups.find((g) => g.name === name))
     .filter((g): g is { name: string; emoji: string } => Boolean(g))
 
-  const registerItem = (name: string) => (el: HTMLElement | null) => {
-    if (el) itemRefs.current.set(name, el)
-    else itemRefs.current.delete(name)
-  }
+  const sensors = useSensors(
+    // a few pixels of travel before it counts as a drag, so a plain click on a
+    // group still filters instead of being swallowed
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
 
-  const beginDrag = (name: string) => (e: React.PointerEvent) => {
-    if (e.button !== 0) return
-    dragPointerId.current = e.pointerId
-    movedPastThreshold.current = false
-    dragStartY.current = e.clientY
-    setDraggingName(name)
-    setLiveOrder(committedOrder)
-    e.currentTarget.setPointerCapture(e.pointerId)
-  }
-
-  const onDragMove = (e: React.PointerEvent) => {
-    if (draggingName === null || e.pointerId !== dragPointerId.current) return
-    if (!movedPastThreshold.current && Math.abs(e.clientY - dragStartY.current) > 4) {
-      movedPastThreshold.current = true
-    }
-    const y = e.clientY
-    setLiveOrder((current) => {
-      if (!current) return current
-      const others = current.filter((n) => n !== draggingName)
-      let insertAt = others.length
-      for (let i = 0; i < others.length; i++) {
-        const el = itemRefs.current.get(others[i])
-        if (!el) continue
-        const mid = el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2
-        if (y < mid) { insertAt = i; break }
-      }
-      const next = [...others]
-      next.splice(insertAt, 0, draggingName)
-      return next.join('|') === current.join('|') ? current : next
-    })
-  }
-
-  const endDrag = async () => {
-    const name = draggingName
-    const moved = movedPastThreshold.current
-    const finalOrder = liveOrder
-    dragPointerId.current = null
-    setDraggingName(null)
-    setLiveOrder(null)
-    if (!name || !moved || !finalOrder) return
-    if (finalOrder.join('|') === committedOrder.join('|')) return
+  const onDragEnd = async ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return
+    const next = arrayMove(order, order.indexOf(String(active.id)), order.indexOf(String(over.id)))
+    setPending(next)                       // hold the new order while the server catches up
     try {
-      await api.setGroupOrder(finalOrder)
+      await api.setGroupOrder(next)
       await reloadHosts()
     } catch {
       toast('Could not save the new order', 'error')
+    } finally {
+      setPending(null)
     }
   }
 
@@ -176,28 +146,30 @@ function Sidebar({ page, setPage, groupFilter, setGroupFilter }: {
               Groups
             </div>
           )}
-          {displayGroups.map(({ name, emoji }) => (
-            <GroupItem
-              key={name}
-              itemRef={registerItem(name)}
-              name={name}
-              emoji={emoji}
-              count={counts.get(name) ?? 0}
-              color={themeById(hostsByGroup?.groups[name]?.[0]?.theme).color}
-              active={groupFilter === name}
-              collapsed={collapsed}
-              dragging={draggingName === name}
-              onPointerDown={beginDrag(name)}
-              onPointerMove={onDragMove}
-              onPointerUp={endDrag}
-              onPointerCancel={endDrag}
-              onClick={() => {
-                if (movedPastThreshold.current) return
-                setPage('hosts')
-                setGroupFilter(groupFilter === name ? null : name)
-              }}
-            />
-          ))}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+            onDragEnd={onDragEnd}
+          >
+            <SortableContext items={order} strategy={verticalListSortingStrategy}>
+              {shown.map(({ name, emoji }) => (
+                <SortableGroupItem
+                  key={name}
+                  name={name}
+                  emoji={emoji}
+                  count={counts.get(name) ?? 0}
+                  color={themeById(hostsByGroup?.groups[name]?.[0]?.theme).color}
+                  active={groupFilter === name}
+                  collapsed={collapsed}
+                  onClick={() => {
+                    setPage('hosts')
+                    setGroupFilter(groupFilter === name ? null : name)
+                  }}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
           {ungrouped > 0 && (
             <GroupItem
               name="Ungrouped"
@@ -301,9 +273,44 @@ function NavItem({ active, onClick, icon, label, badge, hint, collapsed }: {
   return <Tooltip content={hint ? `${label} (${hint})` : label}>{button}</Tooltip>
 }
 
+/** A group in the sidebar, made draggable by dnd-kit.
+ *
+ * The sortable hook supplies the transform that slides this row out of the way
+ * as another is dragged past it - that motion is most of what makes a reorder
+ * feel like one, and it is why this is a library rather than pointer maths.
+ */
+function SortableGroupItem(props: {
+  name: string
+  emoji: string
+  count: number
+  color: string
+  active: boolean
+  collapsed?: boolean
+  onClick: () => void
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: props.name })
+
+  return (
+    <GroupItem
+      {...props}
+      itemRef={setNodeRef}
+      dragging={isDragging}
+      dragProps={{ ...attributes, ...listeners }}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        // the row being dragged rides above the ones sliding past it
+        zIndex: isDragging ? 1 : undefined,
+        position: isDragging ? 'relative' : undefined,
+      }}
+    />
+  )
+}
+
 function GroupItem({
-  name, emoji, count, color, active, onClick, collapsed, dragging, itemRef,
-  onPointerDown, onPointerMove, onPointerUp, onPointerCancel,
+  name, emoji, count, color, active, onClick, collapsed, dragging,
+  itemRef, dragProps, style,
 }: {
   name: string
   emoji: string
@@ -313,17 +320,14 @@ function GroupItem({
   onClick: () => void
   collapsed?: boolean
   dragging?: boolean
-  /** registers this item's element so the drag can measure sibling positions */
   itemRef?: (el: HTMLElement | null) => void
-  onPointerDown?: (e: React.PointerEvent) => void
-  onPointerMove?: (e: React.PointerEvent) => void
-  onPointerUp?: (e: React.PointerEvent) => void
-  onPointerCancel?: (e: React.PointerEvent) => void
+  /** dnd-kit's listeners and a11y attributes; absent on rows that cannot move */
+  dragProps?: Record<string, unknown>
+  style?: React.CSSProperties
 }) {
   // Array.from, not [0]: an emoji or an accented letter is more than one UTF-16
   // unit, and half of one renders as a replacement character.
   const initial = (Array.from(name.trim())[0] ?? '?').toUpperCase()
-  const draggable = Boolean(onPointerDown)
 
   const button = (
     <button
@@ -331,17 +335,15 @@ function GroupItem({
       type="button"
       onClick={onClick}
       aria-label={`${name} (${count})`}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerCancel}
+      style={style}
+      {...dragProps}
       className={cn(
         'flex w-full items-center rounded-lg text-[13px] cursor-pointer touch-none select-none',
         'transition-colors duration-150',
         collapsed ? 'justify-center px-0 py-2' : 'gap-2.5 px-2.5 py-1.5',
         active ? 'bg-accent text-accent-foreground' : 'hover:bg-muted hover:text-foreground',
-        dragging && 'z-10 opacity-70 shadow-lg',
-        draggable && !collapsed && 'cursor-grab active:cursor-grabbing',
+        dragging && 'bg-muted opacity-90 shadow-lg',
+        dragProps && !collapsed && 'cursor-grab active:cursor-grabbing',
       )}
     >
       {collapsed ? (

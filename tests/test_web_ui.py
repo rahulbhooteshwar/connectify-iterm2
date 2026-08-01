@@ -552,6 +552,41 @@ def test_group_rename_and_icon_go_through_one_endpoint():
     assert "method: 'PUT'" in api
 
 
+def test_the_tooltip_does_not_linger_over_the_next_item():
+    """Radix keeps a tooltip open while the pointer might be travelling into
+    it - a "grace area" meant for tooltips you can hover and click. These are
+    plain labels, and the grace area meant a tooltip never closed on leave: the
+    next icon you hovered was blocked from opening its own, so it kept showing
+    the previous group's name at the new position.
+    """
+    app = read(UI_SRC, 'App.tsx')
+    assert 'disableHoverableContent' in app, \
+        "without this a label tooltip stays open and blocks the next one"
+
+
+def test_reordering_uses_a_drag_library_not_hand_rolled_pointer_maths():
+    """Sliding the neighbours out of the way as you drag is most of what makes
+    a reorder feel like one, and is not worth reimplementing. dnd-kit is also
+    pointer-event based, so unlike native HTML5 drag-and-drop it works in
+    iTerm2's embedded WebKit view."""
+    app = read(UI_SRC, 'App.tsx')
+
+    assert '@dnd-kit/sortable' in app
+    assert 'useSortable(' in app
+    assert 'onPointerMove={onDragMove}' not in app, "the hand-rolled drag is still here"
+
+
+def test_a_click_on_a_group_is_not_swallowed_by_the_drag():
+    """Press-and-release on a group has to filter, not count as a zero-length
+    drag - hence an activation distance before dragging begins."""
+    app = read(UI_SRC, 'App.tsx')
+    sensors = app[app.index('const sensors = useSensors('):]
+    sensors = sensors[:sensors.index(')\n\n')]
+
+    assert 'activationConstraint' in sensors
+    assert 'distance' in sensors
+
+
 def test_group_order_is_persisted_through_the_api_not_local_storage_alone():
     """The ask was for the order to persist under ~/.connectify - that only
     happens if the sidebar actually calls the ordering endpoint rather than
