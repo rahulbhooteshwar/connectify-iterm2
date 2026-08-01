@@ -52,6 +52,30 @@ def test_group_hosts_with_no_groups_at_all():
 
 # --- pre-vault host fields ---------------------------------------------------
 
+def test_session_leftovers_are_swept_without_waiting_for_a_restart(tmp_path, monkeypatch):
+    """A tab killed abruptly leaves its session directory behind. The sweep
+    used to run only at server startup, so those sat there for as long as the
+    server was up."""
+    import time
+    import main as main_module
+    from main import SSHManager
+
+    swept = []
+    monkeypatch.setattr(main_module.ssh_session, 'sweep_runtime_dir',
+                        lambda *a, **k: swept.append(1))
+    monkeypatch.setattr(SSHManager, '_last_sweep_at', 0.0)
+
+    assert SSHManager.sweep_session_files() is True
+    # Rate-limited, so calling it from every page load costs nothing
+    assert SSHManager.sweep_session_files() is False
+    assert SSHManager.sweep_session_files(force=True) is True
+
+    deadline = time.time() + 5
+    while len(swept) < 2 and time.time() < deadline:
+        time.sleep(0.02)
+    assert len(swept) == 2, "the sweep runs in the background, not inline"
+
+
 def test_resolve_ssh_verbosity():
     """A host's stored verbosity is what ssh gets, clamped to 0-3."""
     from main import resolve_ssh_verbosity

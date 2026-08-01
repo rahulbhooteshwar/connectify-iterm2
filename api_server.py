@@ -467,6 +467,10 @@ async def get_tags():
 @app.get("/api/vault/status")
 async def vault_status(x_vault_token: Optional[str] = Header(None)):
     """Whether the vault exists and whether this page has it unlocked"""
+    # The UI asks for this as soon as it opens, which makes it the natural
+    # moment to clear out session leftovers - quietly, in the background
+    api_manager.ssh_manager.sweep_session_files()
+
     unlocked = vault_sessions.get_key(x_vault_token) is not None
     return {
         "success": True,

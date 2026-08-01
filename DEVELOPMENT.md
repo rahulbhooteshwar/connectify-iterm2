@@ -210,6 +210,11 @@ Writes, loads and inspects the `com.connectify.ui` LaunchAgent:
   binary that has moved would otherwise fail at every login with nothing said
 - `describe()` is the one-liner shared by `connectify autostart`, the doctor
   and the installer
+- The plist runs `connectify --silent` (the server, in the foreground) with
+  `KeepAlive` off. `connectify ui start` would exit immediately after spawning
+  the server, and launchd would restart the launcher every ten seconds for
+  ever - wrong, and the exact shape endpoint security tools flag as malicious
+  persistence
 
 `setup-autostart.sh` is a shim over the command, kept for the curl|bash URL
 that used to be the documented way to do this.

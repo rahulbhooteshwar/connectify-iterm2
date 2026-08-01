@@ -369,8 +369,26 @@ connectify autostart disable   # stop doing that
 
 Enabling it writes a **LaunchAgent** to
 `~/Library/LaunchAgents/com.connectify.ui.plist` and loads it, so the server
-starts on login, stays up in the background, is restarted if it crashes, and
-logs to `/tmp/connectify-autostart.log`.
+starts when you log in and logs to `~/Library/Logs/Connectify/`.
+
+The agent runs `connectify --silent`, which *is* the server, in the
+foreground - not `connectify ui start`, which spawns it and exits. That
+distinction matters more than it looks: with a launcher that exits, launchd
+sees the job finish and (with `KeepAlive`) starts it again every ten seconds,
+for ever. A process respawning on a timer from a login-persistence entry is
+close to the textbook shape of malware, and **endpoint security tools flag
+it** - SentinelOne among them. `KeepAlive` is off for the same reason: the
+server starts once at login and nothing resurrects it behind your back, so
+`connectify ui stop` keeps meaning what it says. The trade-off is that a
+crashed server stays down until you start it again.
+
+If your Mac is managed and the agent is still flagged, what your IT team
+needs is the LaunchAgent path above, the binary it runs
+(`~/.local/bin/connectify` → `~/.local/lib/connectify/connectify`), the
+release it came from and its SHA-256 - published as a digest on every
+[release](https://github.com/rahulbhooteshwar/connectify-iterm2/releases).
+The binaries are not yet signed with an Apple Developer ID, which is the
+other reason an EDR looks twice at them.
 
 Installing, upgrading and `connectify doctor` all report where you stand, and
 say what to run if it isn't on. One case is handled for you: a LaunchAgent that
@@ -379,6 +397,19 @@ install, since you already asked for auto-start once and a broken one fails
 silently at every login.
 
 The old `setup-autostart.sh` still works - it now forwards to the command.
+
+### Session scratch files
+
+Each session gets a private `0700` directory under `~/.connectify/run/`
+holding two scripts and a FIFO - the ssh command line and the path of the
+FIFO the password is passed through. **No credential is ever written there**;
+the secret exists only in the vault and in kernel memory as it passes through
+the FIFO, and there is a test that fails if any file in that directory ever
+contains it.
+
+A session removes its own directory as soon as ssh exits. Anything left by a
+tab that was killed outright is swept when the app is opened and before every
+launch (older than six hours, so live sessions are left alone).
 
 ## Uninstallation
 

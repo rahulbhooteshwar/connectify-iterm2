@@ -47,7 +47,11 @@ def test_enable_writes_a_plist_launchd_can_read(agent):
         contents = plistlib.load(f)
 
     assert contents['Label'] == autostart.LABEL
-    assert contents['ProgramArguments'][1:] == ['ui', 'start']
+    # The server itself, in the foreground. `ui start` would spawn it and
+    # exit, and launchd would then restart the launcher on a timer for ever -
+    # which is both wrong and the shape endpoint security tools flag.
+    assert contents['ProgramArguments'][1:] == ['--silent']
+    assert contents['KeepAlive'] is False, "nothing should respawn behind the user's back"
     assert os.path.isabs(contents['ProgramArguments'][0]), \
         "launchd expands neither ~ nor $HOME"
     assert contents['RunAtLoad'] is True

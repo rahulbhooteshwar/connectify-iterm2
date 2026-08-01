@@ -321,6 +321,37 @@ class SSHManager:
         cleanup_thread = threading.Thread(target=cleanup_worker, daemon=True)
         cleanup_thread.start()
 
+    # Sweeping walks a handful of directories, but there is no point doing it
+    # on every keystroke either
+    _last_sweep_at = 0.0
+    _sweep_lock = threading.Lock()
+    SWEEP_INTERVAL_SECONDS = 30
+
+    @classmethod
+    def sweep_session_files(cls, force=False):
+        """Clear session directories left behind by tabs that were killed.
+
+        A session cleans up after itself when ssh exits; this is for the ones
+        that never got the chance. Runs in the background so nothing waits on
+        it, and rate-limited so calling it from every page load and every
+        launch costs nothing.
+        """
+        now = time.time()
+        with cls._sweep_lock:
+            if not force and now - cls._last_sweep_at < cls.SWEEP_INTERVAL_SECONDS:
+                return False
+            cls._last_sweep_at = now
+
+        def worker():
+            try:
+                ssh_session.sweep_runtime_dir()
+            except Exception:
+                # Housekeeping must never break a launch or a page load
+                pass
+
+        threading.Thread(target=worker, daemon=True).start()
+        return True
+
     def filter_hosts(self, filter_term=None):
         """Filter hosts based on search term"""
         hosts = self.config.get('hosts', [])
@@ -396,6 +427,9 @@ class SSHManager:
         reading a private FIFO, so it is never written to disk, never passed on
         a command line, and sshpass is not involved.
         """
+        # Tidy up anything a previous session left behind before adding one
+        self.sweep_session_files()
+
         iterm_profile = host.get('iterm_profile', 'Default')
         login = ssh_session.effective_username(host, credential)
         host_name = host.get('name') or (

@@ -24,8 +24,12 @@ from pathlib import Path
 LABEL = "com.connectify.ui"
 PLIST_PATH = Path(f"~/Library/LaunchAgents/{LABEL}.plist").expanduser()
 
-STDOUT_LOG = "/tmp/connectify-autostart.log"
-STDERR_LOG = "/tmp/connectify-autostart.error.log"
+# Under ~/Library/Logs, where macOS keeps user logs and Console.app finds
+# them. /tmp works, but a persistent job writing there is a shape endpoint
+# security tools are trained to distrust.
+LOG_DIR = Path("~/Library/Logs/Connectify").expanduser()
+STDOUT_LOG = str(LOG_DIR / "autostart.log")
+STDERR_LOG = str(LOG_DIR / "autostart.error.log")
 
 
 def connectify_binary():
@@ -111,11 +115,27 @@ def describe(state=None):
 
 
 def _plist_bytes(program):
+    """The LaunchAgent, written to look like what it is: one background job.
+
+    Two things matter here, and they are the same thing twice.
+
+    ``connectify --silent`` is the server itself, running in the foreground.
+    The obvious alternative, ``connectify ui start``, spawns the server and
+    exits straight away - so launchd sees the job finish, and with KeepAlive
+    it starts it again, every ten seconds, forever. A process respawning on a
+    timer under a login-persistence entry is close to the textbook shape of
+    something malicious, and endpoint security tools flag it as such. It is
+    also simply wrong: launchd should supervise the server, not a launcher.
+
+    KeepAlive is off for the same reason. RunAtLoad starts the server once
+    when you log in, which is what "start at login" means; nothing restarts
+    it behind your back, and `connectify ui stop` stays meaningful.
+    """
     return plistlib.dumps({
         'Label': LABEL,
-        'ProgramArguments': [program, 'ui', 'start'],
+        'ProgramArguments': [program, '--silent'],
         'RunAtLoad': True,
-        'KeepAlive': True,
+        'KeepAlive': False,
         'StandardOutPath': STDOUT_LOG,
         'StandardErrorPath': STDERR_LOG,
     })
@@ -132,6 +152,7 @@ def enable():
                        "or make sure ~/.local/bin is on your PATH.")
 
     try:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
         PLIST_PATH.parent.mkdir(parents=True, exist_ok=True)
         PLIST_PATH.write_bytes(_plist_bytes(program))
     except OSError as e:
@@ -149,7 +170,7 @@ def enable():
         detail = (loaded.stderr or loaded.stdout).strip() if loaded else 'launchctl not available'
         return False, f"Wrote {PLIST_PATH} but launchd would not load it: {detail}"
 
-    return True, f"Auto-start enabled - {program} ui start will run at login"
+    return True, f"Auto-start enabled - the web UI server starts when you log in"
 
 
 def disable():
