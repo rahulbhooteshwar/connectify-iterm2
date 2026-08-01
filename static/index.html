@@ -1340,6 +1340,39 @@
       gap: 0.3rem;
     }
 
+    .usage-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      margin-top: 0.3rem;
+      padding: 0.15rem 0.55rem;
+      border: 1px solid var(--border-color);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: inherit;
+      font-size: 0.72rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: color 0.15s ease, border-color 0.15s ease;
+    }
+
+    .usage-badge:hover {
+      color: var(--primary-color);
+      border-color: var(--primary-color);
+    }
+
+    .usage-badge i {
+      font-size: 0.68rem;
+    }
+
+    /* Nothing to open, so it is a label rather than a button */
+    .usage-badge.is-empty {
+      color: var(--text-muted);
+      cursor: default;
+      border-style: dashed;
+    }
+
     .credential-meta {
       color: var(--text-secondary);
       font-size: 0.8rem;
@@ -2414,6 +2447,18 @@
       </div>
     </div>
 
+    <!-- Which hosts use a credential (from the badge on its card) -->
+    <div id="credentialHostsModal" class="connection-overlay">
+      <div class="connection-modal" style="max-width: 460px; text-align: left;">
+        <h3 id="credentialHostsTitle" style="margin-bottom: 0.75rem;">Hosts</h3>
+        <p id="credentialHostsSubtitle" style="color: var(--text-secondary); margin-bottom: 1rem;"></p>
+        <ul id="credentialHostsList" class="credential-host-list"></ul>
+        <div class="modal-actions actions-end">
+          <button id="closeCredentialHostsBtn" class="control-btn" style="width: auto; padding: 0.5rem 1.5rem;">Close</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Delete Confirmation Modal -->
     <div id="deleteModal" class="connection-overlay">
       <div class="connection-modal" style="max-width: 400px;">
@@ -2672,6 +2717,12 @@
           duplicateChooseNameBtn: document.getElementById('duplicateChooseNameBtn'),
           duplicateEditExistingBtn: document.getElementById('duplicateEditExistingBtn'),
           duplicateDeleteExistingBtn: document.getElementById('duplicateDeleteExistingBtn'),
+          credentialHostsModal: document.getElementById('credentialHostsModal'),
+          credentialHostsTitle: document.getElementById('credentialHostsTitle'),
+          credentialHostsSubtitle: document.getElementById('credentialHostsSubtitle'),
+          credentialHostsList: document.getElementById('credentialHostsList'),
+          closeCredentialHostsBtn: document.getElementById('closeCredentialHostsBtn'),
+
           credentialDeleteModal: document.getElementById('credentialDeleteModal'),
           credentialDeleteTitle: document.getElementById('credentialDeleteTitle'),
           credentialDeleteMessage: document.getElementById('credentialDeleteMessage'),
@@ -2914,6 +2965,10 @@
         if (this.elements.confirmCredentialDeleteBtn) {
           this.elements.confirmCredentialDeleteBtn.addEventListener('click',
             () => this.performCredentialDelete());
+        }
+        if (this.elements.closeCredentialHostsBtn) {
+          this.elements.closeCredentialHostsBtn.addEventListener('click',
+            () => this.elements.credentialHostsModal.classList.remove('show'));
         }
 
         // Tag Input Events
@@ -3354,9 +3409,15 @@
             ? this.escapeHTML(credential.ssh_key_path || '')
               + (credential.has_passphrase ? ' - passphrase set' : '')
             : 'Password stored';
+          // Names of every host would wrap the card and bury the rest of
+          // the line, so the count is the badge and the names live behind it
           const usage = usedBy.length
-            ? `${usedBy.length} host(s): ${this.escapeHTML(usedBy.join(', '))}`
-            : 'Not used by any host';
+            ? `<button type="button" class="usage-badge"
+                       title="Show the hosts using this credential"
+                       onclick="app.showCredentialHosts('${this.escapeAttr(credential.name)}')">
+                 <i class="fas fa-server"></i> ${usedBy.length} host${usedBy.length === 1 ? '' : 's'}
+               </button>`
+            : '<span class="usage-badge is-empty">Not used by any host</span>';
           const login = (credential.username || '').trim()
             ? `<span class="credential-user" title="Overrides the username on hosts using this credential"><i class="fas fa-user"></i> ${this.escapeHTML(credential.username)}</span>`
             : '';
@@ -3385,6 +3446,23 @@
             </div>
           `;
         }).join('');
+      }
+
+      showCredentialHosts(name) {
+        const credential = this.credentials.find(c => c.name === name);
+        const hosts = (credential && credential.used_by) || [];
+        if (!hosts.length) return;
+
+        this.elements.credentialHostsTitle.textContent = `Hosts using '${name}'`;
+        this.elements.credentialHostsSubtitle.textContent =
+          `${hosts.length} host${hosts.length === 1 ? '' : 's'} authenticate`
+          + `${hosts.length === 1 ? 's' : ''} with this credential.`;
+        this.elements.credentialHostsList.innerHTML = hosts
+          .slice()
+          .sort((a, b) => String(a).localeCompare(String(b)))
+          .map(host => `<li>${this.escapeHTML(host)}</li>`)
+          .join('');
+        this.elements.credentialHostsModal.classList.add('show');
       }
 
       escapeAttr(value) {
