@@ -152,6 +152,20 @@ or handed to the browser, so a reload, a second tab or a restart all start
 locked. Pressing **Lock** does the same on demand. Reading, editing and
 connecting all require it to be unlocked.
 
+### Passcode and password fields
+
+The vault passcode, credential passwords and key passphrases are masked with
+CSS (`-webkit-text-security`) on a normal text field rather than being
+`type="password"` inputs. Safari - and so iTerm2's embedded browser - paints an
+AutoFill key on top of every password field, and in the embedded browser it
+never goes away. A field the browser has no reason to decorate avoids that
+entirely, and password managers leave it alone.
+
+The swap only happens where the browser is known to mask the field itself; if
+it isn't supported, the fields stay real password inputs (a plain box showing
+your passcode would be far worse than a stray icon), and the AutoFill
+decorations are hidden in CSS as a second line of defence.
+
 ### Managing credentials
 
 The Vault page lists every credential with its type and which hosts use it, and
@@ -204,19 +218,12 @@ Both are needed: many servers (anything authenticating through PAM) only offer
 *"Permission denied (keyboard-interactive)"* without ever prompting. Hosts saved
 by an earlier version are updated on startup.
 
-While ssh authenticates, the tab itself is not blank: it shows a card in the
-middle of the window with the host, the login and which credential is
-answering, bordered in that host's **tile theme colour**, with a spinner and
-the elapsed seconds. ssh tells Connectify the moment the session is actually up
-(via `LocalCommand`), and the card is erased completely - the session output
-then flows into a clean screen.
-
-The card is drawn with [Rich](https://github.com/Textualize/rich), which is
-already in the binary. It does *not* take over the terminal with an alternate
-screen: everything written to one is discarded on the way out, which would
-swallow ssh's own error output on a failed connection. If Rich cannot be
-reached (a source checkout without dependencies), the tab falls back to a
-one-line banner and spinner.
+While ssh authenticates, the tab itself is not blank: it prints the host, the
+login and which credential is answering, then animates a spinner reading
+*connecting...* with the elapsed seconds - one line in the corner, out of the
+way of whatever the session prints next. ssh tells Connectify the moment the
+session is actually up (via `LocalCommand`), so the spinner gives the line back
+before the remote prompt arrives.
 
 Connectify waits for iTerm2 to confirm the tab before reporting success, so the
 tile keeps its spinner until the session is really open and a failure is

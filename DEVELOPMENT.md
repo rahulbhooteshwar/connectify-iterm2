@@ -170,14 +170,6 @@ The SSH engine behind the web UI:
   locked vault with `401 {"code": "vault_locked"}`, which the UI turns into the
   unlock dialog (and retries the original request afterwards).
 
-### 2b-2. session_splash.py - The Connecting Card
-
-Rich `Live(transient=True)` drawing a bordered, centred panel while ssh
-authenticates, then erasing it. Deliberately not `screen=True`: an alternate
-screen discards its contents on exit, taking ssh's error output with it.
-Exits on the marker file, on SIGTERM (the launcher kills it when ssh exits -
-the signal handler lets the context manager erase first), or on timeout.
-
 ### 2c. ssh_session.py - Launching Sessions
 
 Builds everything a session needs without ever putting a secret on disk or on a
@@ -194,8 +186,7 @@ command line:
   when the output is not a terminal, and when verbose logging owns the screen.
 - The askpass helper inspects the prompt ssh passes it. Host-key confirmation
   questions (`authenticity`, `yes/no`, `fingerprint`) are put to the user on
-  `/dev/tty` after touching a `yield` file so the connecting card stops
-  drawing; everything else is served from the FIFO. Answering a trust prompt
+  `/dev/tty` after touching a `yield` file so the spinner stops drawing; everything else is served from the FIFO. Answering a trust prompt
   with the password would both fail the connection and leak the secret.
 - `SecretChannel` - a FIFO in a private 0700 directory that hands the password
   or key passphrase to ssh's askpass helper, a bounded number of times and only

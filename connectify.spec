@@ -56,9 +56,8 @@ a = Analysis(
         'pydantic.types',
         'email_validator',
         'pkg_resources',
-        # Installer UI and the connecting card a session tab shows
+        # Installer UI
         'rich',
-        'session_splash',
         # Credentials vault encryption
         'cryptography',
         'cryptography.hazmat.primitives.ciphers.aead',

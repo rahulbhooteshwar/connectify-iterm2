@@ -290,37 +290,6 @@ def test_the_tab_gets_a_banner_and_a_spinner(runtime):
         session.cleanup()
 
 
-def test_the_tab_opens_a_rich_card_when_it_can(runtime):
-    """A centred card beats a line of text buried in the corner."""
-    session = ssh_session.prepare_session(
-        {**HOST, "theme": "red"}, PASSWORD_CREDENTIAL)
-    try:
-        launcher = session.launcher.read_text()
-
-        assert 'session-splash' in launcher
-        assert "'--theme' 'red'" in launcher, "the card follows the host's tile theme"
-        assert f"'--marker' '{session.directory / 'connected'}'" in launcher
-        assert "'--name' 'prod-web'" in launcher
-        # The shell spinner is still there as the fallback branch
-        assert 'spin &' in launcher
-        assert 'eval' not in launcher, "the command is literal so $! is the card's own pid"
-    finally:
-        session.cleanup()
-
-
-def test_without_rich_the_tab_falls_back_to_the_shell_spinner(runtime, monkeypatch):
-    monkeypatch.setattr(ssh_session, 'splash_command', lambda: None)
-
-    session = ssh_session.prepare_session(HOST, PASSWORD_CREDENTIAL)
-    try:
-        launcher = session.launcher.read_text()
-
-        assert 'session-splash' not in launcher
-        assert 'banner\n' in launcher and 'spin &' in launcher
-    finally:
-        session.cleanup()
-
-
 def test_the_spinner_stands_aside_for_verbose_logs(runtime):
     session = ssh_session.prepare_session(HOST, PASSWORD_CREDENTIAL, verbosity=3)
     try:

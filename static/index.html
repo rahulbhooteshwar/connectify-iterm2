@@ -246,6 +246,42 @@
       z-index: 1;
     }
 
+    /* Secret fields.
+       Safari (and iTerm2's embedded browser with it) paints an AutoFill key
+       on top of every password field, and in the embedded browser it never
+       goes away. Two defences: hide the decorations, and - where the browser
+       can mask a plain text field itself - use one of those instead, so there
+       is no password field for a password manager to decorate at all. See
+       maskSecretFields(). */
+    input[type="password"]::-webkit-credentials-auto-fill-button,
+    input[type="password"]::-webkit-strong-password-auto-fill-button,
+    input[type="password"]::-webkit-strong-password-and-generate-button,
+    input[type="password"]::-webkit-caps-lock-indicator,
+    input[type="password"]::-webkit-textfield-decoration-container {
+      display: none !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+      position: absolute !important;
+      right: 0;
+      width: 0 !important;
+      max-width: 0 !important;
+      height: 0 !important;
+      max-height: 0 !important;
+      opacity: 0 !important;
+      -webkit-appearance: none;
+    }
+
+    .masked-input {
+      -webkit-text-security: disc;
+      text-security: disc;
+    }
+
+    /* The eye button turns the masking off rather than changing the type */
+    .masked-input.is-revealed {
+      -webkit-text-security: none;
+      text-security: none;
+    }
+
     .search-input {
       width: 100%;
       padding: var(--spacing-xs) var(--spacing-sm) var(--spacing-xs) 2.5rem;
@@ -2785,6 +2821,8 @@
 
       async init() {
         console.log('Initializing SSH Session Manager...');
+        // Before anything can be typed into one
+        this.maskSecretFields();
         await this.loadHosts();
         await this.loadTags();
         await this.loadGroups();
@@ -2927,8 +2965,8 @@
           this.elements.toggleCredentialPasswordBtn.addEventListener('click', () => {
             const input = this.elements.credentialPassword;
             const icon = this.elements.toggleCredentialPasswordBtn.querySelector('i');
-            const revealed = input.type === 'text';
-            input.type = revealed ? 'password' : 'text';
+            const revealed = this.isRevealed(input);
+            this.setRevealed(input, !revealed);
             icon.className = revealed ? 'fas fa-eye' : 'fas fa-eye-slash';
           });
         }
@@ -3486,6 +3524,13 @@
         this.hideError(this.elements.credentialError);
         this.elements.credentialOriginalName.value = '';
         this.elements.credentialModalTitle.textContent = 'Add Credential';
+
+        // form.reset() clears values, not the reveal state - without this the
+        // next credential opens with its password on show
+        this.setRevealed(this.elements.credentialPassword, false);
+        const revealIcon = this.elements.toggleCredentialPasswordBtn
+          && this.elements.toggleCredentialPasswordBtn.querySelector('i');
+        if (revealIcon) revealIcon.className = 'fas fa-eye';
 
         if (name) {
           const response = await this.vaultFetch(`/api/vault/credentials/${encodeURIComponent(name)}`);
@@ -4519,6 +4564,49 @@
         }
 
         return html;
+      }
+
+      /**
+       * Swap password fields for masked text fields where the browser can
+       * mask them itself.
+       *
+       * iTerm2's embedded browser renders `type=password` with a permanent
+       * AutoFill key floating over the input. A text field with
+       * `-webkit-text-security` looks and behaves the same but carries none
+       * of that furniture. The swap only happens when support is confirmed:
+       * without it the field stays a real password field, because a plain
+       * text box showing the passcode would be far worse than a stray icon.
+       */
+      maskSecretFields(root = document) {
+        const supported = window.CSS && CSS.supports &&
+          (CSS.supports('-webkit-text-security', 'disc') || CSS.supports('text-security', 'disc'));
+        if (!supported) return false;
+
+        root.querySelectorAll('input[type="password"]').forEach(input => {
+          input.type = 'text';
+          input.classList.add('masked-input');
+          input.setAttribute('autocomplete', 'off');
+          // Tell the usual password managers to keep away
+          input.setAttribute('data-lpignore', 'true');
+          input.setAttribute('data-1p-ignore', 'true');
+          input.setAttribute('data-bwignore', 'true');
+        });
+        return true;
+      }
+
+      /** Is this field masked, whichever of the two ways it ended up? */
+      isRevealed(input) {
+        return input.classList.contains('masked-input')
+          ? input.classList.contains('is-revealed')
+          : input.type === 'text';
+      }
+
+      setRevealed(input, revealed) {
+        if (input.classList.contains('masked-input')) {
+          input.classList.toggle('is-revealed', revealed);
+        } else {
+          input.type = revealed ? 'text' : 'password';
+        }
       }
 
       escapeHTML(value) {
