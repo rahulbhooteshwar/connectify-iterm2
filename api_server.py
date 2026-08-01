@@ -134,6 +134,13 @@ class GroupOrderRequest(BaseModel):
     groups: List[str]
 
 
+class HostOrderRequest(BaseModel):
+    """Host names in their new order, and the group they all belong to.
+    Ungrouped hosts are a group with an empty name."""
+    group: str = ""
+    hosts: List[str]
+
+
 class APISSHManager:
     def __init__(self, config_file="~/.connectify/hosts.json"):
         self.ssh_manager = SSHManager(config_file)
@@ -166,6 +173,38 @@ class APISSHManager:
         groups = {normalize_group(host.get('group')) for host in self.all_hosts}
         groups.discard('')
         return self.group_store.metadata(groups)
+
+    def reorder_hosts(self, group, ordered_names):
+        """Rearrange the hosts of one group, in place.
+
+        The order hosts render in *is* their order in hosts.json - group_hosts
+        walks the array and appends - so reordering a group means rewriting
+        only the array slots those hosts already occupy. Everyone else keeps
+        their position, which is what stops reordering Production from
+        shuffling Databases underneath it.
+        """
+        group = normalize_group(group)
+        hosts = self.ssh_manager.config.get('hosts', [])
+
+        slots = [i for i, host in enumerate(hosts)
+                 if normalize_group(host.get('group')) == group]
+        members = {hosts[i]['name']: hosts[i] for i in slots}
+
+        ordered = []
+        for name in ordered_names:
+            host = members.pop(name, None)
+            if host is not None:
+                ordered.append(host)
+        # A host the caller never mentioned - added from another tab mid-drag -
+        # keeps its relative place at the end rather than being dropped
+        ordered.extend(hosts[i] for i in slots if hosts[i]['name'] in members)
+
+        for slot, host in zip(slots, ordered):
+            hosts[slot] = host
+
+        self.ssh_manager.save_config()
+        self.refresh_hosts_data()
+        return len(ordered)
 
     def rename_group(self, old_name, new_name, emoji=None):
         """Rename a group across every host that uses it.
@@ -850,6 +889,22 @@ async def create_host(host: HostCreate):
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/hosts/order")
+async def set_host_order(request: HostOrderRequest):
+    """Persist the order hosts were dragged into within their group.
+
+    Ahead of /api/hosts/{host_name} on purpose: FastAPI matches routes in the
+    order they are declared, and "order" would otherwise be read as the name
+    of a host.
+    """
+    try:
+        api_manager.refresh_hosts_data()
+        moved = api_manager.reorder_hosts(request.group, request.hosts)
+        return {"success": True, "hosts_reordered": moved}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

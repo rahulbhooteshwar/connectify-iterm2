@@ -86,6 +86,14 @@ export const updateGroup = (name: string, changes: { name?: string; emoji?: stri
     { method: 'PUT', body: JSON.stringify(changes) },
   )
 
+/** Persist the order hosts were dragged into within one group. Ungrouped
+ * hosts are a group with an empty name. */
+export const setHostOrder = (group: string, hosts: string[]) =>
+  request<{ hosts_reordered: number }>('/api/hosts/order', {
+    method: 'PUT',
+    body: JSON.stringify({ group, hosts }),
+  })
+
 /** Persist the order the groups were dragged into. */
 export const setGroupOrder = (groups: string[]) =>
   request<{ group_meta: GroupMeta[] }>('/api/groups/order', {

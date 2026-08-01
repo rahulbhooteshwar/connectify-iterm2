@@ -5,6 +5,16 @@ import {
 } from 'lucide-react'
 import { useStore } from '../store'
 import * as api from '../lib/api'
+import { copyText } from '../lib/clipboard'
+import {
+  DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates,
+  useSortable, verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { effectiveLogin, UNGROUPED, type Host } from '../lib/types'
 import { themeById } from '../lib/themes'
 import { Badge, Button, cn, Input, Spinner } from '../components/ui'
@@ -82,11 +92,28 @@ export function HostsPage({ groupFilter, clearGroupFilter }: {
   }
 
   const copy = async (text: string, label: string) => {
+    if (await copyText(text)) toast(`${label} copied`, 'success')
+    // Naming the value gives it somewhere to go even when every copy route is
+    // blocked - it can at least be read off the screen
+    else toast(`Copy blocked by the browser - ${text}`, 'error')
+  }
+
+  // A few pixels of travel before a press counts as a drag, so Launch and the
+  // hover actions still take a plain click
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
+
+  const reorderHosts = async (group: string, current: Host[], { active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return
+    const names = current.map((h) => h.name)
+    const next = arrayMove(names, names.indexOf(String(active.id)), names.indexOf(String(over.id)))
     try {
-      await navigator.clipboard.writeText(text)
-      toast(`${label} copied`, 'success')
+      await api.setHostOrder(group, next)
+      await reloadHosts()
     } catch {
-      toast('Could not reach the clipboard', 'error')
+      toast('Could not save the new order', 'error')
     }
   }
 
@@ -227,22 +254,35 @@ export function HostsPage({ groupFilter, clearGroupFilter }: {
                     monitor showing four narrow cards and a band of empty space.
                     These stretch to the width available, and stop at four so a
                     card never grows absurd. */}
-                <div className={view === 'grid'
-                  ? 'grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4'
-                  : 'space-y-2'}>
-                  {section.hosts.map((host) => (
-                    <HostTile
-                      key={host.name}
-                      host={host}
-                      list={view === 'list'}
-                      state={launching[host.name]}
-                      onLaunch={() => launch(host)}
-                      onEdit={() => setEditing(host)}
-                      onDelete={() => setDeleting(host)}
-                      onCopy={copy}
-                    />
-                  ))}
-                </div>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={(event) => reorderHosts(section.name ?? '', section.hosts, event)}
+                >
+                  <SortableContext
+                    items={section.hosts.map((h) => h.name)}
+                    // tiles wrap in a grid and stack in a list, so the strategy
+                    // has to match or the placeholders open in the wrong axis
+                    strategy={view === 'grid' ? rectSortingStrategy : verticalListSortingStrategy}
+                  >
+                    <div className={view === 'grid'
+                      ? 'grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4'
+                      : 'space-y-2'}>
+                      {section.hosts.map((host) => (
+                        <SortableHostTile
+                          key={host.name}
+                          host={host}
+                          list={view === 'list'}
+                          state={launching[host.name]}
+                          onLaunch={() => launch(host)}
+                          onEdit={() => setEditing(host)}
+                          onDelete={() => setDeleting(host)}
+                          onCopy={copy}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
               </section>
             ))}
           </div>
@@ -293,7 +333,7 @@ function EmptyState({ filtered, onAdd, onClear }: { filtered: boolean; onAdd: ()
   )
 }
 
-function HostTile({ host, list, state, onLaunch, onEdit, onDelete, onCopy }: {
+interface TileProps {
   host: Host
   list: boolean
   state: LaunchState
@@ -301,6 +341,43 @@ function HostTile({ host, list, state, onLaunch, onEdit, onDelete, onCopy }: {
   onEdit: () => void
   onDelete: () => void
   onCopy: (text: string, label: string) => void
+}
+
+/** A host tile, made draggable within its own group.
+ *
+ * The listeners go on the card itself rather than a separate handle: the whole
+ * tile is the thing you want to pick up. The sensor's activation distance is
+ * what keeps Launch and the hover actions clickable - a press that never
+ * travels is still a click.
+ */
+function SortableHostTile(props: TileProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: props.host.name })
+
+  return (
+    <HostTile
+      {...props}
+      tileRef={setNodeRef}
+      dragging={isDragging}
+      dragProps={{ ...attributes, ...listeners }}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        zIndex: isDragging ? 10 : undefined,
+        position: isDragging ? 'relative' : undefined,
+      }}
+    />
+  )
+}
+
+function HostTile({
+  host, list, state, onLaunch, onEdit, onDelete, onCopy,
+  tileRef, dragProps, dragging, style,
+}: TileProps & {
+  tileRef?: (el: HTMLElement | null) => void
+  dragProps?: Record<string, unknown>
+  dragging?: boolean
+  style?: React.CSSProperties
 }) {
   const { credentials, vaultUnlocked } = useStore()
   const theme = themeById(host.theme)
@@ -373,8 +450,15 @@ function HostTile({ host, list, state, onLaunch, onEdit, onDelete, onCopy }: {
   if (list) {
     return (
       <div
-        className="group flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-2.5 shadow-sm transition-all duration-150 hover:shadow-md animate-fade-up"
-        style={{ borderLeft: `3px solid ${theme.color}` }}
+        ref={tileRef}
+        {...dragProps}
+        className={cn(
+          'group flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-2.5',
+          'shadow-sm transition-all duration-150 hover:shadow-md animate-fade-up',
+          dragProps && 'cursor-grab active:cursor-grabbing touch-none select-none',
+          dragging && 'opacity-90 shadow-lg',
+        )}
+        style={{ ...style, borderLeft: `3px solid ${theme.color}` }}
       >
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -395,12 +479,19 @@ function HostTile({ host, list, state, onLaunch, onEdit, onDelete, onCopy }: {
 
   return (
     <div
+      ref={tileRef}
+      {...dragProps}
       className={cn(
         'group tile relative flex flex-col gap-2 overflow-hidden rounded-xl border border-border',
-        'bg-card p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg',
+        'bg-card p-4 shadow-sm transition-all duration-200 hover:shadow-lg',
         'animate-fade-up',
+        // the lift on hover fights the drag transform, so only one at a time
+        !dragging && 'hover:-translate-y-0.5',
+        dragProps && 'cursor-grab active:cursor-grabbing touch-none select-none',
+        dragging && 'opacity-90 shadow-2xl',
       )}
       style={{
+        ...style,
         boxShadow: `inset 0 3px 0 0 ${theme.color}`,
         ['--tile-tint' as string]: theme.strong,
         ['--tile-tint-fade' as string]: theme.soft,

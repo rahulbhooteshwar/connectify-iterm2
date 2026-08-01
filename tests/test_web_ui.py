@@ -587,6 +587,67 @@ def test_a_click_on_a_group_is_not_swallowed_by_the_drag():
     assert 'distance' in sensors
 
 
+def test_copying_falls_back_when_the_clipboard_api_refuses():
+    """navigator.clipboard is absent without a secure context (the UI reached
+    over the LAN with --share) and WebKit rejects it outright whenever the
+    document is not focused - which, embedded in an iTerm2 tab beside a
+    terminal, it often is not. execCommand has neither restriction, so it is
+    the fallback rather than the error message."""
+    clip = read(UI_SRC, 'lib', 'clipboard.ts')
+
+    assert 'navigator.clipboard' in clip
+    assert "execCommand('copy')" in clip, "there has to be a second route"
+    assert 'isSecureContext' in clip, "the async API is simply absent without one"
+
+    # the function body, not the comment above it that names both routes
+    body = clip[clip.index('export async function copyText'):]
+    api_call = body.index('navigator.clipboard')
+    fallback = body.index('legacyCopy(')
+    assert api_call < fallback, "the modern API should be tried first"
+
+
+def test_every_copy_goes_through_the_one_helper():
+    """A second call site writing to navigator.clipboard directly would fail
+    in exactly the cases the helper exists to survive."""
+    for path, text in source_files():
+        if path.endswith('lib/clipboard.ts'):
+            continue
+        assert 'clipboard.writeText' not in text, \
+            f"{path} writes to the clipboard without the fallback"
+
+
+def test_a_failed_copy_still_shows_the_value():
+    """If every route is blocked there is nothing to be done about it, but the
+    value can at least be put on screen to be read off."""
+    page = read(UI_SRC, 'pages', 'HostsPage.tsx')
+    handler = page[page.index('const copy = async'):]
+    handler = handler[:handler.index('\n  }')]
+
+    assert '${text}' in handler, "the failure message should carry the value"
+
+
+def test_host_tiles_reorder_within_their_group():
+    """Same library as the sidebar, and the order is persisted server-side -
+    hosts.json is the order, so it cannot live in the browser."""
+    page = read(UI_SRC, 'pages', 'HostsPage.tsx')
+
+    assert 'SortableHostTile' in page
+    assert 'api.setHostOrder(' in page, "the new order has to reach hosts.json"
+    assert 'rectSortingStrategy' in page and 'verticalListSortingStrategy' in page, \
+        "a grid and a list need different strategies or the gap opens sideways"
+
+
+def test_dragging_a_tile_does_not_eat_the_launch_click():
+    """The drag listeners are on the whole card, so Launch and the hover
+    actions are inside the draggable - only an activation distance keeps them
+    clickable."""
+    page = read(UI_SRC, 'pages', 'HostsPage.tsx')
+    sensors = page[page.index('const sensors = useSensors('):]
+    sensors = sensors[:sensors.index(')\n\n')]
+
+    assert 'activationConstraint' in sensors and 'distance' in sensors
+
+
 def test_group_order_is_persisted_through_the_api_not_local_storage_alone():
     """The ask was for the order to persist under ~/.connectify - that only
     happens if the sidebar actually calls the ordering endpoint rather than
