@@ -131,34 +131,53 @@ def test_text_fields_opt_out_of_autofill():
         assert 'autocomplete="off"' in markup, markup[:110]
 
 
-# Fields WebKit's AutoFill reads as a person or a place: it paints a contact
-# card on the name and a house on the hostname, and in iTerm2's embedded
-# browser they stay once drawn. Hiding the pseudo-element did not shift them,
-# so the field stops being the kind AutoFill looks at.
-SEARCH_TYPED = ('searchBox', 'hostName', 'hostAddress', 'hostUser',
-                'credentialName', 'credentialUsername', 'credentialDescription',
-                'credentialKeyPath', 'tagInput')
+# Measured in iTerm2's browser (Safari 26.5 WebKit) with tools/field-lab.html:
+# AutoFill paints a contact card on a field whose *label* or *id* reads as a
+# person, and a house when it reads as a place. Neither type="search", nor
+# autocomplete, nor hiding the pseudo-elements shifted it. Different wording
+# did - "Title" and "Endpoint" came back clean where "Display Name" and
+# "Hostname / IP" did not.
+FORBIDDEN_IN_IDS = ('name', 'address', 'user', 'phone', 'email')
 
-# These two drive a dropdown where Escape means "close it"; WebKit also lets
-# Escape clear a search field, which would take the typed value with it
-KEEP_AS_TEXT = ('hostGroup', 'itermProfile')
+# The ids of every field the user types into
+INPUT_IDS = ('searchBox', 'tagInput', 'hostTitle', 'hostEndpoint', 'hostLogin',
+             'hostGroup', 'itermProfile', 'hostPort', 'credentialTitle',
+             'credentialLogin', 'credentialDescription', 'credentialKeyPath')
 
 
-def test_identifier_fields_are_out_of_autofills_reach():
+def test_no_field_id_reads_as_a_person_or_a_place():
     html = read_index()
 
-    for ident in SEARCH_TYPED:
-        field = re.search(r'<input[^>]*id="%s"[^>]*>' % ident, html)
-        assert field, f"{ident} is missing"
-        assert 'type="search"' in field.group(0), f"{ident} is still an AutoFill target"
+    for match in re.finditer(r'<input\b[^>]*>', html, re.S):
+        markup = match.group(0)
+        if 'type="hidden"' in markup:
+            continue          # nothing is drawn, so there is nothing to decorate
 
-    for ident in KEEP_AS_TEXT:
-        field = re.search(r'<input[^>]*id="%s"[^>]*>' % ident, html, re.S)
-        assert field and 'type="text"' in field.group(0), \
-            f"{ident} drives a dropdown; Escape must not clear it"
+        ident = re.search(r'\bid="([^"]+)"', markup)
+        if not ident:
+            continue
+        ident = ident.group(1)
+        lowered = ident.lower()
+        for word in FORBIDDEN_IN_IDS:
+            assert word not in lowered, \
+                f'id="{ident}" contains "{word}" - AutoFill decorates it'
 
-    assert 'input[type="search"] {' in html, "search styling has to be reset to ours"
-    assert '-webkit-appearance: none' in html
+
+def test_no_visible_label_reads_as_a_person_or_a_place():
+    html = read_index()
+
+    labels = re.findall(r'<label[^>]*>(.*?)</label>', html, re.S)
+    for label in labels:
+        text = re.sub(r'<[^>]+>', '', label).lower()
+        assert 'name' not in text, f"label {text.strip()!r} draws a contact card"
+        assert 'hostname' not in text, f"label {text.strip()!r} draws a house"
+
+
+def test_the_fields_are_present_under_their_new_ids():
+    html = read_index()
+
+    for ident in INPUT_IDS:
+        assert re.search(r'<input[^>]*id="%s"' % ident, html), f"{ident} is missing"
 
 
 def test_form_fields_do_not_autocapitalize():

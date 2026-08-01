@@ -168,15 +168,22 @@ Nothing user-facing has to be renamed: the labels can go on saying *Name*,
 because the heuristic reads far more than the label and bending the copy
 around it would make the UI worse to read while still not being dependable.
 
-Hiding the pseudo-elements dealt with the key on password fields but not the
-contact card, so the fields that attract it - display name, hostname, username,
-credential name - are `type="search"` instead. AutoFill's heuristics do not run
-on a search field, and it behaves identically otherwise; the search styling is
-reset so nothing looks different. The group and profile pickers stay
-`type="text"`: they drive a dropdown where Escape means "close it", and WebKit
-also lets Escape clear a search field.
+Measured in iTerm2's browser (Safari 26.5) with `tools/field-lab.html`, which
+varies one thing at a time across 25 fields. The result: **the visible label
+and the element id are what AutoFill reads**. Nothing else moved it - not
+`type="search"`, not any `autocomplete` value, not hiding the pseudo-elements,
+which the engine simply ignores.
 
-Two details that matter if you touch this CSS:
+So the fields are named for what they are rather than for a person or a place:
+**Title** instead of *Display Name*, **Endpoint** instead of *Hostname / IP*,
+**Login** instead of *Username*, with ids to match (`hostTitle`,
+`hostEndpoint`, `hostLogin`). Those exact words came back clean where the old
+ones drew a contact card and a house. The stored data is unchanged - hosts
+still have `name`, `hostname` and `username` in `hosts.json` and the API.
+
+The CSS that hides the AutoFill buttons is still there. It does nothing in
+iTerm2's browser, but it costs nothing and works in engines that honour it.
+Two details if you touch it:
 
 - **One rule per selector.** A browser that doesn't recognise one selector in a
   list discards the entire list, which would silently take the others with it.
@@ -184,6 +191,9 @@ Two details that matter if you touch this CSS:
   `::-webkit-textfield-decoration-container` looks like a tidy catch-all, but
   the field's own text is laid out inside it - a number input renders blank
   while still holding its value.
+
+If you rename a field, keep *name*, *address*, *user*, *phone* and *email* out
+of both the label and the id, or the icon comes back. There are tests for it.
 
 ### Passcode and password fields
 

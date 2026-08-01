@@ -2341,7 +2341,7 @@
       <div class="header-right">
         <div class="search-container">
           <i class="fas fa-search search-icon"></i>
-          <input type="search" id="searchBox" class="search-input" placeholder="Search hosts by name or tags..." autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+          <input type="text" id="searchBox" class="search-input" placeholder="Search hosts or tags..." autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
           <button id="clearSearch" class="clear-search-btn" title="Clear search">
             <i class="fas fa-times"></i>
           </button>
@@ -2446,7 +2446,7 @@
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Tags</label>
             <div class="tag-container" id="tagContainer">
               <!-- Pills will be inserted here -->
-              <input type="search" id="tagInput" class="tag-input" placeholder="Type and press Space/Enter to add..." autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
+              <input type="text" id="tagInput" class="tag-input" placeholder="Type and press Space/Enter to add..." autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
             </div>
             <div id="tagDropdown" class="tag-dropdown">
               <!-- Options will be populated here -->
@@ -2482,15 +2482,21 @@
             </div>
           </div>
 
+          <!-- "Title" and "Endpoint", not "Display Name" and "Hostname / IP",
+               and ids to match: WebKit's AutoFill reads both the label and the
+               id, and paints a contact card on anything it takes for a person
+               or a place. Hiding its buttons in CSS does not work in iTerm2's
+               browser; changing the wording does. The JSON keys are untouched -
+               hosts still have name/hostname/username. -->
           <div class="form-group" style="margin-bottom: 1rem;">
-            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Display Name</label>
-            <input type="search" id="hostName" class="search-input" style="width: 100%;" placeholder="Production DB" required autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Title</label>
+            <input type="text" id="hostTitle" class="search-input" style="width: 100%;" placeholder="Production DB" required autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
           </div>
 
           <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; margin-bottom: 1rem;">
             <div class="form-group">
-              <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Hostname / IP</label>
-              <input type="search" id="hostAddress" required class="search-input" style="width: 100%;" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
+              <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Endpoint</label>
+              <input type="text" id="hostEndpoint" required class="search-input" style="width: 100%;" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
             </div>
             <div class="form-group">
               <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Port</label>
@@ -2499,8 +2505,8 @@
           </div>
 
           <div class="form-group" style="margin-bottom: 1rem;">
-            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Username <span style="color: var(--text-muted); font-weight: 400;">(optional)</span></label>
-            <input type="search" id="hostUser" class="search-input" style="width: 100%;" placeholder="Leave empty to use the credential's username" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Login <span style="color: var(--text-muted); font-weight: 400;">(optional)</span></label>
+            <input type="text" id="hostLogin" class="search-input" style="width: 100%;" placeholder="Leave empty to use the credential's login" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
             <small id="hostUserHint" class="profile-hint"></small>
           </div>
 
@@ -2603,21 +2609,21 @@
           <input type="hidden" id="credentialOriginalName">
 
           <div class="form-group" style="margin-bottom: 1rem;">
-            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Name</label>
-            <input type="search" id="credentialName" class="search-input" style="width: 100%;" placeholder="prod-admin" required autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Title</label>
+            <input type="text" id="credentialTitle" class="search-input" style="width: 100%;" placeholder="prod-admin" required autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
           </div>
 
           <div class="form-group" style="margin-bottom: 1rem;">
-            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Username <span style="color: var(--text-muted); font-weight: 400;">(optional)</span></label>
-            <input type="search" id="credentialUsername" class="search-input" style="width: 100%;" placeholder="ubuntu" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Login <span style="color: var(--text-muted); font-weight: 400;">(optional)</span></label>
+            <input type="text" id="credentialLogin" class="search-input" style="width: 100%;" placeholder="ubuntu" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
             <small style="color: var(--text-muted); display: block; margin-top: 0.35rem;">
-              Overrides the username on every host that uses this credential.
+              Overrides the login on every host that uses this credential.
             </small>
           </div>
 
           <div class="form-group" style="margin-bottom: 1rem;">
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Description <span style="color: var(--text-muted); font-weight: 400;">(optional)</span></label>
-            <input type="search" id="credentialDescription" class="search-input" style="width: 100%;" placeholder="Shared admin login for production" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
+            <input type="text" id="credentialDescription" class="search-input" style="width: 100%;" placeholder="Shared admin login for production" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
           </div>
 
           <div class="form-group" style="margin-bottom: 1rem;">
@@ -2641,7 +2647,7 @@
           <div id="credentialKeyFields" style="display: none;">
             <div class="form-group" style="margin-bottom: 1rem;">
               <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">SSH Key Path</label>
-              <input type="search" id="credentialKeyPath" class="search-input" style="width: 100%;" placeholder="~/.ssh/id_ed25519" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
+              <input type="text" id="credentialKeyPath" class="search-input" style="width: 100%;" placeholder="~/.ssh/id_ed25519" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="off">
             </div>
             <div class="form-group" style="margin-bottom: 1rem;">
               <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Passphrase <span style="color: var(--text-muted); font-weight: 400;">(optional)</span></label>
@@ -2949,8 +2955,8 @@
           credentialForm: document.getElementById('credentialForm'),
           credentialModalTitle: document.getElementById('credentialModalTitle'),
           credentialOriginalName: document.getElementById('credentialOriginalName'),
-          credentialName: document.getElementById('credentialName'),
-          credentialUsername: document.getElementById('credentialUsername'),
+          credentialName: document.getElementById('credentialTitle'),
+          credentialUsername: document.getElementById('credentialLogin'),
           credentialDescription: document.getElementById('credentialDescription'),
           credentialType: document.getElementById('credentialType'),
           credentialPasswordField: document.getElementById('credentialPasswordField'),
@@ -3128,7 +3134,7 @@
           });
         }
 
-        const hostUserInput = document.getElementById('hostUser');
+        const hostUserInput = document.getElementById('hostLogin');
         if (hostUserInput) {
           hostUserInput.addEventListener('input', () => this.updateUsernameHint());
         }
@@ -3673,7 +3679,7 @@
                </button>`
             : '<span class="usage-badge is-empty">Not used by any host</span>';
           const login = (credential.username || '').trim()
-            ? `<span class="credential-user" title="Overrides the username on hosts using this credential"><i class="fas fa-user"></i> ${this.escapeHTML(credential.username)}</span>`
+            ? `<span class="credential-user" title="Overrides the login on hosts using this credential"><i class="fas fa-user"></i> ${this.escapeHTML(credential.username)}</span>`
             : '';
 
           return `
@@ -3989,7 +3995,7 @@
        */
       updateUsernameHint() {
         const hint = document.getElementById('hostUserHint');
-        const field = document.getElementById('hostUser');
+        const field = document.getElementById('hostLogin');
         if (!hint || !field) return;
 
         const credential = this.selectedCredential();
@@ -4003,7 +4009,7 @@
         } else if (typed) {
           hint.textContent = `Connects as ${typed}.`;
         } else {
-          hint.textContent = 'Required unless the credential supplies a username.';
+          hint.textContent = 'Required unless the credential supplies a login.';
         }
       }
 
@@ -5104,9 +5110,9 @@
             this.elements.modalTitle.textContent = 'Edit Host';
             this.elements.originalName.value = host.name;
 
-            document.getElementById('hostName').value = host.name;
-            document.getElementById('hostAddress').value = host.hostname;
-            document.getElementById('hostUser').value = host.username || '';
+            document.getElementById('hostTitle').value = host.name;
+            document.getElementById('hostEndpoint').value = host.hostname;
+            document.getElementById('hostLogin').value = host.username || '';
             document.getElementById('hostPort').value = host.port;
             document.getElementById('itermProfile').value = host.iterm_profile || 'Default';
             this.populateCredentialSelect(host.credential || '');
@@ -5176,20 +5182,20 @@
         e.preventDefault();
 
         const credential = this.selectedCredential();
-        const username = document.getElementById('hostUser').value.trim();
+        const username = document.getElementById('hostLogin').value.trim();
 
         // One of the two has to name a login. When the vault is locked we
         // cannot tell, so leave that call to the server.
         if (!username && credential && !((credential.username || '').trim())) {
           this.showMiniToast(
-            `Add a username - '${credential.name}' does not supply one`, 'error');
-          document.getElementById('hostUser').focus();
+            `Add a login - '${credential.name}' does not supply one`, 'error');
+          document.getElementById('hostLogin').focus();
           return;
         }
 
         const formData = {
-          name: document.getElementById('hostName').value,
-          hostname: document.getElementById('hostAddress').value,
+          name: document.getElementById('hostTitle').value,
+          hostname: document.getElementById('hostEndpoint').value,
           username,
           port: parseInt(document.getElementById('hostPort').value),
           credential: this.elements.hostCredential.value,
