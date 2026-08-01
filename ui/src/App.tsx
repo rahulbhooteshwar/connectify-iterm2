@@ -4,7 +4,7 @@ import {
 } from 'lucide-react'
 import { useStore, type Toast } from './store'
 import * as api from './lib/api'
-import { cn } from './components/ui'
+import { cn, Tooltip, TooltipProvider } from './components/ui'
 import { HostsPage } from './pages/HostsPage'
 import { VaultPage } from './pages/VaultPage'
 import { VaultGate } from './components/VaultGate'
@@ -18,6 +18,7 @@ export default function App() {
   const [groupFilter, setGroupFilter] = React.useState<string | null>(null)
 
   return (
+    <TooltipProvider delayDuration={0}>
     <div className="flex h-full overflow-hidden">
       <Sidebar page={page} setPage={setPage} groupFilter={groupFilter} setGroupFilter={setGroupFilter} />
       <main className="flex min-w-0 flex-1 flex-col">
@@ -28,6 +29,7 @@ export default function App() {
       <VaultGate />
       <Toasts />
     </div>
+    </TooltipProvider>
   )
 }
 
@@ -51,16 +53,73 @@ function Sidebar({ page, setPage, groupFilter, setGroupFilter }: {
   const groups = meta.filter((g) => counts.has(g.name))
   const ungrouped = hostsByGroup?.ungrouped_hosts.length ?? 0
 
-  const [dragging, setDragging] = React.useState<string | null>(null)
-  const [dropTarget, setDropTarget] = React.useState<string | null>(null)
+  // --- drag to reorder ------------------------------------------------------
+  // Pointer Events rather than native HTML5 drag-and-drop: the native drag
+  // session is a browser/OS-level feature that iTerm2's embedded WebKit view
+  // does not reliably provide - dragstart fires but nothing visibly happens,
+  // and drop can silently no-op. Pointer Events are just mouse/touch tracking,
+  // universally supported, and give full control over the reorder itself.
+  const itemRefs = React.useRef(new Map<string, HTMLElement>())
+  const dragPointerId = React.useRef<number | null>(null)
+  const movedPastThreshold = React.useRef(false)
+  const dragStartY = React.useRef(0)
+  const [draggingName, setDraggingName] = React.useState<string | null>(null)
+  const [liveOrder, setLiveOrder] = React.useState<string[] | null>(null)
 
-  const reorder = async (from: string, to: string) => {
-    if (from === to) return
-    const names = groups.map((g) => g.name)
-    const next = names.filter((n) => n !== from)
-    next.splice(next.indexOf(to), 0, from)
+  const committedOrder = groups.map((g) => g.name)
+  const displayOrder = liveOrder ?? committedOrder
+  const displayGroups = displayOrder
+    .map((name) => groups.find((g) => g.name === name))
+    .filter((g): g is { name: string; emoji: string } => Boolean(g))
+
+  const registerItem = (name: string) => (el: HTMLElement | null) => {
+    if (el) itemRefs.current.set(name, el)
+    else itemRefs.current.delete(name)
+  }
+
+  const beginDrag = (name: string) => (e: React.PointerEvent) => {
+    if (e.button !== 0) return
+    dragPointerId.current = e.pointerId
+    movedPastThreshold.current = false
+    dragStartY.current = e.clientY
+    setDraggingName(name)
+    setLiveOrder(committedOrder)
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+
+  const onDragMove = (e: React.PointerEvent) => {
+    if (draggingName === null || e.pointerId !== dragPointerId.current) return
+    if (!movedPastThreshold.current && Math.abs(e.clientY - dragStartY.current) > 4) {
+      movedPastThreshold.current = true
+    }
+    const y = e.clientY
+    setLiveOrder((current) => {
+      if (!current) return current
+      const others = current.filter((n) => n !== draggingName)
+      let insertAt = others.length
+      for (let i = 0; i < others.length; i++) {
+        const el = itemRefs.current.get(others[i])
+        if (!el) continue
+        const mid = el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2
+        if (y < mid) { insertAt = i; break }
+      }
+      const next = [...others]
+      next.splice(insertAt, 0, draggingName)
+      return next.join('|') === current.join('|') ? current : next
+    })
+  }
+
+  const endDrag = async () => {
+    const name = draggingName
+    const moved = movedPastThreshold.current
+    const finalOrder = liveOrder
+    dragPointerId.current = null
+    setDraggingName(null)
+    setLiveOrder(null)
+    if (!name || !moved || !finalOrder) return
+    if (finalOrder.join('|') === committedOrder.join('|')) return
     try {
-      await api.setGroupOrder(next)
+      await api.setGroupOrder(finalOrder)
       await reloadHosts()
     } catch {
       toast('Could not save the new order', 'error')
@@ -117,26 +176,23 @@ function Sidebar({ page, setPage, groupFilter, setGroupFilter }: {
               Groups
             </div>
           )}
-          {groups.map(({ name, emoji }) => (
+          {displayGroups.map(({ name, emoji }) => (
             <GroupItem
               key={name}
+              itemRef={registerItem(name)}
               name={name}
               emoji={emoji}
               count={counts.get(name) ?? 0}
               color={themeById(hostsByGroup?.groups[name]?.[0]?.theme).color}
               active={groupFilter === name}
               collapsed={collapsed}
-              dragging={dragging === name}
-              dropTarget={dropTarget === name}
-              onDragStart={() => setDragging(name)}
-              onDragOver={() => setDropTarget(name)}
-              onDragEnd={() => { setDragging(null); setDropTarget(null) }}
-              onDrop={() => {
-                if (dragging) reorder(dragging, name)
-                setDragging(null)
-                setDropTarget(null)
-              }}
+              dragging={draggingName === name}
+              onPointerDown={beginDrag(name)}
+              onPointerMove={onDragMove}
+              onPointerUp={endDrag}
+              onPointerCancel={endDrag}
               onClick={() => {
+                if (movedPastThreshold.current) return
                 setPage('hosts')
                 setGroupFilter(groupFilter === name ? null : name)
               }}
@@ -183,18 +239,20 @@ function Sidebar({ page, setPage, groupFilter, setGroupFilter }: {
           hint="⌘B"
           collapsed={collapsed}
         />
-        <a
-          href="https://github.com/rahulbhooteshwar/connectify-iterm2"
-          target="_blank" rel="noopener noreferrer"
-          title={collapsed ? 'GitHub' : undefined}
-          className={cn(
-            'flex items-center rounded-lg py-2 text-[13px] transition-colors hover:bg-muted hover:text-foreground',
-            collapsed ? 'justify-center px-0' : 'gap-2.5 px-2.5',
-          )}
-        >
-          <Github size={16} />
-          {!collapsed && <span className="truncate">GitHub</span>}
-        </a>
+        <MaybeTooltip label="GitHub" collapsed={collapsed}>
+          <a
+            href="https://github.com/rahulbhooteshwar/connectify-iterm2"
+            target="_blank" rel="noopener noreferrer"
+            aria-label="GitHub"
+            className={cn(
+              'flex items-center rounded-lg py-2 text-[13px] transition-colors hover:bg-muted hover:text-foreground',
+              collapsed ? 'justify-center px-0' : 'gap-2.5 px-2.5',
+            )}
+          >
+            <Github size={16} />
+            {!collapsed && <span className="truncate">GitHub</span>}
+          </a>
+        </MaybeTooltip>
         {!collapsed && (
           <div className="px-2.5 pt-1.5 text-[10px] text-muted-foreground">
             Built with ❤️ by RB
@@ -215,13 +273,11 @@ function NavItem({ active, onClick, icon, label, badge, hint, collapsed }: {
   hint?: string
   collapsed?: boolean
 }) {
-  return (
+  const button = (
     <button
       type="button"
       onClick={onClick}
       aria-label={label}
-      // Collapsed to icons, the native tooltip is the only label left
-      title={collapsed ? (hint ? `${label} (${hint})` : label) : undefined}
       className={cn(
         'flex w-full items-center rounded-lg py-2 text-[13px] font-medium cursor-pointer',
         'transition-colors duration-150',
@@ -237,11 +293,17 @@ function NavItem({ active, onClick, icon, label, badge, hint, collapsed }: {
       )}
     </button>
   )
+
+  // Collapsed to icons, the tooltip is the only label left. The native title
+  // attribute has a browser delay and does not reliably render in iTerm2's
+  // embedded WebKit browser at all - this shows immediately, everywhere.
+  if (!collapsed) return button
+  return <Tooltip content={hint ? `${label} (${hint})` : label}>{button}</Tooltip>
 }
 
 function GroupItem({
-  name, emoji, count, color, active, onClick, collapsed,
-  dragging, dropTarget, onDragStart, onDragOver, onDragEnd, onDrop,
+  name, emoji, count, color, active, onClick, collapsed, dragging, itemRef,
+  onPointerDown, onPointerMove, onPointerUp, onPointerCancel,
 }: {
   name: string
   emoji: string
@@ -251,42 +313,35 @@ function GroupItem({
   onClick: () => void
   collapsed?: boolean
   dragging?: boolean
-  dropTarget?: boolean
-  onDragStart?: () => void
-  onDragOver?: () => void
-  onDragEnd?: () => void
-  onDrop?: () => void
+  /** registers this item's element so the drag can measure sibling positions */
+  itemRef?: (el: HTMLElement | null) => void
+  onPointerDown?: (e: React.PointerEvent) => void
+  onPointerMove?: (e: React.PointerEvent) => void
+  onPointerUp?: (e: React.PointerEvent) => void
+  onPointerCancel?: (e: React.PointerEvent) => void
 }) {
   // Array.from, not [0]: an emoji or an accented letter is more than one UTF-16
   // unit, and half of one renders as a replacement character.
   const initial = (Array.from(name.trim())[0] ?? '?').toUpperCase()
+  const draggable = Boolean(onPointerDown)
 
-  return (
+  const button = (
     <button
+      ref={itemRef}
       type="button"
       onClick={onClick}
       aria-label={`${name} (${count})`}
-      title={collapsed ? `${name} (${count})` : undefined}
-      // Ungrouped is not a group and has no place in the arrangement, so it is
-      // the one item here that cannot be picked up
-      draggable={Boolean(onDragStart)}
-      onDragStart={(e) => {
-        // some text is required or Safari refuses to start the drag
-        e.dataTransfer.setData('text/plain', name)
-        e.dataTransfer.effectAllowed = 'move'
-        onDragStart?.()
-      }}
-      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; onDragOver?.() }}
-      onDragEnd={() => onDragEnd?.()}
-      onDrop={(e) => { e.preventDefault(); onDrop?.() }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
       className={cn(
-        'flex w-full items-center rounded-lg text-[13px] cursor-pointer',
+        'flex w-full items-center rounded-lg text-[13px] cursor-pointer touch-none select-none',
         'transition-colors duration-150',
-        collapsed ? 'justify-center px-0 py-2' : 'gap-2 px-2.5 py-1.5',
+        collapsed ? 'justify-center px-0 py-2' : 'gap-2.5 px-2.5 py-1.5',
         active ? 'bg-accent text-accent-foreground' : 'hover:bg-muted hover:text-foreground',
-        dragging && 'opacity-40',
-        // where it will land, drawn as a line above the item under the pointer
-        dropTarget && !dragging && 'ring-1 ring-inset ring-ring',
+        dragging && 'z-10 opacity-70 shadow-lg',
+        draggable && !collapsed && 'cursor-grab active:cursor-grabbing',
       )}
     >
       {collapsed ? (
@@ -303,7 +358,7 @@ function GroupItem({
           {emoji || initial}
         </span>
       ) : emoji ? (
-        <span aria-hidden className="w-2 shrink-0 text-center text-[13px] leading-none">{emoji}</span>
+        <span aria-hidden className="w-4 shrink-0 text-center text-[14px] leading-none">{emoji}</span>
       ) : (
         <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />
       )}
@@ -311,6 +366,22 @@ function GroupItem({
       {!collapsed && <span className="text-[11px] tabular-nums text-muted-foreground">{count}</span>}
     </button>
   )
+
+  // Collapsed to icons, the tooltip is the only label left. The native title
+  // attribute has a browser delay and does not reliably render in iTerm2's
+  // embedded WebKit browser at all - this shows immediately, everywhere.
+  if (!collapsed) return button
+  return <Tooltip content={`${name} (${count})`}>{button}</Tooltip>
+}
+
+/** Wraps in a Tooltip only when collapsed - expanded, the label is already
+ * on screen and a second one would just be noise. */
+function MaybeTooltip({ label, collapsed, children }: {
+  label: string
+  collapsed?: boolean
+  children: React.ReactElement
+}) {
+  return collapsed ? <Tooltip content={label}>{children}</Tooltip> : children
 }
 
 const toastStyles: Record<Toast['kind'], string> = {

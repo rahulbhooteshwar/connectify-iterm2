@@ -11,6 +11,8 @@ export interface Host {
   credential: string
   group: string
   theme: string
+  /** optional icon, shown before the title wherever this host's name is rendered */
+  emoji: string
   tags: string[]
   ssh_options: string[] | null
   ssh_verbosity: number

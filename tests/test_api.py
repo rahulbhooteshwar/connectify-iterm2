@@ -83,6 +83,48 @@ def test_create_host(mock_ssh_manager):
     assert stored['ssh_verbosity'] == 0
 
 
+def test_a_host_can_carry_its_own_icon(mock_ssh_manager):
+    """Independent of the group's icon - a host keeps whatever it was given
+    even ungrouped, or grouped under an icon of its own."""
+    mock_ssh_manager.add_host_programmatic.return_value = True
+    mock_ssh_manager.get_host.return_value = {"name": "Rocket Host"}
+
+    response = client.post("/api/hosts", json={
+        "name": "Rocket Host", "hostname": "h", "username": "u", "credential": "c",
+        "emoji": "🚀",
+    })
+
+    assert response.status_code == 200, response.text
+    assert mock_ssh_manager.add_host_programmatic.call_args[0][0]['emoji'] == '🚀'
+
+
+def test_a_hosts_icon_is_normalized_like_a_groups(mock_ssh_manager):
+    """Same rules, same function - control characters and label-length text
+    are not an icon in either place."""
+    mock_ssh_manager.add_host_programmatic.return_value = True
+    mock_ssh_manager.get_host.return_value = {"name": "Bad Icon Host"}
+
+    response = client.post("/api/hosts", json={
+        "name": "Bad Icon Host", "hostname": "h", "username": "u", "credential": "c",
+        "emoji": "this is not an icon, it is a whole sentence",
+    })
+
+    assert response.status_code == 200, response.text
+    assert mock_ssh_manager.add_host_programmatic.call_args[0][0]['emoji'] == ''
+
+
+def test_a_host_without_an_icon_stores_an_empty_string(mock_ssh_manager):
+    mock_ssh_manager.add_host_programmatic.return_value = True
+    mock_ssh_manager.get_host.return_value = {"name": "Plain Host"}
+
+    response = client.post("/api/hosts", json={
+        "name": "Plain Host", "hostname": "h", "username": "u", "credential": "c",
+    })
+
+    assert response.status_code == 200, response.text
+    assert mock_ssh_manager.add_host_programmatic.call_args[0][0]['emoji'] == ''
+
+
 @pytest.mark.parametrize("sent,stored", [(0, 0), (1, 1), (3, 3), (7, 3), (-2, 0), ("2", 2)])
 def test_verbosity_is_clamped_to_what_ssh_understands(mock_ssh_manager, sent, stored):
     mock_ssh_manager.add_host_programmatic.return_value = True

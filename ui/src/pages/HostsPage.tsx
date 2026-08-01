@@ -378,7 +378,10 @@ function HostTile({ host, list, state, onLaunch, onEdit, onDelete, onCopy }: {
       >
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-semibold">{host.name}</span>
+            <span className="truncate text-sm font-semibold">
+              {host.emoji && <span aria-hidden className="mr-1">{host.emoji}</span>}
+              {host.name}
+            </span>
             {credentialBadge}
           </div>
           <div className="truncate font-mono text-xs text-muted-foreground">{target}</div>
@@ -405,7 +408,10 @@ function HostTile({ host, list, state, onLaunch, onEdit, onDelete, onCopy }: {
     >
       {actions}
       <div className="min-w-0">
-        <div className="truncate text-sm font-semibold" title={host.name}>{host.name}</div>
+        <div className="truncate text-sm font-semibold" title={host.name}>
+          {host.emoji && <span aria-hidden className="mr-1">{host.emoji}</span>}
+          {host.name}
+        </div>
         {/* the address on its own line - the login has its own below, so a long
             hostname gets the whole width before it has to ellipsise */}
         <div className="mt-0.5 truncate font-mono text-xs text-muted-foreground" title={address}>

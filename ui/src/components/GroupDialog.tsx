@@ -3,7 +3,7 @@ import { useStore } from '../store'
 import * as api from '../lib/api'
 import { ApiError } from '../lib/api'
 import { Button, Dialog, DialogBody, DialogContent, DialogFooter, Field, Input } from './ui'
-import { EmojiPicker } from './EmojiPicker'
+import { EmojiMartPicker } from './EmojiMartPicker'
 
 /** Rename a group, and give it an icon.
  *
@@ -68,7 +68,7 @@ export function GroupDialog({ group, emoji: initialEmoji, hostCount, onClose }: 
           </Field>
 
           <Field label="Icon" optional hint="Shown before the name in the sidebar and the host list.">
-            <EmojiPicker id="groupEmoji" value={emoji} onChange={setEmoji} />
+            <EmojiMartPicker id="groupEmoji" value={emoji} onChange={setEmoji} label="group icon" />
           </Field>
 
           {error && <p className="text-[13px] text-destructive">{error}</p>}

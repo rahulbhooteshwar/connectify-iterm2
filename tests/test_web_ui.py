@@ -424,40 +424,79 @@ def test_a_collapsed_group_shows_its_initial_and_its_name_on_hover():
 
     assert 'Array.from(name.trim())[0]' in app, \
         "take the initial codepoint-wise - half a surrogate pair renders as a box"
-    assert 'title={collapsed ? `${name} (${count})` : undefined}' in app, \
-        "collapsed, the tooltip is the only place the name is left"
+
+
+def test_collapsed_sidebar_items_use_a_real_tooltip_not_the_native_title():
+    """The native title attribute has a browser-controlled delay, and in
+    iTerm2's embedded WebKit browser it sometimes never renders at all - which
+    is exactly the failure mode for a collapsed icon with no other label. Both
+    NavItem and GroupItem must render through the shared Tooltip component
+    when collapsed, and never fall back to title=.
+    """
+    app = read(UI_SRC, 'App.tsx')
+
+    assert 'return <Tooltip content=' in app, \
+        "collapsed items must render through the Tooltip component"
+    assert re.search(r'\btitle=\{', app) is None, \
+        "a native title= crept back in - it must be the Tooltip, not this"
+
+
+def test_the_tooltip_shows_immediately():
+    """A default hover delay defeats the point - the icon is the only thing on
+    screen, so the name has to appear as soon as the pointer arrives."""
+    ui = read(UI_SRC, 'components', 'ui.tsx')
+    # Tooltip is the last export in the file, so everything from here to the
+    # end of the file is its body
+    tooltip = ui[ui.index('export function Tooltip'):]
+
+    assert 'delayDuration={0}' in tooltip
 
 
 # --- groups ------------------------------------------------------------------
 
-def test_the_emoji_field_takes_whatever_the_system_picker_inserts():
-    """macOS's own emoji picker (Control-Command-Space) inserts into whatever
-    text field has focus - there is no web API to open it directly, so the
-    icon field has to be a real, focusable input rather than a custom widget
-    that only reacts to clicks."""
-    picker = read(UI_SRC, 'components', 'EmojiPicker.tsx')
-    assert 'id={id}' in picker
-    assert "value={value}" in picker
-    assert 'onChange={(e) => onChange(' in picker
+def test_the_emoji_picker_renders_native_glyphs_not_cdn_images():
+    """emoji-mart defaults to fetching a PNG per emoji from a CDN
+    (cdn.jsdelivr.net) unless told otherwise. set="native" renders the actual
+    Unicode character through a <span> instead, so nothing is ever fetched -
+    that string appearing dead in the vendored library source is fine; what
+    matters is our own component never asks for anything else."""
+    picker = read(UI_SRC, 'components', 'EmojiMartPicker.tsx')
+    assert 'set="native"' in picker
 
 
-def test_only_one_grapheme_is_kept_per_icon():
-    """A family emoji is several codepoints; slicing by character would leave
-    a fragment that renders as something else. Intl.Segmenter finds the real
-    boundary."""
-    picker = read(UI_SRC, 'components', 'EmojiPicker.tsx')
-    assert 'Intl.Segmenter' in picker or 'Segmenter' in picker
+def test_the_emoji_dataset_is_bundled_not_fetched():
+    """Left to its default, @emoji-mart/data's own picker prop fetches its
+    dataset over the network on first open. Importing it as a module bundles
+    the ~200KB JSON instead, so the picker works with no server reachable."""
+    picker = read(UI_SRC, 'components', 'EmojiMartPicker.tsx')
+    assert "@emoji-mart/data" in picker
 
 
-def test_the_emoji_picker_carries_no_network_dependency():
-    """Bundled emoji pickers commonly fetch images from a CDN, which breaks
-    offline use and iTerm2's locked-down browser alike - the whole reason a
-    custom picker exists instead of a library."""
-    for path, text in source_files():
-        if 'emoji' not in path.lower():
-            continue
-        for url in re.findall(r'https?://[^\s"\')]+', text):
-            raise AssertionError(f"{path} references {url}")
+def test_the_emoji_picker_is_code_split():
+    """emoji-mart plus its dataset is real weight - nobody looking at a host
+    list should pay for it until they actually open a picker."""
+    picker = read(UI_SRC, 'components', 'EmojiMartPicker.tsx')
+    assert 'React.lazy(' in picker
+    assert 'React.Suspense' in picker
+
+
+def test_the_same_picker_is_used_for_hosts_and_groups():
+    """One component, not two copies that could drift."""
+    host_dialog = read(UI_SRC, 'components', 'HostDialog.tsx')
+    group_dialog = read(UI_SRC, 'components', 'GroupDialog.tsx')
+    assert 'EmojiMartPicker' in host_dialog
+    assert 'EmojiMartPicker' in group_dialog
+
+
+def test_a_host_can_carry_its_own_icon():
+    types = read(UI_SRC, 'lib', 'types.ts')
+    host_dialog = read(UI_SRC, 'components', 'HostDialog.tsx')
+    hosts_page = read(UI_SRC, 'pages', 'HostsPage.tsx')
+
+    interface = types[types.index('export interface Host'):types.index('export interface Credential')]
+    assert 'emoji: string' in interface, "the Host type is missing its icon field"
+    assert 'id="hostEmoji"' in host_dialog
+    assert 'host.emoji &&' in hosts_page, "the tile must not render an empty icon slot"
 
 
 def test_group_rename_and_icon_go_through_one_endpoint():

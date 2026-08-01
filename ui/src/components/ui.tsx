@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
+import * as TooltipPrimitive from '@radix-ui/react-tooltip'
 import { X, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
@@ -248,5 +249,42 @@ export function DialogFooter({ children }: { children: React.ReactNode }) {
     <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-4">
       {children}
     </div>
+  )
+}
+
+// --- Tooltip -----------------------------------------------------------------
+
+export const TooltipProvider = TooltipPrimitive.Provider
+
+/** A tooltip that actually shows up.
+ *
+ * The native `title` attribute has a browser-controlled delay - and in
+ * iTerm2's embedded WebKit browser it sometimes never appears at all, which
+ * is exactly the problem for the sidebar's collapsed icons: the icon is the
+ * only thing on screen, so if the name doesn't show on hover there is no way
+ * to tell what it is. This shows immediately and reliably, wherever it runs.
+ */
+export function Tooltip({ content, children, side = 'right' }: {
+  content: React.ReactNode
+  children: React.ReactNode
+  side?: 'top' | 'right' | 'bottom' | 'left'
+}) {
+  return (
+    <TooltipPrimitive.Root delayDuration={0}>
+      <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
+      <TooltipPrimitive.Portal>
+        <TooltipPrimitive.Content
+          side={side}
+          sideOffset={8}
+          className={cn(
+            'z-[80] animate-fade-in rounded-md border border-border bg-card px-2.5 py-1.5',
+            'text-[12px] font-medium text-card-foreground shadow-lg',
+          )}
+        >
+          {content}
+          <TooltipPrimitive.Arrow className="fill-card" />
+        </TooltipPrimitive.Content>
+      </TooltipPrimitive.Portal>
+    </TooltipPrimitive.Root>
   )
 }

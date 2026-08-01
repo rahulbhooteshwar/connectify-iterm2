@@ -18,6 +18,7 @@ import {
 import { TILE_THEMES } from '../lib/themes'
 import { Badge, Button, cn, Dialog, DialogBody, DialogContent, DialogFooter, Field, Input, Spinner } from './ui'
 import { Combobox } from './Combobox'
+import { EmojiMartPicker } from './EmojiMartPicker'
 import { CredentialDialog } from './CredentialDialog'
 
 export function HostDialog({ host, onClose }: { host: Host | null; onClose: () => void }) {
@@ -31,6 +32,7 @@ export function HostDialog({ host, onClose }: { host: Host | null; onClose: () =
   const [profile, setProfile] = React.useState(host?.iterm_profile || 'Default')
   const [group, setGroup] = React.useState(host?.group ?? '')
   const [theme, setTheme] = React.useState(host?.theme || 'default')
+  const [emoji, setEmoji] = React.useState(host?.emoji ?? '')
   const [tags, setTags] = React.useState<string[]>(host?.tags ?? [])
   const [tagDraft, setTagDraft] = React.useState('')
   const [sshOptions, setSshOptions] = React.useState<string[]>(() => {
@@ -90,6 +92,7 @@ export function HostDialog({ host, onClose }: { host: Host | null; onClose: () =
         iterm_profile: profile.trim() || 'Default',
         group: group.trim(),
         theme,
+        emoji,
         tags,
         ssh_options: sshOptions,
         ssh_verbosity: verbosity,
@@ -110,7 +113,10 @@ export function HostDialog({ host, onClose }: { host: Host | null; onClose: () =
     <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogContent title={host ? 'Edit host' : 'Add host'} wide>
         <DialogBody className="space-y-4">
-          <div className="grid grid-cols-[1fr_7rem] gap-3">
+          <div className="grid grid-cols-[auto_1fr_7rem] gap-3">
+            <Field label="Icon" optional htmlFor="hostEmoji">
+              <EmojiMartPicker id="hostEmoji" value={emoji} onChange={setEmoji} label="host icon" />
+            </Field>
             <Field label="Title" htmlFor="hostTitle">
               <Input id="hostTitle" value={title} onChange={(e) => setTitle(e.target.value)}
                 placeholder="Production DB" autoFocus />

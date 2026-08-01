@@ -22,7 +22,7 @@ import uvicorn
 
 import iterm_profiles
 import ssh_session
-from groups import GroupStore
+from groups import GroupStore, normalize_emoji
 import vault as vault_module
 from main import (
     DEFAULT_HOST_THEME,
@@ -48,6 +48,10 @@ class HostModel(BaseModel):
     group: str = ""
     # Tile theme in the web UI: default (neutral), red, green or orange.
     theme: str = DEFAULT_HOST_THEME
+    # Optional icon shown before the title on the tile and wherever the host's
+    # name is rendered. Independent of the group's icon - a host can carry one
+    # even when ungrouped, or a different one than its group.
+    emoji: str = ""
     tags: List[str] = []
     # SSH "-o" options (e.g. "PreferredAuthentications=password"). None means
     # "not configured" so the backend applies auth-method defaults; an empty
@@ -71,6 +75,11 @@ class HostModel(BaseModel):
     @classmethod
     def _clean_theme(cls, value):
         return normalize_theme(value)
+
+    @field_validator('emoji')
+    @classmethod
+    def _clean_emoji(cls, value):
+        return normalize_emoji(value)
 
 
 class HostCreate(HostModel):
