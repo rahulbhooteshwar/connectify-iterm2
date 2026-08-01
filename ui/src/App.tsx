@@ -111,7 +111,9 @@ function Sidebar({ page, setPage, groupFilter, setGroupFilter }: {
             <GroupItem
               name="Ungrouped"
               count={ungrouped}
-              color="var(--muted-foreground)"
+              // the neutral theme's own grey: --muted-foreground flips with the
+              // colour scheme, which left a dark initial on dark grey in light mode
+              color={themeById(undefined).color}
               active={groupFilter === UNGROUPED}
               collapsed={collapsed}
               onClick={() => {
@@ -209,11 +211,15 @@ function GroupItem({ name, count, color, active, onClick, collapsed }: {
   onClick: () => void
   collapsed?: boolean
 }) {
+  // Array.from, not [0]: an emoji or an accented letter is more than one UTF-16
+  // unit, and half of one renders as a replacement character.
+  const initial = (Array.from(name.trim())[0] ?? '?').toUpperCase()
+
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label={name}
+      aria-label={`${name} (${count})`}
       title={collapsed ? `${name} (${count})` : undefined}
       className={cn(
         'flex w-full items-center rounded-lg text-[13px] cursor-pointer',
@@ -222,10 +228,20 @@ function GroupItem({ name, count, color, active, onClick, collapsed }: {
         active ? 'bg-accent text-accent-foreground' : 'hover:bg-muted hover:text-foreground',
       )}
     >
-      <span
-        className={cn('shrink-0 rounded-full', collapsed ? 'h-2.5 w-2.5' : 'h-2 w-2')}
-        style={{ background: color }}
-      />
+      {collapsed ? (
+        // Collapsed there is no room for the name, and nine coloured dots say
+        // nothing about which group is which. An initial does, and the tooltip
+        // carries the rest.
+        <span
+          aria-hidden
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold uppercase leading-none"
+          style={{ background: color, color: '#0b0d12' }}
+        >
+          {initial}
+        </span>
+      ) : (
+        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />
+      )}
       {!collapsed && <span className="flex-1 truncate text-left">{name}</span>}
       {!collapsed && <span className="text-[11px] tabular-nums text-muted-foreground">{count}</span>}
     </button>

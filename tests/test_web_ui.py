@@ -416,3 +416,13 @@ def test_a_field_caption_never_wraps_its_control():
     # the wrapper itself has to be a plain element
     wrapper = field[field.index('return ('):field.index('{children}')]
     assert '<label className' not in wrapper, "Field still wraps its children in a label"
+
+
+def test_a_collapsed_group_shows_its_initial_and_its_name_on_hover():
+    """Nine coloured dots in a row say nothing about which group is which."""
+    app = read(UI_SRC, 'App.tsx')
+
+    assert 'Array.from(name.trim())[0]' in app, \
+        "take the initial codepoint-wise - half a surrogate pair renders as a box"
+    assert 'title={collapsed ? `${name} (${count})` : undefined}' in app, \
+        "collapsed, the tooltip is the only place the name is left"
