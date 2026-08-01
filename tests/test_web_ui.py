@@ -12,6 +12,10 @@ def read_index():
         return f.read()
 
 
+SECRET_FIELDS = ('vaultPasscode', 'vaultPasscodeConfirm',
+                 'credentialPassword', 'credentialPassphrase')
+
+
 def test_secret_fields_are_masked_and_undecorated():
     """iTerm2's embedded browser floats an AutoFill key over password fields.
 
@@ -24,6 +28,36 @@ def test_secret_fields_are_masked_and_undecorated():
     assert '-webkit-text-security: disc' in html
     assert 'maskSecretFields' in html
     assert 'this.maskSecretFields();' in html, "run before anything can be typed"
+
+
+def test_every_secret_field_is_masked_by_the_markup_itself():
+    """No window, however short, where a keystroke could be read.
+
+    The mask is a class in the HTML rather than something JavaScript adds
+    later, so it applies as the field is parsed - and the field starts as a
+    password input, which is masked even if the stylesheet never loads.
+    """
+    html = read_index()
+
+    for ident in SECRET_FIELDS:
+        field = re.search(r'<input[^>]*id="%s"[^>]*>' % ident, html)
+        assert field, f"{ident} is missing"
+        markup = field.group(0)
+        assert 'masked-input' in markup, f"{ident} is not masked in the markup"
+        assert 'type="password"' in markup, f"{ident} must start as a password field"
+
+
+def test_no_secret_field_is_left_as_a_plain_input():
+    """Anything that takes a secret has to be in the masked set above."""
+    html = read_index()
+
+    for match in re.finditer(r'<input\b[^>]*>', html, re.S):
+        markup = match.group(0)
+        looks_secret = any(word in markup.lower()
+                           for word in ('passcode', 'password', 'passphrase'))
+        if not looks_secret or 'placeholder' in markup and 'id=' not in markup:
+            continue
+        assert 'masked-input' in markup, f"unmasked secret field: {markup[:110]}"
 
 
 def test_the_plain_text_swap_is_gated_on_support():

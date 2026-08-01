@@ -161,10 +161,13 @@ AutoFill key on top of every password field, and in the embedded browser it
 never goes away. A field the browser has no reason to decorate avoids that
 entirely, and password managers leave it alone.
 
-The swap only happens where the browser is known to mask the field itself; if
-it isn't supported, the fields stay real password inputs (a plain box showing
-your passcode would be far worse than a stray icon), and the AutoFill
-decorations are hidden in CSS as a second line of defence.
+The mask is a class in the markup, so it applies as the field is parsed - there
+is no moment, however brief, where a keystroke could be read. Each field also
+*starts* as a password input, so it is masked even before the stylesheet
+arrives, and the swap to a text field only happens where the browser is known
+to mask it itself. If it isn't supported the fields simply stay password
+inputs, and the AutoFill decorations are hidden in CSS as a second line of
+defence.
 
 ### Managing credentials
 

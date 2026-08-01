@@ -271,6 +271,9 @@
       -webkit-appearance: none;
     }
 
+    /* Applies to the field as it is parsed, so there is no moment - however
+       brief - where anything typed into it could be read. Harmless on a
+       password field, which the browser is masking anyway. */
     .masked-input {
       -webkit-text-security: disc;
       text-security: disc;
@@ -2369,11 +2372,11 @@
         <form id="vaultUnlockForm">
           <div class="form-group" style="margin-bottom: 1rem;">
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Passcode</label>
-            <input type="password" id="vaultPasscode" class="search-input" style="width: 100%;" autocomplete="off" required autocapitalize="off" autocorrect="off" spellcheck="false">
+            <input type="password" id="vaultPasscode" class="search-input masked-input" style="width: 100%;" autocomplete="off" required autocapitalize="off" autocorrect="off" spellcheck="false">
           </div>
           <div class="form-group" id="vaultPasscodeConfirmField" style="margin-bottom: 1rem; display: none;">
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Confirm passcode</label>
-            <input type="password" id="vaultPasscodeConfirm" class="search-input" style="width: 100%;" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+            <input type="password" id="vaultPasscodeConfirm" class="search-input masked-input" style="width: 100%;" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
             <small class="profile-hint">There is no recovery - if you forget this passcode the credentials are gone.</small>
           </div>
           <div id="vaultUnlockError" class="vault-error" style="display: none;"></div>
@@ -2421,7 +2424,7 @@
           <div id="credentialPasswordField" class="form-group" style="margin-bottom: 1rem;">
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Password</label>
             <div style="position: relative;">
-              <input type="password" id="credentialPassword" class="search-input" style="width: 100%; padding-right: 40px;" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+              <input type="password" id="credentialPassword" class="search-input masked-input" style="width: 100%; padding-right: 40px;" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
               <button type="button" id="toggleCredentialPasswordBtn" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-secondary); cursor: pointer;">
                 <i class="fas fa-eye"></i>
               </button>
@@ -2435,7 +2438,7 @@
             </div>
             <div class="form-group" style="margin-bottom: 1rem;">
               <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Passphrase <span style="color: var(--text-muted); font-weight: 400;">(optional)</span></label>
-              <input type="password" id="credentialPassphrase" class="search-input" style="width: 100%;" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+              <input type="password" id="credentialPassphrase" class="search-input masked-input" style="width: 100%;" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
             </div>
           </div>
 
@@ -2646,6 +2649,11 @@
 
         // ssh -v/-vv/-vvv for the host being edited (0 = quiet)
         this.sshVerbosity = 0;
+
+        // Whether this browser can mask a text field itself; decided by
+        // maskSecretFields(), assumed false until then so nothing is revealed
+        // on the strength of an unanswered question
+        this.cssMasking = false;
 
         this.sshOptionDefs = [
           { flag: this.passwordAuthFlag, label: 'Prefer password authentication' },
@@ -3259,6 +3267,7 @@
       }
 
       openVaultUnlockModal() {
+        this.maskSecretFields();
         const creating = !this.vaultExists;
         this.vaultMode = creating ? 'create' : 'unlock';
 
@@ -3519,6 +3528,7 @@
         }
 
         this.credentialReturnToHostForm = returnToHostForm;
+        this.maskSecretFields();
         const form = this.elements.credentialForm;
         form.reset();
         this.hideError(this.elements.credentialError);
@@ -4578,8 +4588,9 @@
        * text box showing the passcode would be far worse than a stray icon.
        */
       maskSecretFields(root = document) {
-        const supported = window.CSS && CSS.supports &&
-          (CSS.supports('-webkit-text-security', 'disc') || CSS.supports('text-security', 'disc'));
+        const supported = !!(window.CSS && CSS.supports &&
+          (CSS.supports('-webkit-text-security', 'disc') || CSS.supports('text-security', 'disc')));
+        this.cssMasking = supported;
         if (!supported) return false;
 
         root.querySelectorAll('input[type="password"]').forEach(input => {
@@ -4594,19 +4605,22 @@
         return true;
       }
 
-      /** Is this field masked, whichever of the two ways it ended up? */
+      /** Is this field showing its contents, whichever way it is masked? */
       isRevealed(input) {
-        return input.classList.contains('masked-input')
-          ? input.classList.contains('is-revealed')
-          : input.type === 'text';
+        if (input.type === 'password') return false;
+        return !input.classList.contains('masked-input')
+          || input.classList.contains('is-revealed');
       }
 
       setRevealed(input, revealed) {
-        if (input.classList.contains('masked-input')) {
-          input.classList.toggle('is-revealed', revealed);
-        } else {
-          input.type = revealed ? 'text' : 'password';
+        if (revealed) {
+          input.type = 'text';
+          input.classList.add('is-revealed');
+          return;
         }
+        input.classList.remove('is-revealed');
+        // Back to whichever masking this browser can manage
+        if (!this.cssMasking) input.type = 'password';
       }
 
       escapeHTML(value) {
