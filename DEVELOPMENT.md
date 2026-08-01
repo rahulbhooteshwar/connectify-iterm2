@@ -8,6 +8,8 @@ This guide is for developers who want to contribute to Connectify or build it fr
 - iTerm2
 - Python 3.12+
 - **uv** (recommended) - Fast Python package manager
+- **Node 20+** - only to rebuild the interface in `ui/`; the built output is
+  committed, so working on the Python side needs no Node at all
 
 **Note**: End users don't need any of these! They can install via the one-line installer which downloads pre-built binaries.
 
@@ -49,13 +51,32 @@ uv run python connectify.py --help
 ### Running in Development Mode
 
 ```bash
-# Web interface (foreground)
+# Web interface (foreground) - serves the built UI out of static/
 uv run tasks.py ui
 
 # Run with arguments
 uv run python main.py --ui --port 8080
 uv run python connectify.py doctor
 ```
+
+### Working on the Interface
+
+The interface is a React + Vite app in `ui/`, built into `static/`. The build
+output is committed, so a plain checkout runs without Node; you only need Node
+when you change the interface itself.
+
+```bash
+# Build ui/ into static/ (npm ci on first run)
+uv run tasks.py ui-build
+
+# Watch mode: Vite on :5173, proxying /api to a backend on :7860
+uv run tasks.py ui-dev
+```
+
+`uv run tasks.py build` runs `ui-build` first, so the packaged binary can never
+ship a stale bundle, and the release workflow rebuilds it on each runner too.
+The backend reads `static/index.html` when it starts, so restart the server
+after a rebuild.
 
 ### Building the Executable
 
@@ -113,11 +134,16 @@ connectify/
 ├── installer.py               # Rich installer UI, bundled in the binary
 ├── install.sh                 # curl|sh bootstrap (download + hand off)
 ├── uninstall.sh               # Uninstallation script
-├── static/                    # Web UI assets
-│   ├── index.html            # Single-page web interface
-│   └── vendor/               # Vendored assets - the UI loads no CDNs at runtime
-│       ├── fontawesome/      # Icon font (solid + regular)
-│       └── montserrat/       # UI typeface (variable, latin + latin-ext)
+├── ui/                        # React + Vite source for the interface
+│   ├── src/                  # Components, pages, store, API client
+│   ├── public/               # Manifest, service worker, icons, fonts
+│   └── vite.config.ts        # Builds into ../static
+├── static/                    # Built interface (committed; served and bundled)
+│   ├── index.html            # Entry point, written by the Vite build
+│   ├── assets/               # Hashed JS/CSS
+│   ├── fonts/                # Montserrat - the UI loads no CDNs at runtime
+│   ├── manifest.webmanifest  # PWA manifest (installs from /)
+│   └── sw.js                 # Service worker, served from the root
 ├── tests/                     # Test files
 └── docs/                      # Documentation
     ├── README.md             # User documentation
@@ -251,22 +277,34 @@ Handles:
 - Static file serving
 - CORS configuration
 
-### 5. static/index.html - Web UI
+### 5. ui/ - Web UI
 
-Single-page application with:
-- Tile-based host display grouped by each host's `group` (ungrouped hosts are
-  rendered as-is, after the groups)
-- Per-host tile theme (`default`/`red`/`green`/`orange`), picked with the colour
-  dots in the add/edit form - `GET /api/groups` feeds the group picker
-- Real-time search and filtering (tags remain search/filter only)
-- The Vault page (toolbar lock icon): unlock, credential CRUD, host associations
-- One message style throughout: a slim pill at the bottom of the window
-- Each tile marks how its host authenticates with a small badge on the
-  connection line (key / password / no credential yet), resolved from the
-  vault's credential list once it is unlocked
+React 18 + Vite + Tailwind CSS v4, shadcn-style components over Radix
+primitives, built into `static/`:
+
+- A sidebar owns navigation: Hosts, Vault, the group list (each group's dot
+  takes the colour of its first host's theme), and the lock / theme / GitHub
+  controls at the bottom
+- Tile or list view of the hosts, grouped by each host's `group` (ungrouped
+  hosts come last), with real-time search and tag filtering
+- Nine tile themes, picked with the colour dots in the add/edit form. The ids
+  live in `ui/src/lib/themes.ts` and must match `HOST_THEMES` in `main.py` -
+  `tests/test_web_ui.py` checks that they do
+- The Vault page: unlock, credential CRUD, and which hosts use each credential
+- Each tile marks how its host authenticates with a badge (key / password / no
+  credential yet), resolved from the vault once it is unlocked, and shows the
+  login that will actually be used - the credential's, or the host's own
 - Launching shows a spinner on the tile for as long as the launch actually
   takes - `POST /api/connect` only answers once iTerm2 has opened the tab
-- Responsive design
+- Light and dark, chosen from the system and remembered in `localStorage`;
+  the choice is applied before first paint so there is no flash
+- Installs as a desktop PWA: `manifest.webmanifest` and a service worker
+  served from `/sw.js` (root scope), which caches the hashed assets and
+  nothing else - never the API
+
+Secrets never touch storage: the vault token is a module-level variable in
+`ui/src/lib/api.ts`, and `SecretInput` masks with `-webkit-text-security`
+where the browser supports it and `type=password` where it does not.
 
 ## Building and Packaging
 
@@ -371,8 +409,8 @@ If a command genuinely belongs on the command line:
 ### Adding a New UI Feature
 
 1. Update `api_server.py` for backend
-2. Update `static/index.html` for frontend
-3. Test with `uv run tasks.py ui`
+2. Update the React source in `ui/src/` for frontend
+3. Test with `uv run tasks.py ui-dev` (or `ui-build` then `ui`)
 4. Rebuild and test: `uv run tasks.py build`
 
 ### Adding a New Dependency

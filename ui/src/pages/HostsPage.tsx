@@ -1,0 +1,353 @@
+import * as React from 'react'
+import {
+  Check, Copy, Download, FolderOpen, KeyRound, LayoutGrid, List, Pencil, Plus,
+  RefreshCw, Rocket, Search, SquareAsterisk, Tag, Terminal, Trash2, TriangleAlert, Upload, X,
+} from 'lucide-react'
+import { useStore } from '../store'
+import * as api from '../lib/api'
+import { effectiveLogin, type Host } from '../lib/types'
+import { themeById } from '../lib/themes'
+import { Badge, Button, cn, Input, Spinner } from '../components/ui'
+import { HostDialog } from '../components/HostDialog'
+import { ConfirmDialog } from '../components/ConfirmDialog'
+import { ImportDialog, ExportDialog } from '../components/TransferDialogs'
+
+type LaunchState = 'connecting' | 'launched' | undefined
+
+export function HostsPage({ groupFilter, clearGroupFilter }: {
+  groupFilter: string | null
+  clearGroupFilter: () => void
+}) {
+  const store = useStore()
+  const { hostsByGroup, credentials, tags, view, setView, toast, reloadHosts, withVault } = store
+
+  const [search, setSearch] = React.useState('')
+  const [tagFilter, setTagFilter] = React.useState('')
+  const [launching, setLaunching] = React.useState<Record<string, LaunchState>>({})
+  const [editing, setEditing] = React.useState<Host | null | 'new'>(null)
+  const [deleting, setDeleting] = React.useState<Host | null>(null)
+  const [importing, setImporting] = React.useState(false)
+  const [exporting, setExporting] = React.useState(false)
+
+  const matches = React.useCallback((host: Host) => {
+    if (tagFilter && !(host.tags ?? []).includes(tagFilter)) return false
+    const term = search.trim().toLowerCase()
+    if (!term) return true
+    const haystack = [
+      host.name, host.hostname, host.username, effectiveLogin(host, credentials),
+      host.group ?? '', ...(host.tags ?? []),
+    ].join(' ').toLowerCase()
+    return haystack.includes(term)
+  }, [search, tagFilter, credentials])
+
+  const sections = React.useMemo(() => {
+    if (!hostsByGroup) return []
+    const all: { name: string | null; hosts: Host[] }[] = [
+      ...Object.entries(hostsByGroup.groups).map(([name, hosts]) => ({ name, hosts })),
+      { name: null, hosts: hostsByGroup.ungrouped_hosts },
+    ]
+    return all
+      .filter((section) => groupFilter === null
+        || (groupFilter === ' ungrouped' ? section.name === null : section.name === groupFilter))
+      .map((section) => ({ ...section, hosts: section.hosts.filter(matches) }))
+      .filter((section) => section.hosts.length > 0)
+  }, [hostsByGroup, matches, groupFilter])
+
+  const visible = sections.reduce((n, s) => n + s.hosts.length, 0)
+  const total = store.hosts.length
+
+  const launch = async (host: Host) => {
+    setLaunching((s) => ({ ...s, [host.name]: 'connecting' }))
+    try {
+      await withVault(() => api.connectHost(host.name))
+      setLaunching((s) => ({ ...s, [host.name]: 'launched' }))
+      window.setTimeout(() => setLaunching((s) => ({ ...s, [host.name]: undefined })), 1600)
+    } catch (e) {
+      setLaunching((s) => ({ ...s, [host.name]: undefined }))
+      if (e instanceof Error && e.message !== 'Vault unlock cancelled') toast(e.message, 'error')
+    }
+  }
+
+  const copy = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast(`${label} copied`, 'success')
+    } catch {
+      toast('Could not reach the clipboard', 'error')
+    }
+  }
+
+  const confirmDelete = async () => {
+    if (!deleting) return
+    await api.deleteHost(deleting.name)
+    toast(`'${deleting.name}' deleted`, 'success')
+    setDeleting(null)
+    await reloadHosts()
+  }
+
+  return (
+    <>
+      {/* toolbar */}
+      <header className="flex shrink-0 flex-wrap items-center gap-2.5 border-b border-border bg-card/60 px-5 py-3 backdrop-blur">
+        <div className="relative min-w-52 max-w-md flex-1">
+          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            id="searchBox"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search hosts or tags…"
+            className="pl-9 pr-8"
+          />
+          {search && (
+            <button
+              type="button" aria-label="Clear search"
+              onClick={() => setSearch('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground cursor-pointer"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        {tags.length > 0 && (
+          <div className="relative">
+            <Tag size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <select
+              value={tagFilter}
+              onChange={(e) => setTagFilter(e.target.value)}
+              className="h-9 cursor-pointer appearance-none rounded-lg border border-input bg-card pl-8 pr-7 text-sm text-foreground focus:outline-none focus:border-ring"
+            >
+              <option value="">All tags</option>
+              {tags.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+        )}
+
+        {groupFilter && (
+          <Badge className="border-primary/40 bg-accent text-accent-foreground">
+            <FolderOpen size={11} />
+            {groupFilter === ' ungrouped' ? 'Ungrouped' : groupFilter}
+            <button type="button" aria-label="Clear group filter" onClick={clearGroupFilter} className="cursor-pointer hover:text-foreground">
+              <X size={11} />
+            </button>
+          </Badge>
+        )}
+
+        <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+          {visible === total ? `${total} host${total === 1 ? '' : 's'}` : `${visible} of ${total} hosts`}
+        </span>
+
+        <div className="flex overflow-hidden rounded-lg border border-border">
+          <button
+            type="button" aria-label="Grid view"
+            onClick={() => setView('grid')}
+            className={cn('flex h-8 w-8 items-center justify-center cursor-pointer transition-colors',
+              view === 'grid' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-muted')}
+          >
+            <LayoutGrid size={15} />
+          </button>
+          <button
+            type="button" aria-label="List view"
+            onClick={() => setView('list')}
+            className={cn('flex h-8 w-8 items-center justify-center cursor-pointer transition-colors',
+              view === 'list' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-muted')}
+          >
+            <List size={15} />
+          </button>
+        </div>
+
+        <Button size="icon" variant="outline" aria-label="Refresh"
+          onClick={() => reloadHosts().then(() => toast('Refreshed', 'success'))}>
+          <RefreshCw size={14} />
+        </Button>
+        <Button size="icon" variant="outline" aria-label="Import hosts" onClick={() => setImporting(true)}>
+          <Upload size={14} />
+        </Button>
+        <Button size="icon" variant="outline" aria-label="Export hosts" onClick={() => setExporting(true)}>
+          <Download size={14} />
+        </Button>
+        <Button onClick={() => setEditing('new')}>
+          <Plus size={15} /> Add host
+        </Button>
+      </header>
+
+      {/* content */}
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        {sections.length === 0 ? (
+          <EmptyState
+            filtered={total > 0}
+            onAdd={() => setEditing('new')}
+            onClear={() => { setSearch(''); setTagFilter(''); clearGroupFilter() }}
+          />
+        ) : (
+          <div className="space-y-6">
+            {sections.map((section) => (
+              <section key={section.name ?? '·ungrouped'} className="animate-fade-up">
+                <div className="mb-2.5 flex items-baseline gap-2">
+                  <h2 className="text-[13px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {section.name ?? 'Ungrouped'}
+                  </h2>
+                  <span className="text-[11px] tabular-nums text-muted-foreground/70">{section.hosts.length}</span>
+                </div>
+                <div className={view === 'grid'
+                  ? 'grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(280px,1fr))]'
+                  : 'space-y-2'}>
+                  {section.hosts.map((host) => (
+                    <HostTile
+                      key={host.name}
+                      host={host}
+                      list={view === 'list'}
+                      state={launching[host.name]}
+                      onLaunch={() => launch(host)}
+                      onEdit={() => setEditing(host)}
+                      onDelete={() => setDeleting(host)}
+                      onCopy={copy}
+                    />
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {editing !== null && (
+        <HostDialog host={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />
+      )}
+      {deleting && (
+        <ConfirmDialog
+          title="Delete host?"
+          body={<>Delete <strong>{deleting.name}</strong>? This cannot be undone. Its vault credential is not affected.</>}
+          confirmLabel="Delete"
+          destructive
+          onConfirm={confirmDelete}
+          onClose={() => setDeleting(null)}
+        />
+      )}
+      {importing && <ImportDialog onClose={() => setImporting(false)} />}
+      {exporting && <ExportDialog onClose={() => setExporting(false)} />}
+    </>
+  )
+}
+
+function EmptyState({ filtered, onAdd, onClear }: { filtered: boolean; onAdd: () => void; onClear: () => void }) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 text-center animate-fade-in">
+      <div className="rounded-2xl bg-muted p-5 text-muted-foreground"><Terminal size={30} /></div>
+      <div>
+        <p className="font-semibold">{filtered ? 'No hosts match' : 'No hosts yet'}</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {filtered ? 'Try clearing the search and filters.' : 'Add your first SSH host to get started.'}
+        </p>
+      </div>
+      {filtered
+        ? <Button variant="outline" onClick={onClear}>Clear filters</Button>
+        : <Button onClick={onAdd}><Plus size={15} /> Add host</Button>}
+    </div>
+  )
+}
+
+function HostTile({ host, list, state, onLaunch, onEdit, onDelete, onCopy }: {
+  host: Host
+  list: boolean
+  state: LaunchState
+  onLaunch: () => void
+  onEdit: () => void
+  onDelete: () => void
+  onCopy: (text: string, label: string) => void
+}) {
+  const { credentials, vaultUnlocked } = useStore()
+  const theme = themeById(host.theme)
+  const credential = credentials.find((c) => c.name === host.credential)
+  const login = effectiveLogin(host, credentials)
+  const port = host.port && host.port !== 22 ? `:${host.port}` : ''
+  const target = `${login ? `${login}@` : ''}${host.hostname}${port}`
+  const connectionString = `${login ? `${login}@` : ''}${host.hostname}`
+
+  const credentialBadge = !host.credential ? (
+    <Badge className="border-destructive/40 text-destructive"><TriangleAlert size={10} /> no credential</Badge>
+  ) : !vaultUnlocked || !credential ? (
+    <Badge title={`Credential: ${host.credential}`}><KeyRound size={10} /> {host.credential}</Badge>
+  ) : credential.type === 'key' ? (
+    <Badge className="border-success/40 text-success" title={`SSH key: ${credential.name}`}>
+      <KeyRound size={10} /> {credential.name}
+    </Badge>
+  ) : (
+    <Badge className="border-warning/40 text-warning" title={`Password: ${credential.name}`}>
+      <SquareAsterisk size={10} /> {credential.name}
+    </Badge>
+  )
+
+  // On a tile the actions float over the top-right corner rather than sitting
+  // in the flow: four icon buttons would otherwise take half the card's width
+  // away from the title and the endpoint, which are what people read.
+  const actions = (
+    <div className={cn(
+      'flex items-center gap-1',
+      !list && 'absolute right-2.5 top-2.5 z-10 rounded-lg border border-border bg-card/95 px-0.5 shadow-sm',
+      !list && 'opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100',
+    )}>
+      <Button size="icon" variant="ghost" aria-label="Copy endpoint" title="Copy endpoint"
+        onClick={() => onCopy(host.hostname, 'Endpoint')}><Copy size={13} /></Button>
+      <Button size="icon" variant="ghost" aria-label="Copy connection string" title="Copy connection string"
+        onClick={() => onCopy(connectionString, 'Connection string')}><Terminal size={13} /></Button>
+      <Button size="icon" variant="ghost" aria-label="Edit host" title="Edit" onClick={onEdit}><Pencil size={13} /></Button>
+      <Button size="icon" variant="ghost" aria-label="Delete host" title="Delete"
+        className="hover:text-destructive" onClick={onDelete}><Trash2 size={13} /></Button>
+    </div>
+  )
+
+  // mt-auto holds the button against the card's bottom edge, so a row of tiles
+  // lines up however many tags each one wraps onto a second line
+  const launchButton = (
+    <Button
+      variant="subtle"
+      size={list ? 'sm' : 'md'}
+      onClick={onLaunch}
+      disabled={state === 'connecting'}
+      className={cn(!list && 'mt-auto w-full', state === 'launched' && 'text-success')}
+      style={{ ['--tint' as string]: theme.soft }}
+    >
+      {state === 'connecting' ? <Spinner /> : state === 'launched' ? <Check size={15} /> : <Rocket size={14} />}
+      {state === 'connecting' ? 'Connecting…' : state === 'launched' ? 'Launched' : 'Launch'}
+    </Button>
+  )
+
+  if (list) {
+    return (
+      <div
+        className="group flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-2.5 shadow-sm transition-all duration-150 hover:shadow-md animate-fade-up"
+        style={{ borderLeft: `3px solid ${theme.color}` }}
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-sm font-semibold">{host.name}</span>
+            {credentialBadge}
+          </div>
+          <div className="truncate font-mono text-xs text-muted-foreground">{target}</div>
+        </div>
+        {(host.tags ?? []).slice(0, 3).map((t) => <Badge key={t}>{t}</Badge>)}
+        {actions}
+        {launchButton}
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className="group relative flex flex-col gap-2.5 overflow-hidden rounded-xl border border-border bg-card p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg animate-fade-up"
+      style={{ boxShadow: `inset 0 3px 0 0 ${theme.color}` }}
+    >
+      {actions}
+      <div className="min-w-0">
+        <div className="truncate text-sm font-semibold" title={host.name}>{host.name}</div>
+        <div className="mt-0.5 truncate font-mono text-xs text-muted-foreground" title={target}>{target}</div>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {credentialBadge}
+        {(host.tags ?? []).map((t) => <Badge key={t}>{t}</Badge>)}
+      </div>
+      {launchButton}
+    </div>
+  )
+}

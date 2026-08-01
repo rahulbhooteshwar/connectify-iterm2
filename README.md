@@ -10,7 +10,8 @@ A web-based manager for your SSH sessions, with credentials in an encrypted loca
 - 🎨 **Bundled iTerm2 profiles** (PERSONAL / NON-PROD / PROD / UI) installed for you
 - 🔍 **Smart search and filtering** by name or tags
 - 🗂️ **Group-based organization** with per-host tile themes
-- 🌐 **Web interface** - Modern tile-based UI for easy host management
+- 🌐 **Web interface** - sidebar navigation, tile or list view, light and dark
+- 💻 **Installs as a desktop app** - the interface is a PWA
 - 🚀 **Background UI server** - Always-on web interface
 
 ## Requirements
@@ -71,10 +72,12 @@ connectify --help             # Show all commands
 ```
 
 The web interface provides:
-- 🎨 **Tile-based host display** organized by group
-- 🔍 **Real-time search** and filtering
+- 🧭 **A sidebar** for hosts, the vault and your groups
+- 🎨 **Tile or list view**, organized by group
+- 🔍 **Real-time search** and tag filtering
 - 🖱️ **Click-to-connect** functionality
-- 📱 **Responsive design** for desktop and mobile
+- 🌗 **Light and dark**, following the system until you choose
+- 💻 **Install it as a desktop app** from the browser's install button
 
 ## iTerm2 Profiles
 
@@ -296,10 +299,10 @@ add/edit form offers the groups already in use and lets you type a new one on th
 fly, which then becomes available to every other host. Hosts without a group are
 rendered as-is, below the groups - grouping is entirely optional.
 
-Each host also picks its own **Theme**: 🔴 red, 🟢 green, 🟠 orange or the neutral
-grey default. Click a dot in the add/edit form; the selected one is ringed. The
-theme colours that host's tile in the web UI, replacing the old guesswork based
-on tag names.
+Each host also picks its own **Theme**: red, orange, amber, green, teal, blue,
+violet, pink, or the neutral default. Click a dot in the add/edit form; the
+selected one is ringed. The theme colours that host's tile in the web UI, and
+its group's dot in the sidebar.
 
 Tags are unchanged and still used for search and filtering.
 
@@ -347,7 +350,7 @@ Configuration is stored at `~/.connectify/hosts.json`. On first run, a sample co
 | `credential` | Name of a credential in the vault | To connect |
 | `iterm_profile` | iTerm2 profile name | No |
 | `group` | Group used to organize the host list | No |
-| `theme` | Tile theme: `default`, `red`, `green` or `orange` | No |
+| `theme` | Tile theme: `default`, `red`, `orange`, `amber`, `green`, `teal`, `blue`, `violet` or `pink` | No |
 | `tags` | Array of tags for search and filtering | No |
 | `ssh_options` | Extra `-o` options, e.g. `StrictHostKeyChecking=no` | No |
 | `ssh_verbosity` | ssh debug level: `0` (off) to `3` (`-vvv`) | No |

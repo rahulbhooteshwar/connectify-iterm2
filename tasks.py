@@ -19,6 +19,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 DIST = ROOT / "dist"
 BUILD = ROOT / "build"
+UI = ROOT / "ui"
+STATIC = ROOT / "static"
 
 # Release archives are named after the architecture they were built for
 ARCH_ALIASES = {"x86_64": "amd64", "arm64": "arm64"}
@@ -37,7 +39,8 @@ def run(*command, **kwargs):
     """Run a command, echoing it first, and stop the task if it fails."""
     printable = ' '.join(str(part) for part in command)
     print(f"$ {printable}")
-    result = subprocess.run([str(part) for part in command], cwd=ROOT, **kwargs)
+    kwargs.setdefault("cwd", ROOT)
+    result = subprocess.run([str(part) for part in command], **kwargs)
     if result.returncode != 0:
         sys.exit(result.returncode)
     return result
@@ -59,6 +62,21 @@ def ui():
     run("uv", "run", "python", "main.py", "--ui")
 
 
+@task("Build the React interface into static/ (needs Node)")
+def ui_build():
+    if shutil.which("npm") is None:
+        sys.exit("❌ npm is required to build the interface (https://nodejs.org)")
+    if not (UI / "node_modules").exists():
+        run("npm", "ci", cwd=UI)
+    run("npm", "run", "build", cwd=UI)
+    print(f"✅ Built {STATIC.relative_to(ROOT)}")
+
+
+@task("Run the interface in watch mode against a running backend")
+def ui_dev():
+    run("npm", "run", "dev", cwd=UI)
+
+
 @task("Run the test suite")
 def test():
     run("uv", "run", "--with", "pytest", "--with", "httpx", "pytest", "tests", "-q")
@@ -66,6 +84,9 @@ def test():
 
 @task("Build the standalone executable into dist/")
 def build():
+    # static/ is committed, but PyInstaller bundles whatever is on disk - build
+    # the interface first so the executable can never ship a stale one.
+    ui_build()
     run("uv", "run", "pyinstaller", "connectify.spec", "--noconfirm")
     binary = DIST / "connectify" / "connectify"
     if not binary.exists():

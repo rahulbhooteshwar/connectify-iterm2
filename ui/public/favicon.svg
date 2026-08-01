@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Connectify">
+  <title>Connectify</title>
+  <!--
+    A shell prompt: the one mark that says "this tab is a terminal session".
+    Drawn as geometry rather than text so it needs no font, and kept to two
+    heavy strokes so it still reads at 16px in a browser tab.
+    The gradient is the app's own primary colour into the scrollbar violet.
+  -->
+  <defs>
+    <linearGradient id="c" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#667eea"/>
+      <stop offset="1" stop-color="#764ba2"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="64" height="64" rx="14" fill="url(#c)"/>
+
+  <g fill="none" stroke="#ffffff" stroke-width="6"
+     stroke-linecap="round" stroke-linejoin="round">
+    <!-- the > of the prompt -->
+    <path d="M19 21 L31 32 L19 43"/>
+    <!-- the cursor resting after it -->
+    <path d="M36 43 L46 43"/>
+  </g>
+</svg>
