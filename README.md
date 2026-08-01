@@ -348,27 +348,27 @@ Configuration is stored at `~/.connectify/hosts.json`. On first run, a sample co
 
 ## Auto-Start on Login
 
-The installer will offer to configure the UI server to start automatically when you log in. If you skipped this during installation, you can set it up anytime:
+The web UI is a background server, so it is worth having it start with your
+session. That is a `connectify` command - no script to download:
 
 ```bash
-# Download and run the setup script
-curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/connectify-iterm2/main/setup-autostart.sh | bash -s enable
-
-# Or if you have the repo cloned:
-./setup-autostart.sh enable
-
-# Check status
-curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/connectify-iterm2/main/setup-autostart.sh | bash -s status
-
-# Disable auto-start
-curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/connectify-iterm2/main/setup-autostart.sh | bash -s disable
+connectify autostart           # is it set up?
+connectify autostart enable    # start the web UI at login
+connectify autostart disable   # stop doing that
 ```
 
-The auto-start feature creates a LaunchAgent that:
-- Starts the UI server automatically on login
-- Keeps the server running in the background
-- Restarts the server if it crashes
-- Logs output to `/tmp/connectify-autostart.log`
+Enabling it writes a **LaunchAgent** to
+`~/Library/LaunchAgents/com.connectify.ui.plist` and loads it, so the server
+starts on login, stays up in the background, is restarted if it crashes, and
+logs to `/tmp/connectify-autostart.log`.
+
+Installing, upgrading and `connectify doctor` all report where you stand, and
+say what to run if it isn't on. One case is handled for you: a LaunchAgent that
+points at a copy of Connectify a reinstall has moved is repaired during the
+install, since you already asked for auto-start once and a broken one fails
+silently at every login.
+
+The old `setup-autostart.sh` still works - it now forwards to the command.
 
 ## Uninstallation
 

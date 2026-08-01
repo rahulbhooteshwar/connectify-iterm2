@@ -101,6 +101,7 @@ connectify/
 ├── iterm_profiles.py          # Bundled profile install + iTerm2 discovery
 ├── vault.py                   # Encrypted credentials vault (AES-256-GCM + scrypt)
 ├── ssh_session.py             # Leak-free session launch (askpass over a FIFO)
+├── autostart.py               # LaunchAgent: start the web UI at login
 ├── profiles/                  # iTerm2 profiles shipped with Connectify
 │   ├── connectify-PERSONAL.json
 │   ├── connectify-NONPROD.json
@@ -198,6 +199,20 @@ command line:
 
 Requires OpenSSH 8.4+ (`SSH_ASKPASS_REQUIRE=force`); older versions fall back to
 prompting in the terminal. `connectify doctor` reports the installed version.
+
+### 2d. autostart.py - Starting at Login
+
+Writes, loads and inspects the `com.connectify.ui` LaunchAgent:
+- `enable()` resolves the connectify binary to an **absolute** path first -
+  launchd expands neither `~` nor `$HOME` - and boots the agent out before
+  bootstrapping it again, so running it twice repairs rather than fails
+- `status()` reports configured / loaded / **stale**: a plist pointing at a
+  binary that has moved would otherwise fail at every login with nothing said
+- `describe()` is the one-liner shared by `connectify autostart`, the doctor
+  and the installer
+
+`setup-autostart.sh` is a shim over the command, kept for the curl|bash URL
+that used to be the documented way to do this.
 
 ### 3. iterm_profiles.py - iTerm2 Profiles
 

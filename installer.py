@@ -246,6 +246,47 @@ def install_profiles():
         console.print(f"  [dim]{pretty(result['target_dir'])}[/dim]")
 
 
+def setup_autostart():
+    """Report whether the UI starts at login, and say how to turn it on.
+
+    Enabling it is left to the user - it is their login, not ours - with one
+    exception: an agent that is already enabled but points at a binary this
+    install has moved is repaired, because they asked for auto-start once and
+    a silently broken LaunchAgent helps nobody.
+    """
+    step("Start at login")
+
+    try:
+        import autostart
+    except ImportError as e:                       # pragma: no cover - defensive
+        warn(f"Could not check auto-start: {e}")
+        return
+
+    state = autostart.status()
+
+    if not state['supported']:
+        warn("Auto-start needs macOS")
+        return
+
+    if state['stale']:
+        ok_repair, message = autostart.enable()
+        (ok if ok_repair else warn)(f"Repaired: {message}")
+        return
+
+    if state['configured'] and state['loaded']:
+        ok("The web UI already starts when you log in")
+        return
+
+    if state['configured']:
+        warn("Set up but not loaded")
+        console.print("    Run [bold]connectify autostart enable[/bold] to fix it")
+        return
+
+    warn("The web UI does not start automatically")
+    console.print("    Turn it on with [bold]connectify autostart enable[/bold] "
+                  "[dim](and off again with 'disable')[/dim]")
+
+
 def check_path():
     """Tell the user how to put ~/.local/bin on PATH, if it isn't."""
     entries = os.environ.get('PATH', '').split(os.pathsep)
@@ -280,6 +321,7 @@ def summary(version, arch, on_path):
     commands.add_column(style="dim")
     commands.add_row("connectify ui start", "Start the web UI in the background")
     commands.add_row("connectify ui status", "Check whether it is running")
+    commands.add_row("connectify autostart enable", "Start the web UI at login")
     commands.add_row("connectify doctor", "Diagnostics")
     commands.add_row("connectify --help", "All commands")
 
@@ -315,6 +357,8 @@ def run_install(source, version=None):
     install_files(source)
     console.print()
     install_profiles()
+    console.print()
+    setup_autostart()
     console.print()
 
     step("Finishing up")
@@ -353,6 +397,8 @@ def run_upgrade(version=None):
         install_files(payload)
         console.print()
         install_profiles()
+        console.print()
+        setup_autostart()
         console.print()
 
         step("Finishing up")

@@ -134,6 +134,26 @@ def test_the_bootstrap_draws_its_own_progress_bar():
     assert 'IGNORECASE' not in code
 
 
+def test_autostart_is_a_command_not_a_hosted_script():
+    """It used to be a curl|bash script; the old URL now forwards to this."""
+    result = run_cli('--help')
+    assert 'connectify autostart' in result.stdout
+
+    status = run_cli('autostart')
+    assert status.returncode == 0
+    assert 'Auto-start' in status.stdout
+
+    with open(os.path.join(REPO_ROOT, 'setup-autostart.sh')) as f:
+        script = f.read()
+    assert 'connectify autostart' in script, "the old script forwards to the command"
+    assert 'launchctl load' not in script, "and no longer has its own copy of the logic"
+
+
+def test_the_doctor_reports_autostart():
+    result = run_cli('doctor')
+    assert 'Auto-start' in result.stdout
+
+
 def test_install_and_upgrade_are_documented_commands():
     result = run_cli('--help')
     assert 'connectify upgrade' in result.stdout

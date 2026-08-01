@@ -309,6 +309,32 @@ def describe_openssh():
             f"terminal instead of being supplied automatically")
 
 
+def handle_autostart_command(action):
+    """connectify autostart [status|enable|disable]"""
+    import autostart
+
+    state = autostart.status()
+
+    if action == 'status':
+        print(f"Auto-start: {autostart.describe(state)}")
+        if state['configured']:
+            print(f"  LaunchAgent : {state['plist']}")
+            print(f"  Runs        : {state['program']} ui start")
+            print(f"  Logs        : {autostart.STDOUT_LOG}")
+        elif state['supported']:
+            print("  Enable it with: connectify autostart enable")
+        return 0
+
+    ok, message = autostart.enable() if action == 'enable' else autostart.disable()
+    print(f"{'✅' if ok else '❌'} {message}")
+
+    if ok and action == 'enable':
+        print(f"   The web UI will be at http://localhost:{UI_PORT} after every login.")
+        print("   Turn it off again with: connectify autostart disable")
+
+    return 0 if ok else 1
+
+
 def run_doctor():
     """Print everything useful for diagnosing a broken setup"""
     print(f"Connectify v{VERSION} ({BUILD_DATE})")
@@ -331,8 +357,17 @@ def run_doctor():
         print("   Status       : ❌ not running ('connectify ui start')")
     print(f"   Log file     : {LOG_FILE}{'' if os.path.exists(LOG_FILE) else ' (none yet)'}")
 
-    launchagent_plist = os.path.expanduser("~/Library/LaunchAgents/com.connectify.ui.plist")
-    print(f"   Auto-start   : {'✅ configured' if os.path.exists(launchagent_plist) else '❌ disabled'}")
+    try:
+        import autostart
+
+        state = autostart.status()
+        mark = '✅' if state['loaded'] and not state['stale'] else (
+            '⚠️ ' if state['configured'] else '❌')
+        print(f"   Auto-start   : {mark} {autostart.describe(state)}")
+        if state['configured']:
+            print(f"   LaunchAgent  : {state['plist']}")
+    except Exception as e:
+        print(f"   Auto-start   : ⚠️  could not check: {e}")
 
     # iTerm2 + profiles
     print("\n🎨 iTerm2")
@@ -418,6 +453,10 @@ This command exists to run that server and to diagnose problems.
   connectify profiles list      Show bundled and available iTerm2 profiles
   connectify profiles install   (Re)install the bundled iTerm2 profiles
 
+  connectify autostart          Is the server set to start at login?
+  connectify autostart enable   Start the web UI automatically at login
+  connectify autostart disable  Stop doing that
+
   connectify doctor             Full diagnostics (server, iTerm2, config, vault)
   connectify upgrade            Download and install the latest release
   connectify version            Show version information
@@ -466,6 +505,16 @@ def main():
             sys.exit(installer.run_install(options.source, options.version))
 
         sys.exit(installer.run_upgrade(options.version))
+
+    if command == 'autostart':
+        parser = argparse.ArgumentParser(
+            prog='connectify autostart',
+            description='Start the web UI automatically when you log in'
+        )
+        parser.add_argument('autostart_command', nargs='?', default='status',
+                            choices=['enable', 'disable', 'status'],
+                            help='Action (default: status)')
+        sys.exit(handle_autostart_command(parser.parse_args(args[1:]).autostart_command))
 
     if command == 'profiles':
         parser = argparse.ArgumentParser(
