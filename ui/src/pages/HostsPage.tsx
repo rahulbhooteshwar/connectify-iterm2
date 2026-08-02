@@ -51,8 +51,9 @@ export function HostsPage({ groupFilter, clearGroupFilter }: {
   const [exporting, setExporting] = React.useState(false)
 
   /* Landing on the host list means you are looking for a host, so typing should
-   * go straight into the search box - on first load, and again on the way back
-   * from the vault, since this page unmounts while that one is up.
+   * go straight into the search box - on first load, on the way back from the
+   * vault (this page unmounts while that one is up), and on coming back to the
+   * window from another app or tab.
    *
    * Not `autoFocus`: on a locked vault the unlock dialog is up at the same
    * moment and owns the focus. Waiting for the gate to close, and standing down
@@ -60,11 +61,25 @@ export function HostsPage({ groupFilter, clearGroupFilter }: {
    * caret. */
   React.useEffect(() => {
     if (gateOpen) return
-    const frame = requestAnimationFrame(() => {
+
+    const focusSearch = () => {
       if (document.querySelector('[role="dialog"]')) return
       searchRef.current?.focus()
-    })
-    return () => cancelAnimationFrame(frame)
+    }
+    // a frame's grace so this runs after whatever else is mounting settles
+    const frame = requestAnimationFrame(focusSearch)
+
+    // `focus` alone misses a tab that was switched away from and back without
+    // the window ever losing focus, which is the common case in a browser
+    const onVisible = () => { if (!document.hidden) focusSearch() }
+    window.addEventListener('focus', focusSearch)
+    document.addEventListener('visibilitychange', onVisible)
+
+    return () => {
+      cancelAnimationFrame(frame)
+      window.removeEventListener('focus', focusSearch)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [gateOpen])
 
   const matches = React.useCallback((host: Host) => {
@@ -148,27 +163,8 @@ export function HostsPage({ groupFilter, clearGroupFilter }: {
     <>
       {/* toolbar */}
       <header className="flex shrink-0 flex-wrap items-center gap-2.5 border-b border-border bg-card/60 px-5 py-3 backdrop-blur">
-        <div className="relative min-w-52 max-w-md flex-1">
-          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            id="searchBox"
-            ref={searchRef}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search hosts or tags…"
-            className="pl-9 pr-8"
-          />
-          {search && (
-            <button
-              type="button" aria-label="Clear search"
-              onClick={() => setSearch('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground cursor-pointer"
-            >
-              <X size={14} />
-            </button>
-          )}
-        </div>
-
+        {/* The filters lead, then search takes whatever width is left over -
+            host addresses are long, and this is the field being typed into. */}
         {tags.length > 0 && (
           <div className="relative">
             <Tag size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -193,6 +189,29 @@ export function HostsPage({ groupFilter, clearGroupFilter }: {
           </Badge>
         )}
 
+        <div className="relative min-w-52 flex-1">
+          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            id="searchBox"
+            ref={searchRef}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search hosts or tags…"
+            className="pl-9 pr-8"
+          />
+          {search && (
+            <button
+              type="button" aria-label="Clear search"
+              onClick={() => setSearch('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground cursor-pointer"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+
+        {/* ml-auto is a no-op while search is absorbing the slack, but it still
+            pins the count right when the toolbar wraps on a narrow window */}
         <span className="ml-auto text-xs tabular-nums text-muted-foreground">
           {visible === total ? `${total} host${total === 1 ? '' : 's'}` : `${visible} of ${total} hosts`}
         </span>

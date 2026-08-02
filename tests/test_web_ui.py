@@ -729,3 +729,43 @@ def test_the_search_box_takes_focus_on_the_host_list():
     search = page[page.index('id="searchBox"'):]
     assert 'autoFocus' not in search[:search.index('/>')], \
         "autoFocus would fire while the vault gate is still up"
+
+
+def test_the_filters_come_before_the_search_box():
+    """Tag filter first, then the group chip, then search - the filters read as
+    one cluster instead of the chip being stranded beside the host count once
+    search started absorbing the slack."""
+    page = read(UI_SRC, 'pages', 'HostsPage.tsx')
+    header = page[page.index('{/* toolbar */}'):page.index('Grid view')]
+
+    assert header.index('setTagFilter(') < header.index('id="searchBox"'), \
+        "the tag filter should be left of the search box"
+    assert header.index('Clear group filter') < header.index('id="searchBox"'), \
+        "the group chip belongs with the tag filter, not out by the host count"
+
+
+def test_the_search_box_takes_the_leftover_width():
+    """It was capped at max-w-md, which left a band of empty toolbar on a wide
+    screen while host addresses were still being truncated."""
+    page = read(UI_SRC, 'pages', 'HostsPage.tsx')
+    wrapper = re.search(r'<div className="(relative[^"]*)">\s*\n\s*<Search ', page)
+
+    assert wrapper, "the search box should still be wrapped for its icons"
+    classes = wrapper.group(1)
+    assert 'flex-1' in classes, classes
+    assert 'max-w-' not in classes, f"a max width caps the search box: {classes}"
+
+
+def test_coming_back_to_the_window_refocuses_the_search_box():
+    """Switching to another app or another tab and back should land the caret in
+    search again, not leave it wherever it was. `focus` alone misses a tab
+    switch that never took focus off the window, hence visibilitychange too."""
+    page = read(UI_SRC, 'pages', 'HostsPage.tsx')
+    effect = page[page.index('const searchRef'):page.index('const matches')]
+
+    assert "window.addEventListener('focus'" in effect
+    assert "document.addEventListener('visibilitychange'" in effect
+    assert "window.removeEventListener('focus'" in effect, "the listeners have to come off again"
+    assert "document.removeEventListener('visibilitychange'" in effect
+    # the dialog guard lives in the shared handler, so it covers these too
+    assert '[role="dialog"]' in effect
