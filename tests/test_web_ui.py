@@ -700,3 +700,14 @@ def test_the_emoji_list_can_be_scrolled_inside_a_dialog():
     assert 'passive: false' in picker, "preventDefault needs a non-passive listener"
     assert 'shadowRoot' in picker and 'scrollTop' in picker, \
         "the scroll container is behind the shadow boundary"
+
+
+def test_each_group_is_drawn_on_its_own_surface():
+    """Spacing alone let one group run into the next down a long listing. Each
+    section is a panel now - a border and a tint the tiles sit on."""
+    page = read(UI_SRC, 'pages', 'HostsPage.tsx')
+    section = re.search(r'<section\s+key=\{section\.name[^>]*?className="([^"]*)"', page, re.S)
+
+    assert section, "the group section should carry a literal className"
+    classes = section.group(1)
+    assert 'border' in classes and 'bg-' in classes and 'rounded' in classes, classes

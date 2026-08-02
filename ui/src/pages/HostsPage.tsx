@@ -221,10 +221,17 @@ export function HostsPage({ groupFilter, clearGroupFilter }: {
             onClear={() => { setSearch(''); setTagFilter(''); clearGroupFilter() }}
           />
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-5">
+            {/* Each group sits on its own surface. Spacing alone left one group
+                running into the next on a tall listing - a panel gives the eye
+                a boundary, and makes a group read as the single thing its tiles
+                are dragged around inside. */}
             {sections.map((section) => (
-              <section key={section.name ?? '·ungrouped'} className="animate-fade-up">
-                <div className="group/section mb-2.5 flex items-center gap-2">
+              <section
+                key={section.name ?? '·ungrouped'}
+                className="animate-fade-up rounded-2xl border border-border bg-muted/40 p-4"
+              >
+                <div className="group/section mb-3 flex items-center gap-2">
                   {section.emoji && (
                     <span aria-hidden className="text-sm leading-none">{section.emoji}</span>
                   )}
