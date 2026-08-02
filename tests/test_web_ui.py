@@ -711,3 +711,21 @@ def test_each_group_is_drawn_on_its_own_surface():
     assert section, "the group section should carry a literal className"
     classes = section.group(1)
     assert 'border' in classes and 'bg-' in classes and 'rounded' in classes, classes
+
+
+def test_the_search_box_takes_focus_on_the_host_list():
+    """Landing on the host list means looking for a host, so typing should go
+    straight into the search box. Not `autoFocus` though: on a locked vault the
+    unlock dialog is up at the same moment and owns the focus, so this waits for
+    the gate and stands down for any dialog on screen."""
+    page = read(UI_SRC, 'pages', 'HostsPage.tsx')
+    effect = page[page.index('const searchRef'):page.index('const matches')]
+
+    assert 'searchRef.current?.focus()' in effect
+    assert 'gateOpen' in effect, "it must not race the unlock dialog for the caret"
+    assert '[role="dialog"]' in effect, "an open dialog keeps its own focus"
+    assert 'ref={searchRef}' in page
+
+    search = page[page.index('id="searchBox"'):]
+    assert 'autoFocus' not in search[:search.index('/>')], \
+        "autoFocus would fire while the vault gate is still up"

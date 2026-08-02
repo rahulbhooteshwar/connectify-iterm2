@@ -36,7 +36,8 @@ export function HostsPage({ groupFilter, clearGroupFilter }: {
   clearGroupFilter: () => void
 }) {
   const store = useStore()
-  const { hostsByGroup, credentials, tags, view, setView, toast, reloadHosts, withVault } = store
+  const { hostsByGroup, credentials, tags, view, setView, toast, reloadHosts, withVault, gateOpen } = store
+  const searchRef = React.useRef<HTMLInputElement>(null)
 
   const [search, setSearch] = React.useState('')
   const [tagFilter, setTagFilter] = React.useState('')
@@ -48,6 +49,23 @@ export function HostsPage({ groupFilter, clearGroupFilter }: {
   const [dragged, setDragged] = React.useState<Host | null>(null)
   const [importing, setImporting] = React.useState(false)
   const [exporting, setExporting] = React.useState(false)
+
+  /* Landing on the host list means you are looking for a host, so typing should
+   * go straight into the search box - on first load, and again on the way back
+   * from the vault, since this page unmounts while that one is up.
+   *
+   * Not `autoFocus`: on a locked vault the unlock dialog is up at the same
+   * moment and owns the focus. Waiting for the gate to close, and standing down
+   * if any dialog is on screen, keeps this from fighting a focus trap for the
+   * caret. */
+  React.useEffect(() => {
+    if (gateOpen) return
+    const frame = requestAnimationFrame(() => {
+      if (document.querySelector('[role="dialog"]')) return
+      searchRef.current?.focus()
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [gateOpen])
 
   const matches = React.useCallback((host: Host) => {
     if (tagFilter && !(host.tags ?? []).includes(tagFilter)) return false
@@ -134,6 +152,7 @@ export function HostsPage({ groupFilter, clearGroupFilter }: {
           <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
             id="searchBox"
+            ref={searchRef}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search hosts or tags…"
