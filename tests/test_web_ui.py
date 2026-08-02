@@ -654,3 +654,36 @@ def test_group_order_is_persisted_through_the_api_not_local_storage_alone():
     keeping the arrangement in the browser alone."""
     app = read(UI_SRC, 'App.tsx')
     assert 'api.setGroupOrder(' in app
+
+
+def test_the_entry_animation_does_not_hold_its_last_frame():
+    """A filled animation outranks every normal declaration, inline styles
+    included. ``animation: fade-up ... both`` therefore went on asserting
+    ``opacity: 1`` long after it finished, and silently beat the ``opacity-40``
+    that marks the tile a drag left behind. The final keyframe is the resting
+    state anyway, so only the ``backwards`` half is worth keeping."""
+    css = read_css()
+    rule = re.search(r'\.animate-fade-up\s*\{([^}]*)\}', css)
+
+    assert rule, "the fade-up utility should still exist"
+    assert 'backwards' in rule.group(1)
+    assert 'forwards' not in rule.group(1) and 'both' not in rule.group(1)
+
+
+def test_tiles_are_measured_before_they_start_moving():
+    """The sortable strategy works out where each tile belongs by comparing the
+    layout it started from with the order it would land in. Re-measuring every
+    frame hands it rects that already carry the shift, and it settles on "stay
+    put" - the tiles stop making room for the card being dragged."""
+    page = read(UI_SRC, 'pages', 'HostsPage.tsx')
+
+    assert 'MeasuringStrategy.Always' not in page
+
+
+def test_the_card_under_the_pointer_is_not_the_one_left_behind():
+    """A drag should look like carrying the card: a full-strength copy travels
+    with the pointer while the tile it came from stays put as a faded gap."""
+    page = read(UI_SRC, 'pages', 'HostsPage.tsx')
+
+    assert 'DragOverlay' in page, "the carried copy is what makes the drag read as a drag"
+    assert 'opacity-40' in page, "and the tile it came from should read as a gap"

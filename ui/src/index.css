@@ -142,7 +142,12 @@ input::-webkit-search-results-decoration { display: none !important; -webkit-app
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .animate-fade-in { animation: fade-in 0.18s ease both; }
-.animate-fade-up { animation: fade-up 0.22s ease both; }
+/* `backwards`, not `both`: these are entry animations, and their last keyframe
+   is the element's resting state anyway, so holding it forwards buys nothing.
+   It costs, though - a filled animation outranks every normal declaration,
+   inline styles included, so a finished fade-up would go on pinning opacity 1
+   and transform none and quietly beat anything set on the element later. */
+.animate-fade-up { animation: fade-up 0.22s ease backwards; }
 .animate-zoom-in { animation: zoom-in 0.18s ease both; }
 .animate-toast-in { animation: toast-in 0.22s ease both; }
 

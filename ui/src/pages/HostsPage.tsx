@@ -7,8 +7,8 @@ import { useStore } from '../store'
 import * as api from '../lib/api'
 import { copyText } from '../lib/clipboard'
 import {
-  DndContext, KeyboardSensor, PointerSensor, closestCenter, useSensor, useSensors,
-  type DragEndEvent,
+  DndContext, DragOverlay, KeyboardSensor, PointerSensor,
+  closestCenter, useSensor, useSensors, type DragEndEvent,
 } from '@dnd-kit/core'
 import {
   SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates,
@@ -45,6 +45,7 @@ export function HostsPage({ groupFilter, clearGroupFilter }: {
   const [deleting, setDeleting] = React.useState<Host | null>(null)
   const [editingGroup, setEditingGroup] =
     React.useState<{ name: string; emoji: string; count: number } | null>(null)
+  const [dragged, setDragged] = React.useState<Host | null>(null)
   const [importing, setImporting] = React.useState(false)
   const [exporting, setExporting] = React.useState(false)
 
@@ -257,7 +258,19 @@ export function HostsPage({ groupFilter, clearGroupFilter }: {
                 <DndContext
                   sensors={sensors}
                   collisionDetection={closestCenter}
-                  onDragEnd={(event) => reorderHosts(section.name ?? '', section.hosts, event)}
+                  // no `measuring` override here on purpose: the sortable
+                  // strategy works out where each tile should sit by comparing
+                  // the layout it started from against the order it would land
+                  // in, so it needs the rects from before anything moved.
+                  // Re-measuring every frame feeds it rects that already carry
+                  // the shift, and the maths then settles on "stay put".
+                  onDragStart={({ active }) =>
+                    setDragged(section.hosts.find((h) => h.name === active.id) ?? null)}
+                  onDragCancel={() => setDragged(null)}
+                  onDragEnd={(event) => {
+                    setDragged(null)
+                    reorderHosts(section.name ?? '', section.hosts, event)
+                  }}
                 >
                   <SortableContext
                     items={section.hosts.map((h) => h.name)}
@@ -265,9 +278,16 @@ export function HostsPage({ groupFilter, clearGroupFilter }: {
                     // has to match or the placeholders open in the wrong axis
                     strategy={view === 'grid' ? rectSortingStrategy : verticalListSortingStrategy}
                   >
-                    <div className={view === 'grid'
-                      ? 'grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4'
-                      : 'space-y-2'}>
+                    <div className={cn(
+                      view === 'grid'
+                        ? 'grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4'
+                        : 'space-y-2',
+                      // while something is in flight the tiles are only scenery
+                      // making room - they should not light up under the pointer
+                      // or offer buttons. dnd-kit tracks the drag on the
+                      // document and sorts by rects, so it is unaffected.
+                      dragged && 'pointer-events-none',
+                    )}>
                       {section.hosts.map((host) => (
                         <SortableHostTile
                           key={host.name}
@@ -282,6 +302,23 @@ export function HostsPage({ groupFilter, clearGroupFilter }: {
                       ))}
                     </div>
                   </SortableContext>
+                  {/* Rendered under the pointer at full opacity while the tile
+                      it came from fades to a placeholder. This is what makes a
+                      drag feel like carrying the card rather than nudging it. */}
+                  <DragOverlay dropAnimation={{ duration: 180, easing: 'cubic-bezier(0.2, 0, 0, 1)' }}>
+                    {dragged && section.hosts.some((h) => h.name === dragged.name) ? (
+                      <HostTile
+                        host={dragged}
+                        list={view === 'list'}
+                        state={undefined}
+                        onLaunch={() => {}}
+                        onEdit={() => {}}
+                        onDelete={() => {}}
+                        onCopy={() => {}}
+                        overlay
+                      />
+                    ) : null}
+                  </DragOverlay>
                 </DndContext>
               </section>
             ))}
@@ -372,12 +409,14 @@ function SortableHostTile(props: TileProps) {
 
 function HostTile({
   host, list, state, onLaunch, onEdit, onDelete, onCopy,
-  tileRef, dragProps, dragging, style,
+  tileRef, dragProps, dragging, style, overlay,
 }: TileProps & {
   tileRef?: (el: HTMLElement | null) => void
   dragProps?: Record<string, unknown>
   dragging?: boolean
   style?: React.CSSProperties
+  /** the copy carried under the pointer, rather than the one in the grid */
+  overlay?: boolean
 }) {
   const { credentials, vaultUnlocked } = useStore()
   const theme = themeById(host.theme)
@@ -454,9 +493,20 @@ function HostTile({
         {...dragProps}
         className={cn(
           'group flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-2.5',
-          'shadow-sm transition-all duration-150 hover:shadow-md animate-fade-up',
+          'shadow-sm hover:shadow-md',
+          // the overlay is mounted mid-drag, so the entry animation would play
+          // again on the card the pointer has already picked up
+          !overlay && 'animate-fade-up',
+          // dnd-kit supplies its own transition inline while a drag is live;
+          // ours would only be something for it to fight
+          dragging ? 'transition-none' : 'transition-all duration-150',
           dragProps && 'cursor-grab active:cursor-grabbing touch-none select-none',
-          dragging && 'opacity-90 shadow-lg',
+          // the card itself is drawn in the DragOverlay under the pointer, so
+          // what stays behind is just the gap it will drop into - inert, or it
+          // would still be painting its hover wash and action buttons
+          dragging && 'opacity-40 pointer-events-none',
+          // see the grid tile below - the carried row would otherwise hover itself
+          overlay && 'cursor-grabbing pointer-events-none shadow-2xl',
         )}
         style={{ ...style, borderLeft: `3px solid ${theme.color}` }}
       >
@@ -483,16 +533,25 @@ function HostTile({
       {...dragProps}
       className={cn(
         'group tile relative flex flex-col gap-2 overflow-hidden rounded-xl border border-border',
-        'bg-card p-4 shadow-sm transition-all duration-200 hover:shadow-lg',
-        'animate-fade-up',
+        'bg-card p-4 shadow-sm hover:shadow-lg',
+        dragging ? 'transition-none' : 'transition-all duration-200',
+        !overlay && 'animate-fade-up',
         // the lift on hover fights the drag transform, so only one at a time
         !dragging && 'hover:-translate-y-0.5',
         dragProps && 'cursor-grab active:cursor-grabbing touch-none select-none',
-        dragging && 'opacity-90 shadow-2xl',
+        dragging && 'opacity-40 pointer-events-none',
+        // the carried card sits directly under the pointer, so without this it
+        // hovers itself: theme wash on, action buttons out, on a card whose
+        // buttons cannot be clicked mid-drag
+        overlay && 'cursor-grabbing pointer-events-none',
       )}
       style={{
         ...style,
-        boxShadow: `inset 0 3px 0 0 ${theme.color}`,
+        // the lift has to go here rather than in a shadow-* class: the inset
+        // rule below is the same property and would win
+        boxShadow: overlay
+          ? `inset 0 3px 0 0 ${theme.color}, 0 18px 38px -12px rgb(0 0 0 / 0.35)`
+          : `inset 0 3px 0 0 ${theme.color}`,
         ['--tile-tint' as string]: theme.strong,
         ['--tile-tint-fade' as string]: theme.soft,
       }}
