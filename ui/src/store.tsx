@@ -11,7 +11,7 @@ import type { Credential, Host, HostsPayload, ItermProfile } from './lib/types'
 
 export interface Toast {
   id: number
-  kind: 'success' | 'error' | 'info' | 'locked' | 'unlocked'
+  kind: 'success' | 'error' | 'info' | 'warning' | 'locked' | 'unlocked'
   text: string
 }
 

@@ -1,6 +1,7 @@
 import * as React from 'react'
 import {
-  Github, KeyRound, Lock, LockOpen, Moon, PanelLeftClose, PanelLeftOpen, Server, Sun, Unplug,
+  Github, KeyRound, Lock, LockOpen, Moon, PanelLeftClose, PanelLeftOpen, Server, Sun,
+  TriangleAlert, Unplug,
 } from 'lucide-react'
 import { useStore, type Toast } from './store'
 import * as api from './lib/api'
@@ -390,6 +391,7 @@ const toastStyles: Record<Toast['kind'], string> = {
   success: 'text-success',
   error: 'text-destructive',
   info: 'text-muted-foreground',
+  warning: 'text-warning',
   locked: 'text-warning',
   unlocked: 'text-success',
 }
@@ -397,17 +399,18 @@ const toastStyles: Record<Toast['kind'], string> = {
 function Toasts() {
   const { toasts } = useStore()
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-6 z-[70]">
-      {toasts.map((t, index) => (
-        <div
-          key={t.id}
-          style={{ bottom: `${index * 42}px` }}
-          className="absolute left-1/2 -translate-x-1/2 animate-toast-in"
-        >
-          <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border bg-card px-4 py-1.5 text-[13px] text-card-foreground shadow-lg">
+    /* A flex column rather than stacked absolute offsets: advice toasts wrap
+       to two lines, and a fixed per-toast offset would overlap them */
+    <div className="pointer-events-none fixed inset-x-0 bottom-6 z-[70] flex flex-col-reverse items-center gap-2">
+      {toasts.map((t) => (
+        <div key={t.id} className="animate-toast-in">
+          {/* Advice can run long - it wraps rather than pushing off-screen,
+              while the short confirmations keep their single-line pill */}
+          <div className="flex max-w-[min(30rem,calc(100vw-2rem))] items-center gap-2 rounded-2xl border border-border bg-card px-4 py-1.5 text-[13px] text-card-foreground shadow-lg">
             {t.kind === 'locked' && <Lock size={13} className={toastStyles[t.kind]} />}
             {t.kind === 'unlocked' && <LockOpen size={13} className={toastStyles[t.kind]} />}
             {t.kind === 'error' && <Unplug size={13} className={toastStyles[t.kind]} />}
+            {t.kind === 'warning' && <TriangleAlert size={13} className={`shrink-0 ${toastStyles[t.kind]}`} />}
             <span>{t.text}</span>
           </div>
         </div>

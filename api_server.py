@@ -319,17 +319,24 @@ class APISSHManager:
         # the UI keeps its spinner up until iTerm2 has the tab open. Launches
         # are serialized in SSHManager, so a burst of connects queues here.
         try:
-            self.ssh_manager.launch_iterm_session(host, credential)
+            launched = self.ssh_manager.launch_session(host, credential)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
             logging.error(f"Error launching session for {host_name}: {e}")
             raise HTTPException(status_code=502, detail=f"Could not open the session: {e}")
 
+        # `launched` carries which terminal opened the tab and anything the UI
+        # should surface about it - the session is already running either way.
+        launched = launched if isinstance(launched, dict) else {}
+
         return {
             "success": True,
             "message": f"SSH session launched for {host['name']}",
-            "host": host
+            "host": host,
+            "terminal": launched.get("terminal"),
+            "terminal_name": launched.get("terminal_name"),
+            "notices": launched.get("notices", []),
         }
 
     def add_host(self, host_data: dict):

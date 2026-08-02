@@ -456,7 +456,7 @@ class SSHManager:
                     f"{terminal.display_name} is not running and could not be started")
 
             try:
-                session_id = terminal.open_session(
+                result = terminal.open_session(
                     session.command, host_name, profile, debug=self.debug)
             except terminals.TerminalLaunchError as e:
                 SSHManager._last_launch_at = time.time()
@@ -474,8 +474,17 @@ class SSHManager:
                     f"Could not open a session in {terminal.display_name}: {e}")
 
             SSHManager._last_launch_at = time.time()
-            print(f"✅ Session launched ({session_id})")
-            return True
+            print(f"✅ Session launched ({result.id})")
+
+            # The notices are advisory - the session is already up. They exist
+            # so the web UI can say which terminal it used, and how to get tabs
+            # back when the Accessibility permission is missing.
+            return {
+                "terminal": terminal.key,
+                "terminal_name": terminal.display_name,
+                "session_id": result.id,
+                "notices": list(result.notices),
+            }
 
     # The name this has always been called by, from the API and the tests
     launch_iterm_session = launch_session

@@ -245,7 +245,7 @@ def test_connecting_resolves_the_credential_from_the_vault(vault_env, monkeypatc
     })
 
     launched = {}
-    monkeypatch.setattr(api_server.api_manager.ssh_manager, "launch_iterm_session",
+    monkeypatch.setattr(api_server.api_manager.ssh_manager, "launch_session",
                         lambda host, credential=None: launched.update(host=host, credential=credential))
 
     response = client.post("/api/connect", headers=headers, json={"host_name": "prod-web"})
@@ -253,6 +253,42 @@ def test_connecting_resolves_the_credential_from_the_vault(vault_env, monkeypatc
     assert response.status_code == 200
     assert launched["credential"]["password"] == "s3cret"
     assert launched["host"]["name"] == "prod-web"
+
+
+def test_connecting_passes_the_terminals_advice_back_to_the_ui(vault_env, monkeypatch):
+    """The session is already up - these drive the toast, not the outcome."""
+    headers, _ = create_vault()
+    client.post("/api/vault/credentials", headers=headers, json={
+        "name": "prod-admin", "type": "password", "password": "s3cret",
+    })
+
+    notice = {"kind": "warning", "text": "Opened in a new macOS Terminal window - Accessibility"}
+    monkeypatch.setattr(api_server.api_manager.ssh_manager, "launch_session",
+                        lambda host, credential=None: {
+                            "terminal": "terminal", "terminal_name": "macOS Terminal",
+                            "session_id": "/dev/ttys003", "notices": [notice],
+                        })
+
+    body = client.post("/api/connect", headers=headers, json={"host_name": "prod-web"}).json()
+
+    assert body["terminal"] == "terminal"
+    assert body["terminal_name"] == "macOS Terminal"
+    assert body["notices"] == [notice]
+
+
+def test_connecting_survives_a_launcher_that_reports_nothing(vault_env, monkeypatch):
+    """Older/stubbed launchers return None - the connect must still succeed."""
+    headers, _ = create_vault()
+    client.post("/api/vault/credentials", headers=headers, json={
+        "name": "prod-admin", "type": "password", "password": "s3cret",
+    })
+    monkeypatch.setattr(api_server.api_manager.ssh_manager, "launch_session",
+                        lambda host, credential=None: None)
+
+    body = client.post("/api/connect", headers=headers, json={"host_name": "prod-web"}).json()
+
+    assert body["success"] is True
+    assert body["notices"] == []
 
 
 def test_connecting_a_host_without_a_credential_explains_itself(vault_env):
@@ -277,7 +313,7 @@ def test_a_credentials_username_overrides_the_hosts(vault_env, monkeypatch):
     assert listed[0]["username"] == "ubuntu"
 
     launched = {}
-    monkeypatch.setattr(api_server.api_manager.ssh_manager, "launch_iterm_session",
+    monkeypatch.setattr(api_server.api_manager.ssh_manager, "launch_session",
                         lambda host, credential=None: launched.update(host=host, credential=credential))
 
     # prod-web says "admin", the credential says "ubuntu" - the credential wins
@@ -300,7 +336,7 @@ def test_a_host_can_leave_the_username_to_its_credential(vault_env, monkeypatch)
     assert created.json()["host"]["username"] == ""
 
     launched = {}
-    monkeypatch.setattr(api_server.api_manager.ssh_manager, "launch_iterm_session",
+    monkeypatch.setattr(api_server.api_manager.ssh_manager, "launch_session",
                         lambda host, credential=None: launched.update(host=host, credential=credential))
 
     assert client.post("/api/connect", headers=headers,

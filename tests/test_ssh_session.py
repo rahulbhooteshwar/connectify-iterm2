@@ -515,7 +515,9 @@ def test_launch_passes_a_command_to_iterm_and_never_types_the_secret(runtime, tm
 
     host = {**HOST, "iterm_profile": "connectify-PROD",
             "ssh_options": ["StrictHostKeyChecking=no"]}
-    assert manager.launch_iterm_session(host, PASSWORD_CREDENTIAL) is True
+    launched = manager.launch_iterm_session(host, PASSWORD_CREDENTIAL)
+    assert launched['terminal'] == 'iterm2'
+    assert launched['session_id']
 
     applescript = scripts[0]
     assert SECRET not in applescript, "the secret must never reach AppleScript"
@@ -570,7 +572,7 @@ def test_launch_retries_a_transient_applescript_error(runtime, tmp_path, monkeyp
     monkeypatch.setattr(terminals.subprocess, "run", flaky)
 
     assert manager.launch_iterm_session({**HOST, "iterm_profile": "Default"},
-                                        PASSWORD_CREDENTIAL) is True
+                                        PASSWORD_CREDENTIAL)['session_id']
     assert len(calls) == 2, "the transient failure should have been retried"
 
 

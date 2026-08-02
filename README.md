@@ -67,6 +67,10 @@ falls back to Terminal rather than failing.
   terminals, never through the terminal itself.
 - No profiles: `iterm_profile` on a host is ignored.
 
+The web UI tells you which of these applies as you connect: every session
+launched in the macOS Terminal says so in the pill at the bottom of the screen,
+and one that had to fall back to a window says how to get tabs back.
+
 ## Quick Installation
 
 ### One-Line Install (Recommended)

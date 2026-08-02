@@ -7,7 +7,8 @@
  */
 
 import type {
-  Credential, FullCredential, GroupMeta, Host, HostsPayload, ItermProfile, VaultStatus,
+  Credential, FullCredential, GroupMeta, Host, HostsPayload, ItermProfile, LaunchNotice,
+  VaultStatus,
 } from './types'
 
 let vaultToken: string | null = null
@@ -64,8 +65,12 @@ export const updateHost = (originalName: string, host: Partial<Host>) =>
 export const deleteHost = (name: string) =>
   request(`/api/hosts/${encodeURIComponent(name)}`, { method: 'DELETE' })
 
+/** Launching answers with which terminal took the session, plus anything the
+ * user should know about it - which terminal it was, and how to get tabs back
+ * when macOS Terminal had to fall back to a window. */
 export const connectHost = (name: string) =>
-  request<{ message: string }>('/api/connect', {
+  request<{ message: string; terminal: string | null; terminal_name: string | null;
+            notices: LaunchNotice[] }>('/api/connect', {
     method: 'POST', body: JSON.stringify({ host_name: name }),
   })
 

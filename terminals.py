@@ -24,6 +24,7 @@ import os
 import shlex
 import subprocess
 import time
+from typing import NamedTuple
 
 import iterm_profiles
 
@@ -47,8 +48,27 @@ APPLE_TERMINAL_SEARCH_PATHS = [
 ITERM_DOWNLOAD_URL = iterm_profiles.ITERM_DOWNLOAD_URL
 
 
+# How the macOS Terminal ended up placing a session. Only NO_TAB means
+# something the user can fix: windows were open, but the tab keystroke did
+# nothing, which is what a missing Accessibility permission looks like.
+TAB = 'tab'
+FIRST_WINDOW = 'window'
+NO_TAB = 'notab'
+
+
 class TerminalLaunchError(RuntimeError):
     """The terminal could not be scripted into opening the session."""
+
+
+class LaunchResult(NamedTuple):
+    """A session that opened, plus anything worth telling the user about it.
+
+    ``notices`` are advisory - the session is already running. Each is
+    ``{"kind": "info"|"warning", "text": ...}``, ready for the web UI's toast.
+    """
+
+    id: str
+    notices: tuple = ()
 
 
 def _applescript_escape(value):
@@ -229,11 +249,17 @@ class ITerm2Backend(TerminalBackend):
                             1, 'osascript',
                             stderr='iTerm2 did not report a session id')
 
+                    notices = ()
                     if profile_attempt != profile:
                         using = profile_attempt or "iTerm2's default profile"
                         print(f"⚠️  Profile '{profile}' not usable, used {using} instead")
+                        notices = ({
+                            "kind": "warning",
+                            "text": f"Profile '{profile}' is not in iTerm2 - "
+                                    f"used {using} instead",
+                        },)
 
-                    return session_id
+                    return LaunchResult(session_id, notices)
 
                 except subprocess.TimeoutExpired:
                     last_error = "iTerm2 did not respond in time"
@@ -308,6 +334,11 @@ class AppleTerminalBackend(TerminalBackend):
         a new window instead. Without it, ``do script ... in selected tab of
         front window`` would run ssh inside whatever the user was already doing
         in that tab.
+
+        Returns ``<outcome> <tty>``. The outcome distinguishes a window we
+        opened because there was nothing to add a tab to (fine, expected) from
+        one we fell back to because the keystroke did nothing (worth telling
+        the user about - it means the Accessibility permission is missing).
         """
         escaped_command = _applescript_escape(f"exec {shlex.quote(str(command))}")
         escaped_title = _applescript_escape(title)
@@ -315,7 +346,8 @@ class AppleTerminalBackend(TerminalBackend):
         tell application "Terminal"
             activate
             set didTab to false
-            if (count of windows) > 0 then
+            set hadWindows to (count of windows) > 0
+            if hadWindows then
                 set tabCount to count of tabs of front window
                 try
                     tell application "System Events" to tell process "Terminal" to keystroke "t" using command down
@@ -331,12 +363,18 @@ class AppleTerminalBackend(TerminalBackend):
 
             if didTab then
                 set newTab to do script "{escaped_command}" in selected tab of front window
+                set outcome to "{TAB}"
             else
                 set newTab to do script "{escaped_command}"
+                if hadWindows then
+                    set outcome to "{NO_TAB}"
+                else
+                    set outcome to "{FIRST_WINDOW}"
+                end if
             end if
 
             set custom title of newTab to "{escaped_title}"
-            return tty of newTab
+            return outcome & " " & tty of newTab
         end tell
         '''
 
@@ -355,13 +393,13 @@ class AppleTerminalBackend(TerminalBackend):
 
                 # Terminal tabs have no id, so the tty is what proves a tab
                 # really appeared - /dev/ttys004 and friends
-                tty = result.stdout.strip()
+                outcome, _, tty = result.stdout.strip().partition(' ')
                 if not tty:
                     raise subprocess.CalledProcessError(
                         1, 'osascript',
                         stderr='Terminal did not report a tty for the new tab')
 
-                return tty
+                return LaunchResult(tty, self._notices_for(outcome))
 
             except subprocess.TimeoutExpired:
                 last_error = "Terminal did not respond in time"
@@ -377,6 +415,23 @@ class AppleTerminalBackend(TerminalBackend):
             print(f"DEBUG: Terminal launch failed: {last_error}")
 
         raise TerminalLaunchError(last_error or "Terminal did not open a session")
+
+    @staticmethod
+    def _notices_for(outcome):
+        """What to tell the user about where their session landed.
+
+        Every session says which terminal it opened in, because "why doesn't
+        this look like my iTerm2 profile?" is the obvious first question. Only
+        a genuine tab failure adds the fix - a window opened because Terminal
+        had none is normal and needs no advice.
+        """
+        if outcome == NO_TAB:
+            return ({
+                "kind": "warning",
+                "text": "Opened in a new macOS Terminal window - allow Connectify "
+                        "under Privacy & Security › Accessibility to get tabs",
+            },)
+        return ({"kind": "info", "text": "Opened in the macOS Terminal"},)
 
     def permission_hint(self):
         # Two different permissions, and they fail differently: without

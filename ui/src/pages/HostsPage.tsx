@@ -116,9 +116,12 @@ export function HostsPage({ groupFilter, clearGroupFilter }: {
   const launch = async (host: Host) => {
     setLaunching((s) => ({ ...s, [host.name]: 'connecting' }))
     try {
-      await withVault(() => api.connectHost(host.name))
+      const result = await withVault(() => api.connectHost(host.name))
       setLaunching((s) => ({ ...s, [host.name]: 'launched' }))
       window.setTimeout(() => setLaunching((s) => ({ ...s, [host.name]: undefined })), 1600)
+      // The session is already up; these only say where it went and, when
+      // macOS Terminal could not open a tab, how to get tabs back
+      result?.notices?.forEach((notice) => toast(notice.text, notice.kind))
     } catch (e) {
       setLaunching((s) => ({ ...s, [host.name]: undefined }))
       if (e instanceof Error && e.message !== 'Vault unlock cancelled') toast(e.message, 'error')

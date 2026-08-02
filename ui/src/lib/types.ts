@@ -76,6 +76,13 @@ export const SSH_OPTION_DEFS = [
   { flag: 'StrictHostKeyChecking=no', label: "Skip host key checking (don't prompt on new hosts)" },
 ]
 
+/** Advice attached to a launch that already succeeded - which terminal opened
+ * the session, and how to get tabs when macOS Terminal fell back to a window. */
+export interface LaunchNotice {
+  kind: 'info' | 'warning'
+  text: string
+}
+
 /** Hosts saved before keyboard-interactive was allowed carry the bare flag */
 export const LEGACY_PASSWORD_AUTH = 'PreferredAuthentications=password'
 export const PASSWORD_AUTH = 'PreferredAuthentications=password,keyboard-interactive'

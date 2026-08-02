@@ -137,7 +137,17 @@ def test_the_terminal_script_titles_the_tab():
 
 def test_the_terminal_script_asks_for_the_tty_as_proof_of_launch():
     """Terminal tabs have no id, so the tty is what proves a tab appeared."""
-    assert "return tty of newTab" in terminal_script()
+    assert "tty of newTab" in terminal_script()
+
+
+def test_the_terminal_script_reports_whether_it_got_a_tab():
+    """A window is only worth mentioning when a tab was actually attempted."""
+    script = terminal_script()
+
+    assert f'set outcome to "{terminals.TAB}"' in script
+    assert f'set outcome to "{terminals.NO_TAB}"' in script
+    assert f'set outcome to "{terminals.FIRST_WINDOW}"' in script
+    assert "return outcome & \" \" & tty of newTab" in script
 
 
 def test_the_tab_keystroke_can_fail_without_taking_over_the_current_tab():
@@ -171,9 +181,9 @@ def test_the_terminal_backend_ignores_profiles(monkeypatch):
     """Terminal's 'settings sets' are not iTerm2 profiles - never guess a mapping."""
     backend = terminals.AppleTerminalBackend()
     monkeypatch.setattr(terminals.subprocess, "run",
-                        lambda argv, **kw: subprocess.CompletedProcess(argv, 0, '/dev/ttys003', ''))
+                        lambda argv, **kw: subprocess.CompletedProcess(argv, 0, 'tab /dev/ttys003', ''))
 
-    assert backend.open_session("/tmp/s.sh", "host", profile="connectify-PROD") == "/dev/ttys003"
+    assert backend.open_session("/tmp/s.sh", "host", profile="connectify-PROD").id == "/dev/ttys003"
 
 
 def test_the_terminal_backend_fails_loudly_without_a_tty(monkeypatch):
@@ -194,12 +204,73 @@ def test_the_terminal_backend_retries_a_transient_error(monkeypatch):
         if len(calls) == 1:
             raise subprocess.CalledProcessError(
                 1, argv, stderr="Terminal got an error: Can't get current window")
-        return subprocess.CompletedProcess(argv, 0, '/dev/ttys004', '')
+        return subprocess.CompletedProcess(argv, 0, 'tab /dev/ttys004', '')
 
     monkeypatch.setattr(terminals.subprocess, "run", flaky)
 
-    assert backend.open_session("/tmp/s.sh", "host") == "/dev/ttys004"
+    assert backend.open_session("/tmp/s.sh", "host").id == "/dev/ttys004"
     assert len(calls) == 2
+
+
+# --- what the web UI is told -------------------------------------------------
+
+def open_with_outcome(monkeypatch, outcome):
+    backend = terminals.AppleTerminalBackend()
+    monkeypatch.setattr(terminals.subprocess, "run",
+                        lambda argv, **kw: subprocess.CompletedProcess(
+                            argv, 0, f'{outcome} /dev/ttys003', ''))
+    return backend.open_session("/tmp/s.sh", "host")
+
+
+def test_a_tab_still_says_which_terminal_took_the_session(monkeypatch):
+    """'Why doesn't this look like my profile?' is the obvious first question."""
+    notices = open_with_outcome(monkeypatch, terminals.TAB).notices
+
+    assert [n["kind"] for n in notices] == ["info"]
+    assert "macOS Terminal" in notices[0]["text"]
+
+
+def test_a_first_window_is_not_reported_as_a_permission_problem(monkeypatch):
+    """Terminal had no window to add a tab to - that is normal, not a failure."""
+    notices = open_with_outcome(monkeypatch, terminals.FIRST_WINDOW).notices
+
+    assert [n["kind"] for n in notices] == ["info"]
+    assert "Accessibility" not in notices[0]["text"]
+
+
+def test_a_failed_tab_tells_the_user_how_to_get_tabs(monkeypatch):
+    notices = open_with_outcome(monkeypatch, terminals.NO_TAB).notices
+
+    assert [n["kind"] for n in notices] == ["warning"]
+    assert "Accessibility" in notices[0]["text"]
+    assert "window" in notices[0]["text"]
+
+
+def test_iterm2_says_nothing_when_the_profile_was_honoured(monkeypatch):
+    backend = terminals.ITerm2Backend()
+    monkeypatch.setattr(terminals.subprocess, "run",
+                        lambda argv, **kw: subprocess.CompletedProcess(argv, 0, 'sid', ''))
+
+    assert backend.open_session("/tmp/s.sh", "host", profile="connectify-PROD").notices == ()
+
+
+def test_iterm2_reports_a_profile_it_could_not_use(monkeypatch):
+    """The fallback was previously only visible in the server log."""
+    backend = terminals.ITerm2Backend()
+    calls = []
+
+    def only_default(argv, **kwargs):
+        calls.append(argv)
+        if 'connectify-PROD' in argv[-1]:
+            raise subprocess.CalledProcessError(1, argv, stderr='no such profile')
+        return subprocess.CompletedProcess(argv, 0, 'sid', '')
+
+    monkeypatch.setattr(terminals.subprocess, "run", only_default)
+
+    notices = backend.open_session("/tmp/s.sh", "host", profile="connectify-PROD").notices
+
+    assert [n["kind"] for n in notices] == ["warning"]
+    assert "connectify-PROD" in notices[0]["text"]
 
 
 # --- guidance ----------------------------------------------------------------
