@@ -269,6 +269,11 @@ def handle_profiles_command(command):
         return 1
 
     if command == 'install':
+        if not iterm_profiles.find_iterm2():
+            print("❌ iTerm2 is not installed - there is nothing to import profiles into")
+            print(f"   Get it from {iterm_profiles.ITERM_DOWNLOAD_URL}, then run:")
+            print("   connectify configure iterm")
+            return 1
         result = iterm_profiles.install_bundled_profiles(force=True)
         iterm_profiles.warn_if_browser_plugin_missing()
         print()
@@ -281,6 +286,129 @@ def handle_profiles_command(command):
         print(f"❌ Unknown profiles command: {command}")
         print("   Usage: connectify profiles [install|list]")
         return 1
+
+
+def _set_terminal_preference(key):
+    """Persist the terminal preference into hosts.json, and report the change."""
+    from main import SSHManager
+
+    manager = SSHManager()
+    manager.config['terminal'] = key
+    if not manager.save_config():
+        return None
+    return manager.config_file
+
+
+def handle_configure_command(command):
+    """Handle 'connectify configure ...' subcommands.
+
+    This is how someone who installed iTerm2 *after* Connectify gets the full
+    experience: the installer deliberately skips the profile import when iTerm2
+    isn't there, and this is the one command that does it later.
+    """
+    try:
+        import iterm_profiles
+        import terminals
+    except ImportError as e:
+        print(f"❌ Terminal support unavailable: {e}")
+        return 1
+
+    if command == 'iterm':
+        # The install may have happened seconds ago - never trust a cached answer
+        terminals.reset_cache()
+        iterm = iterm_profiles.find_iterm2()
+        if not iterm:
+            print("❌ iTerm2 is not installed")
+            print(f"   Get it from {iterm_profiles.ITERM_DOWNLOAD_URL} and run this again.")
+            print("   Until then sessions keep opening in macOS Terminal - nothing is broken.")
+            return 1
+
+        print(f"✅ Found iTerm2: {iterm}")
+        print()
+        print("🎨 Importing the Connectify profiles...")
+        result = iterm_profiles.install_bundled_profiles(force=True)
+        iterm_profiles.warn_if_browser_plugin_missing()
+
+        if result['errors']:
+            return 1
+
+        config_file = _set_terminal_preference(terminals.ITERM2)
+        if not config_file:
+            print("⚠️  Profiles imported, but the terminal preference could not be saved")
+            return 1
+
+        print()
+        print(f"✅ Sessions will now open in iTerm2 ({config_file})")
+        for line in terminals.ITerm2Backend().permission_hint():
+            print(f"   {line}")
+        print()
+        print("💡 Run 'connectify ui restart' so the running server picks this up")
+        return 0
+
+    if command == 'terminal':
+        config_file = _set_terminal_preference(terminals.APPLE_TERMINAL)
+        if not config_file:
+            print("⚠️  Could not save the terminal preference")
+            return 1
+        print(f"✅ Sessions will now open in macOS Terminal ({config_file})")
+        for line in terminals.AppleTerminalBackend().permission_hint():
+            print(f"   {line}")
+        print()
+        print("💡 Run 'connectify ui restart' so the running server picks this up")
+        return 0
+
+    if command in ('status', None):
+        print_terminal_status()
+        return 0
+
+    print(f"❌ Unknown configure command: {command}")
+    print("   Usage: connectify configure [status|iterm|terminal]")
+    return 1
+
+
+def print_terminal_status():
+    """Everything about which terminal sessions open in, and why."""
+    try:
+        import iterm_profiles
+        import terminals
+        from main import SSHManager
+    except ImportError as e:
+        print(f"   ⚠️  Could not inspect the terminal: {e}")
+        return
+
+    try:
+        preference = SSHManager().config.get('terminal')
+    except Exception:
+        preference = None
+
+    info = terminals.describe(preference)
+    backend = info['backend']
+
+    print(f"   Sessions open in : {info['display_name']} ({info['reason']})")
+    if info['path']:
+        print(f"   Application      : {info['path']}")
+
+    for i, line in enumerate(backend.permission_hint()):
+        print(f"   {'Permissions      : ' if i == 0 else ' ' * 19}{line}")
+
+    if info['iterm2']:
+        print(f"   iTerm2           : ✅ {info['iterm2']}")
+        plugin = iterm_profiles.find_browser_plugin()
+        print(f"   Browser plugin   : {plugin or '⚠️  not found - ' + iterm_profiles.BROWSER_PLUGIN_DOWNLOAD_URL}")
+
+        target_dir = iterm_profiles.dynamic_profiles_dir()
+        for profile in iterm_profiles.list_bundled_profiles():
+            installed = (target_dir / f"{profile['name']}.json").exists()
+            print(f"   Profile          : {profile['name']} - "
+                  f"{'✅ imported' if installed else '⬜ not imported'}")
+        if not info['supports_profiles']:
+            print("   Profiles         : ⬜ not in use - sessions open in macOS Terminal")
+            print("                      Switch with: connectify configure iterm")
+    else:
+        print(f"   iTerm2           : ❌ not found - {iterm_profiles.ITERM_DOWNLOAD_URL}")
+        print("   Profiles         : ⬜ not imported (iTerm2 is not installed)")
+        for line in backend.upgrade_hint():
+            print(f"                      {line}")
 
 
 def describe_openssh():
@@ -382,21 +510,12 @@ def run_doctor():
     except Exception as e:
         print(f"   Auto-start   : ⚠️  could not check: {e}")
 
-    # iTerm2 + profiles
-    print("\n🎨 iTerm2")
+    # Which terminal sessions open in, and everything that depends on it
+    print("\n🖥  Terminal")
     try:
-        import iterm_profiles
-
-        status = iterm_profiles.check_iterm2_requirements(quiet=True)
-        print(f"   iTerm2       : {status['iterm2'] or '❌ not found - ' + iterm_profiles.ITERM_DOWNLOAD_URL}")
-        print(f"   Plugin       : {status['browser_plugin'] or '⚠️  not found - ' + iterm_profiles.BROWSER_PLUGIN_DOWNLOAD_URL}")
-
-        target_dir = iterm_profiles.dynamic_profiles_dir()
-        for profile in iterm_profiles.list_bundled_profiles():
-            installed = (target_dir / f"{profile['name']}.json").exists()
-            print(f"   Profile      : {profile['name']} - {'✅ installed' if installed else '⬜ not installed'}")
+        print_terminal_status()
     except Exception as e:
-        print(f"   ⚠️  Could not inspect iTerm2: {e}")
+        print(f"   ⚠️  Could not inspect the terminal: {e}")
 
     # Config + credentials
     print("\n📁 Configuration")
@@ -466,13 +585,18 @@ This command exists to run that server and to diagnose problems.
   connectify profiles list      Show bundled and available iTerm2 profiles
   connectify profiles install   (Re)install the bundled iTerm2 profiles
 
+  connectify configure          Which terminal sessions open in, and why
+  connectify configure iterm    Import the profiles and switch to iTerm2
+     ... run this if you installed iTerm2 after Connectify
+  connectify configure terminal Switch back to the macOS Terminal
+
   connectify autostart          Is the server set to start at login?
   connectify autostart enable   Start the web UI automatically at login
   connectify autostart disable  Stop doing that
      ... --shell on either uses your shell profile instead of a LaunchAgent,
      which is what to do when security software objects to one
 
-  connectify doctor             Full diagnostics (server, iTerm2, config, vault)
+  connectify doctor             Full diagnostics (server, terminal, config, vault)
   connectify upgrade            Download and install the latest release
   connectify version            Show version information
 """.format(port=UI_PORT)
@@ -534,6 +658,20 @@ def main():
                                  '(no login hook for security software to flag)')
         options = parser.parse_args(args[1:])
         sys.exit(handle_autostart_command(options.autostart_command, options.shell))
+
+    if command == 'configure':
+        parser = argparse.ArgumentParser(
+            prog='connectify configure',
+            description='Choose which terminal Connectify opens sessions in'
+        )
+        parser.add_argument(
+            'configure_command',
+            nargs='?',
+            default='status',
+            choices=['status', 'iterm', 'terminal'],
+            help='What to configure (default: status)'
+        )
+        sys.exit(handle_configure_command(parser.parse_args(args[1:]).configure_command))
 
     if command == 'profiles':
         parser = argparse.ArgumentParser(

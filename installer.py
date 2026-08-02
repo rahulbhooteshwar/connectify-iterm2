@@ -33,6 +33,7 @@ from rich.table import Table
 from rich.text import Text
 
 import iterm_profiles
+import terminals
 
 GITHUB_REPO = "rahulbhooteshwar/connectify-iterm2"
 INSTALL_DIR = Path("~/.local/bin").expanduser()
@@ -85,8 +86,13 @@ def link(url):
 
 # --- environment -------------------------------------------------------------
 
-def check_requirements(strict=True):
-    """Check what Connectify needs, reporting each item as it goes."""
+def check_requirements():
+    """Check what Connectify needs, reporting each item as it goes.
+
+    iTerm2 is recommended, not required: without it sessions open in the
+    Terminal that ships with macOS, so the install goes ahead either way. Only
+    the platform and the account are hard requirements.
+    """
     step("Checking requirements")
 
     if sys.platform != 'darwin':
@@ -101,19 +107,21 @@ def check_requirements(strict=True):
     iterm = iterm_profiles.find_iterm2()
     if iterm:
         ok(f"iTerm2 [dim]{iterm}[/dim]")
-    else:
-        fail("iTerm2 is not installed")
-        console.print(f"    Connectify launches every session in iTerm2: {link(ITERM_URL)}")
-        if strict:
-            return False
 
-    plugin = iterm_profiles.find_browser_plugin()
-    if plugin:
-        ok(f"iTerm2 browser plugin [dim]{plugin}[/dim]")
+        plugin = iterm_profiles.find_browser_plugin()
+        if plugin:
+            ok(f"iTerm2 browser plugin [dim]{plugin}[/dim]")
+        else:
+            warn("iTerm2 browser plugin not found [dim](optional)[/dim]")
+            console.print(f"    Needed only by the bundled [bold]connectify-UI[/bold] profile: "
+                          f"{link(BROWSER_PLUGIN_URL)}")
     else:
-        warn("iTerm2 browser plugin not found [dim](optional)[/dim]")
-        console.print(f"    Needed only by the bundled [bold]connectify-UI[/bold] profile: "
-                      f"{link(BROWSER_PLUGIN_URL)}")
+        warn("iTerm2 not found [dim]- sessions will open in macOS Terminal[/dim]")
+        console.print("    Connectify works best with iTerm2: it adds profiles, badges "
+                      "and per-host colours.")
+        console.print(f"    {link(ITERM_URL)}")
+        console.print("    Install it later and run [bold]connectify configure iterm[/bold] "
+                      "to import the profiles.")
 
     ssh = shutil.which('ssh')
     if ssh:
@@ -230,7 +238,19 @@ def install_files(source):
 
 
 def install_profiles():
+    """Import the bundled profiles - but only when there is an iTerm2 to read them.
+
+    On a machine without iTerm2 this is skipped rather than failed: writing
+    into its DynamicProfiles folder would create it for an app that isn't
+    there. `connectify configure iterm` does the import later.
+    """
     step("Installing iTerm2 profiles")
+
+    if not iterm_profiles.find_iterm2():
+        warn("Skipped - iTerm2 is not installed")
+        console.print("    Install iTerm2 later, then run "
+                      "[bold]connectify configure iterm[/bold] to import them")
+        return
 
     result = iterm_profiles.install_bundled_profiles(force=True, quiet=True)
     changed = result["installed"] + result["updated"]
@@ -316,6 +336,9 @@ def summary(version, arch, on_path):
     table.add_row("Command", pretty(INSTALL_DIR / "connectify"))
     table.add_row("Config", "~/.connectify")
 
+    backend, _ = terminals.resolve()
+    table.add_row("Sessions open in", backend.display_name)
+
     commands = Table.grid(padding=(0, 2))
     commands.add_column(style="cyan")
     commands.add_column(style="dim")
@@ -338,6 +361,14 @@ def summary(version, arch, on_path):
                              "[bold]http://localhost:7890[/bold]"),
         ),
         border_style="green", padding=(1, 2)))
+
+    # Whatever else scrolled past, these are the two things someone on the
+    # macOS Terminal needs to know before their first connect
+    hints = backend.permission_hint() + backend.upgrade_hint()
+    if hints:
+        console.print(Panel(Group(*[Text.from_markup(line) for line in hints]),
+                            title=f"Using {backend.display_name}",
+                            border_style="cyan", padding=(1, 2)))
 
     if not on_path:
         console.print("[yellow]Open a new terminal (or run the command above) "

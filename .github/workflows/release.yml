@@ -167,7 +167,8 @@ jobs:
           generate_release_notes: true
           body: |
             **Connectify** manages your SSH sessions from a web UI and opens
-            each one in its own iTerm2 tab.
+            each one in its own terminal tab - iTerm2 when you have it, the
+            macOS Terminal when you don't.
 
             ## Install
 
@@ -178,8 +179,11 @@ jobs:
             Already installed? `connectify upgrade` does the same thing.
 
             Builds are provided for **Apple Silicon** (`arm64`) and **Intel**
-            (`amd64`); the installer picks the right one. Requires
-            [iTerm2](https://iterm2.com/index.html). The
+            (`amd64`); the installer picks the right one.
+            [iTerm2](https://iterm2.com/index.html) is recommended - it adds
+            profiles, badges and per-host colours - but is no longer required:
+            without it sessions open in the macOS Terminal. Install it later and
+            run `connectify configure iterm` to import the profiles. The
             [browser plugin](https://iterm2.com/browser-plugin.html) is optional
             and only used by the bundled `connectify-UI` profile.
 
@@ -196,7 +200,7 @@ jobs:
             - **Hosts, groups and tile themes** in the web UI, with per-host
               iTerm2 profiles and optional verbose SSH logging.
             - **Bundled iTerm2 profiles** (PERSONAL / NON-PROD / PROD / UI)
-              installed for you.
+              installed for you when iTerm2 is present.
 
             ## Upgrading from 1.x
 

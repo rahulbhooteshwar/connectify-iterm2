@@ -18,6 +18,7 @@ import glob
 
 import iterm_profiles
 import ssh_session
+import terminals
 
 # Import version info
 try:
@@ -113,12 +114,15 @@ def resolve_ssh_options(host):
     return list(options)
 
 class SSHManager:
-    # Class-level lock to serialize iTerm2 tab launches and prevent race conditions
-    # when multiple connections are launched simultaneously
-    _iterm_launch_lock = threading.Lock()
+    # Class-level lock to serialize terminal tab launches and prevent race
+    # conditions when multiple connections are launched simultaneously
+    _terminal_launch_lock = threading.Lock()
 
-    # When several sessions are launched at once, give iTerm2 a beat between
-    # tabs - it drops requests that arrive while it is still creating one
+    # Kept under the old name for anything still reaching for it
+    _iterm_launch_lock = _terminal_launch_lock
+
+    # When several sessions are launched at once, give the terminal a beat
+    # between tabs - it drops requests that arrive while it is still creating one
     _last_launch_at = 0.0
     LAUNCH_SETTLE_SECONDS = 0.35
 
@@ -133,6 +137,11 @@ class SSHManager:
         
         self.config = self.load_config()
 
+        # Which terminal sessions open in. Resolved once: detection shells out
+        # to osascript, and this sits on the launch path.
+        self.terminal, self.terminal_reason = terminals.resolve(
+            self.config.get('terminal'), quiet=not self.debug)
+
         # Drop pre-vault fields from the host list (see the method for why)
         self.clean_legacy_host_fields()
         self.modernize_ssh_options()
@@ -146,7 +155,18 @@ class SSHManager:
         self.cleanup_old_temp_files()
 
     def ensure_iterm_profiles(self):
-        """Install the bundled iTerm2 profiles if they are not in place yet."""
+        """Install the bundled iTerm2 profiles if they are not in place yet.
+
+        Skipped entirely when sessions open in something other than iTerm2 -
+        creating its DynamicProfiles folder on a machine that has no iTerm2
+        would leave litter for an app that will never read it.
+        """
+        if not self.terminal.supports_profiles:
+            if self.debug:
+                print(f"DEBUG: profile install skipped - sessions open in "
+                      f"{self.terminal.display_name}")
+            return
+
         try:
             result = iterm_profiles.ensure_profiles_installed(VERSION, quiet=True)
         except Exception as e:
@@ -379,69 +399,29 @@ class SSHManager:
 
         return filtered_hosts
 
-    def _iterm_is_ready(self):
-        """True when iTerm2 is running and answering AppleScript."""
-        try:
-            result = subprocess.run(
-                ['osascript', '-e', 'tell application "iTerm" to return (count of windows) as string'],
-                capture_output=True, text=True, timeout=10,
-            )
-            return result.returncode == 0
-        except (OSError, subprocess.SubprocessError):
-            return False
+    def launch_session(self, host, credential=None):
+        """Launch a terminal session for a host, using its vault credential.
 
-    def _ensure_iterm_running(self, timeout=20):
-        """Make sure iTerm2 is up and actually answering before we script it.
-
-        Waiting for a real answer (rather than sleeping a fixed few seconds)
-        is what stops the first launch after a cold start from failing.
-        """
-        if self._iterm_is_ready():
-            return True
-
-        print("📱 iTerm2 not responding yet, launching it...")
-        for launcher in (['open', '-a', 'iTerm'],
-                         ['osascript', '-e', 'tell application "iTerm" to activate']):
-            try:
-                subprocess.run(launcher, check=True, capture_output=True, text=True, timeout=15)
-                break
-            except (OSError, subprocess.SubprocessError):
-                continue
-        else:
-            print("⚠️  Could not launch iTerm2. Make sure it is installed:")
-            print("   https://iterm2.com/index.html")
-            return False
-
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            if self._iterm_is_ready():
-                print("✅ iTerm2 is ready")
-                return True
-            time.sleep(0.4)
-
-        print("⚠️  iTerm2 did not become ready in time")
-        return False
-
-    def launch_iterm_session(self, host, credential=None):
-        """Launch an iTerm2 session for a host, using its vault credential.
-
-        The session is started as iTerm2's session *command*, so no shell runs
-        it: the command never appears in the tab or in the shell history. Any
-        password or key passphrase reaches ssh through an askpass helper
-        reading a private FIFO, so it is never written to disk, never passed on
-        a command line, and sshpass is not involved.
+        Everything here is terminal-agnostic: the session is prepared as a
+        self-contained script and handed to whichever backend ``terminals``
+        resolved. Any password or key passphrase reaches ssh through an askpass
+        helper reading a private FIFO, so it is never written to disk, never
+        passed on a command line, and sshpass is not involved - and that holds
+        whichever terminal opens the tab.
         """
         # Tidy up anything a previous session left behind before adding one
         self.sweep_session_files()
 
-        iterm_profile = host.get('iterm_profile', 'Default')
+        terminal = self.terminal
+        # Only iTerm2 has profiles; the Terminal backend ignores the argument
+        profile = host.get('iterm_profile', 'Default')
         login = ssh_session.effective_username(host, credential)
         host_name = host.get('name') or (
             f"{login}@{host['hostname']}" if login else host['hostname']
         )
         print(f"🚀 Launching {host_name} session...")
 
-        self._ensure_iterm_running()
+        terminal.ensure_running()
 
         credential = credential or {}
         if credential.get('type') == 'password' and not credential.get('password'):
@@ -456,120 +436,49 @@ class SSHManager:
         )
 
         if self.debug:
+            print(f"DEBUG: terminal: {terminal.display_name} ({self.terminal_reason})")
             print(f"DEBUG: launcher: {session.launcher}")
             print(f"DEBUG: secret channel: {'yes' if session.channel else 'no'}")
 
-        escaped_host_name = host_name.replace('\\', '\\\\').replace('"', '\\"')
-        escaped_command = session.command.replace('\\', '\\\\').replace('"', '\\"')
-
-        def create_applescript(profile_name):
-            """AppleScript that opens a tab running the launcher directly.
-
-            Explicit tab/window references avoid races when several sessions
-            are launched at once, and passing the launcher as the session's
-            command means nothing is ever typed into a shell. The script
-            returns the new session's id so the caller can confirm the tab
-            really exists.
-            """
-            with_profile = (f'with profile "{profile_name}"' if profile_name
-                            else 'with default profile')
-            return f'''
-            tell application "iTerm"
-                activate
-                if (count of windows) = 0 then
-                    set newWindow to (create window {with_profile} command "{escaped_command}")
-                    set targetSession to current session of newWindow
-                else
-                    tell current window
-                        set newTab to (create tab {with_profile} command "{escaped_command}")
-                        set targetSession to current session of newTab
-                    end tell
-                end if
-                tell targetSession
-                    set name to "{escaped_host_name}"
-                    return id
-                end tell
-            end tell
-            '''
-
         # Serialize the whole launch. Two AppleScripts creating tabs at the
-        # same moment race over iTerm2's "current window", and a user switching
-        # tabs mid-launch used to be enough to lose a session.
-        with SSHManager._iterm_launch_lock:
-            # Give iTerm2 a moment to settle after the previous tab, otherwise
-            # rapid-fire launches can outrun it
+        # same moment race over the terminal's "current window", and a user
+        # switching tabs mid-launch used to be enough to lose a session.
+        with SSHManager._terminal_launch_lock:
+            # Give the terminal a moment to settle after the previous tab,
+            # otherwise rapid-fire launches can outrun it
             since_last = time.time() - SSHManager._last_launch_at
             if since_last < self.LAUNCH_SETTLE_SECONDS:
                 time.sleep(self.LAUNCH_SETTLE_SECONDS - since_last)
 
-            if not self._ensure_iterm_running():
+            if not terminal.ensure_running():
                 session.cleanup()
-                raise RuntimeError("iTerm2 is not running and could not be started")
+                raise RuntimeError(
+                    f"{terminal.display_name} is not running and could not be started")
 
-            profiles_to_try = [iterm_profile]
-            if iterm_profile != "Default":
-                profiles_to_try.append("Default")
-            profiles_to_try.append(None)   # let iTerm2 pick its default profile
+            try:
+                session_id = terminal.open_session(
+                    session.command, host_name, profile, debug=self.debug)
+            except terminals.TerminalLaunchError as e:
+                SSHManager._last_launch_at = time.time()
+                session.cleanup()
 
-            last_error = None
-            for profile_attempt in profiles_to_try:
-                for attempt in range(2):   # one retry for transient AppleScript errors
-                    try:
-                        result = subprocess.run(
-                            ['osascript', '-e', create_applescript(profile_attempt)],
-                            check=True, capture_output=True, text=True, timeout=30,
-                        )
-
-                        # The script returns the new session's id: proof that the
-                        # tab exists rather than an assumption that it does
-                        session_id = result.stdout.strip()
-                        if not session_id:
-                            raise subprocess.CalledProcessError(
-                                1, 'osascript', stderr='iTerm2 did not report a session id')
-
-                        SSHManager._last_launch_at = time.time()
-
-                        if profile_attempt != iterm_profile:
-                            using = profile_attempt or "iTerm2's default profile"
-                            print(f"⚠️  Profile '{iterm_profile}' not usable, used {using} instead")
-
-                        print(f"✅ Session launched ({session_id})")
-                        return True
-
-                    except subprocess.TimeoutExpired as e:
-                        last_error = "iTerm2 did not respond in time"
-                        break
-                    except subprocess.CalledProcessError as e:
-                        last_error = (e.stderr or str(e)).strip()
-                        if attempt == 0 and self._is_transient_applescript_error(last_error):
-                            time.sleep(0.5)
-                            continue
-                        break
-
-                if self.debug:
-                    print(f"DEBUG: profile '{profile_attempt}' failed: {last_error}")
+                print(f"✗ Could not open a session in {terminal.display_name}")
+                print(f"   Last error: {e}")
+                print(f"")
+                print(f"💡 Troubleshooting tips:")
+                print(f"   1. Make sure {terminal.display_name} can be launched")
+                for i, line in enumerate(terminal.permission_hint()):
+                    print(f"   2. {line}" if i == 0 else f"      {line}")
+                print(f"   3. Try running {terminal.display_name} manually first")
+                raise RuntimeError(
+                    f"Could not open a session in {terminal.display_name}: {e}")
 
             SSHManager._last_launch_at = time.time()
-            session.cleanup()
+            print(f"✅ Session launched ({session_id})")
+            return True
 
-            print(f"✗ Could not open a session in iTerm2")
-            print(f"   Last error: {last_error}")
-            print(f"")
-            print(f"💡 Troubleshooting tips:")
-            print(f"   1. Make sure iTerm2 is installed and can be launched")
-            print(f"   2. Check iTerm2's automation permissions "
-                  f"(System Settings > Privacy & Security > Automation)")
-            print(f"   3. Try running iTerm2 manually first")
-            raise RuntimeError(f"Could not open a session in iTerm2: {last_error}")
-
-    @staticmethod
-    def _is_transient_applescript_error(message):
-        """Errors worth one retry: iTerm2 busy, starting up or mid-redraw."""
-        message = (message or '').lower()
-        return any(marker in message for marker in (
-            'timed out', 'not responding', "can't get current window",
-            'invalid index', '-1712', '-1728', '-600',
-        ))
+    # The name this has always been called by, from the API and the tests
+    launch_iterm_session = launch_session
 
     # Fields that predate the credentials vault. They described how to
     # authenticate; that now lives on the credential, so they are stripped on

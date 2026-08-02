@@ -5,7 +5,7 @@ This guide is for developers who want to contribute to Connectify or build it fr
 ## Prerequisites for Development
 
 - macOS
-- iTerm2
+- iTerm2 (optional - without it sessions open in the macOS Terminal)
 - Python 3.12+
 - **uv** (recommended) - Fast Python package manager
 - **Node 20+** - only to rebuild the interface in `ui/`; the built output is
@@ -120,6 +120,7 @@ connectify/
 ├── main.py                    # Core SSH manager functionality
 ├── api_server.py              # FastAPI web server
 ├── iterm_profiles.py          # Bundled profile install + iTerm2 discovery
+├── terminals.py               # Which terminal opens sessions, and how
 ├── vault.py                   # Encrypted credentials vault (AES-256-GCM + scrypt)
 ├── ssh_session.py             # Leak-free session launch (askpass over a FIFO)
 ├── autostart.py               # LaunchAgent: start the web UI at login
@@ -160,6 +161,7 @@ and connections are managed in the web UI, so the CLI only covers
 
 - UI server management (`ui start|stop|restart|status|logs`)
 - Bundled iTerm2 profiles (`profiles install|list`)
+- Choosing a terminal (`configure [status|iterm|terminal]`)
 - Diagnostics (`doctor`) and `version`
 - Internally, `--silent`/`--ui` hand off to `main.main()` to run the server -
   this is how `ui start` relaunches the executable in the background
@@ -170,11 +172,12 @@ Works with both the PyInstaller bundle and the source checkout.
 
 The SSH engine behind the web UI:
 - SSH host configuration (load/save/CRUD)
-- iTerm2 session launching, using a credential resolved from the vault. Launches
-  are serialized and spaced (`LAUNCH_SETTLE_SECONDS`), the AppleScript returns
-  the new session's id so a silent failure can't look like success, transient
-  AppleScript errors are retried once, and a failed launch cleans up its
-  session directory
+- Session launching, using a credential resolved from the vault. Everything here
+  is terminal-agnostic - the tab itself is opened by a backend from
+  `terminals.py`. Launches are serialized and spaced (`LAUNCH_SETTLE_SECONDS`),
+  the backend returns an id for the new session so a silent failure can't look
+  like success, and a failed launch cleans up its session directory.
+  `launch_session()` is the name; `launch_iterm_session` remains as an alias
 - Credential associations: which hosts use a credential and renaming
 - `clean_legacy_host_fields()` strips pre-vault auth fields from hosts.json on
   startup, materialising the SSH options they implied first
@@ -220,8 +223,10 @@ command line:
   for a limited window. The FIFO is replaced between hand-offs so a draining
   reader can't pick up a second copy.
 - `prepare_session()` - writes the askpass helper and the launcher script, then
-  arms the channel. `main.py` passes `session.command` to iTerm2 as the session
-  *command*, so no shell runs it and nothing reaches the shell history.
+  arms the channel. `main.py` hands `session.command` to a terminal backend -
+  iTerm2 runs it as the session *command*, so no shell runs it and nothing
+  reaches the shell history; macOS Terminal has no equivalent and `exec`s it
+  from the tab's shell instead. Nothing written here is secret either way.
 
 Requires OpenSSH 8.4+ (`SSH_ASKPASS_REQUIRE=force`); older versions fall back to
 prompting in the terminal. `connectify doctor` reports the installed version.
@@ -261,8 +266,37 @@ Handles:
   installed but never offered when configuring a host
 - Locating iTerm2 and its browser plugin by bundle id via AppleScript
   (`com.googlecode.iterm2` / `com.googlecode.iterm2.iTermBrowserPlugin`),
-  falling back to `/Applications`. The installers use the same logic in bash:
-  a missing iTerm2 aborts installation, a missing plugin only warns.
+  falling back to `/Applications` (`find_app()` takes `search_paths` so
+  `terminals.py` can reuse it for Terminal.app). A missing iTerm2 no longer
+  blocks installation - it downgrades to the macOS Terminal and skips the
+  profile import, which `connectify configure iterm` performs later.
+
+### 3a. terminals.py - Which Terminal Opens Sessions
+
+The one place that knows about AppleScript. A backend has to answer four things:
+is it installed, is it running, open a tab running this command with this title,
+and what permission does it need.
+
+- `ITerm2Backend` - runs the launcher as the session *command*, supports
+  profiles (with a fallback chain: the host's profile, then `Default`, then
+  iTerm2's own default), and retries transient AppleScript errors once
+- `AppleTerminalBackend` - always available. Terminal's dictionary has no
+  "create tab", so a ⌘T keystroke goes through System Events, guarded by a
+  `try` **and** a before/after tab count. That guard is the important part: if
+  Accessibility permission is missing the keystroke does nothing, and without
+  the count check `do script ... in selected tab of front window` would run ssh
+  inside the tab the user was already using. It returns the new tab's `tty`,
+  since Terminal tabs have no id
+- `resolve(preference)` - config key, then `CONNECTIFY_TERMINAL`, then
+  auto-detection (iTerm2 if installed, else Terminal). A preference for a
+  terminal that isn't installed warns and falls back rather than failing.
+  Detection is memoised, so `reset_cache()` after installing an app or in tests
+- `permission_hint()` / `upgrade_hint()` - the installer, `doctor`, `configure`
+  and the launch-failure path all print these, so the wording lives in one place
+
+`supports_profiles` also gates the profile import: without it, a machine with no
+iTerm2 would get a `DynamicProfiles` folder created for an app that will never
+read it.
 
 To add a new bundled profile: export it from iTerm2, save it as
 `profiles/connectify-<NAME>.json` in the Dynamic Profile format

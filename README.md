@@ -1,12 +1,12 @@
 # Connectify - SSH Session Manager for iTerm2
 
-A web-based manager for your SSH sessions, with credentials in an encrypted local vault and iTerm2 profile support.
+A web-based manager for your SSH sessions, with credentials in an encrypted local vault and iTerm2 profile support. Works out of the box with the macOS Terminal too.
 
 ## Features
 
 - 🔐 **Encrypted credentials vault** - one passcode, no macOS Keychain
 - 🎯 **Web-based host management** - add, edit, group and connect
-- 🖥️ **iTerm2 integration** with custom profiles
+- 🖥️ **iTerm2 integration** with custom profiles, falling back to macOS Terminal
 - 🎨 **Bundled iTerm2 profiles** (PERSONAL / NON-PROD / PROD / UI) installed for you
 - 🔍 **Smart search and filtering** by name or tags
 - 🗂️ **Group-based organization** with per-host tile themes
@@ -18,11 +18,54 @@ A web-based manager for your SSH sessions, with credentials in an encrypted loca
 
 - macOS on **Apple Silicon or Intel** - releases ship a build for each, and the
   installer picks the right one
-- **[iTerm2](https://iterm2.com/index.html)** - required. Connectify launches every
-  session in iTerm2, so the installer stops if it isn't installed.
+- **[iTerm2](https://iterm2.com/index.html)** - strongly recommended, not required.
+  Connectify works best with iTerm2: profiles, badges and per-host colours all
+  come from it. Without it, sessions open in the Terminal that ships with macOS
+  and the installer carries on regardless.
 - **[iTerm2 browser plugin](https://iterm2.com/browser-plugin.html)** - optional.
   Only needed for the shipped `connectify-UI` profile, which opens the Connectify
   web UI inside iTerm2. The installer warns and continues if it's missing.
+
+### Which terminal your sessions open in
+
+Connectify picks one automatically: **iTerm2 if it's installed, otherwise macOS
+Terminal.** Check which one you're on at any time:
+
+```bash
+connectify configure           # what will happen when you hit connect, and why
+```
+
+**Installed iTerm2 after Connectify?** One command imports the bundled profiles
+and switches over - the installer deliberately skips the import when iTerm2
+isn't there, so nothing happens automatically:
+
+```bash
+connectify configure iterm     # import the profiles and switch to iTerm2
+connectify ui restart          # so the running server picks it up
+connectify configure terminal  # ...or switch back to macOS Terminal
+```
+
+You can also force one for a single run with `CONNECTIFY_TERMINAL=terminal`, or
+permanently with a `"terminal": "iterm2" | "terminal" | "auto"` key in
+`~/.connectify/hosts.json`. A preference for iTerm2 on a machine without it
+falls back to Terminal rather than failing.
+
+**On macOS Terminal, two things differ:**
+
+- **Two permissions, and they fail differently.** Controlling Terminal at all
+  needs *System Settings → Privacy & Security → **Automation***; macOS asks the
+  first time you connect, and without it no session opens. Getting **tabs**
+  additionally needs *Privacy & Security → **Accessibility***, because
+  Terminal's AppleScript support has no "new tab" command and Connectify has to
+  send a ⌘T keystroke. Deny that one and every session opens in its own
+  **window** - a downgrade, never a failure, and it will never take over a tab
+  you were already working in.
+- **The launcher's path shows in the scrollback.** Terminal can't run a command
+  *as* the session the way iTerm2 can, so it types the path in. That path is not
+  a secret and the directory deletes itself the moment ssh exits. Your passwords
+  and passphrases are unaffected - they travel through a private FIFO on both
+  terminals, never through the terminal itself.
+- No profiles: `iterm_profile` on a host is ignored.
 
 ## Quick Installation
 
@@ -36,8 +79,9 @@ curl -LsSf https://raw.githubusercontent.com/rahulbhooteshwar/connectify-iterm2/
 
 The installer shows you what it is doing: the version and architecture being
 downloaded with a progress bar, a checklist of requirements (iTerm2, the browser
-plugin, OpenSSH), where things are installed, the iTerm2 profiles it sets up and
-how to put `~/.local/bin` on your PATH if it isn't. No sudo, no Python and no
+plugin, OpenSSH), where things are installed, which terminal your sessions will
+open in, the iTerm2 profiles it sets up and how to put `~/.local/bin` on your
+PATH if it isn't. No sudo, no Python and no
 build tools needed on your machine.
 
 Already installed? `connectify upgrade` fetches and installs the latest release
@@ -64,9 +108,12 @@ Once started, access the UI at: **http://localhost:7890**
 ### Everything else
 
 ```bash
+connectify configure          # Which terminal sessions open in, and why
+connectify configure iterm    # Import the profiles and switch to iTerm2
+connectify configure terminal # Switch back to the macOS Terminal
 connectify profiles list      # Bundled + available iTerm2 profiles
 connectify profiles install   # (Re)install the bundled iTerm2 profiles
-connectify doctor             # Diagnostics: server, iTerm2, config, vault
+connectify doctor             # Diagnostics: server, terminal, config, vault
 connectify version            # Version information
 connectify --help             # Show all commands
 ```
@@ -100,6 +147,10 @@ They are installed as [iTerm2 Dynamic Profiles](https://iterm2.com/documentation
 into `~/Library/Application Support/iTerm2/DynamicProfiles/` during installation,
 so they show up in iTerm2 (and in Connectify) without any manual import. Upgrades
 refresh them automatically.
+
+If iTerm2 wasn't installed when you installed Connectify, the import is skipped
+entirely - no folder is created for an app that isn't there. Install iTerm2 and
+run `connectify configure iterm` to do it then.
 
 ```bash
 connectify profiles list      # Bundled profiles + everything iTerm2 offers
@@ -247,7 +298,9 @@ Connectify never types your password anywhere. When you connect:
    directory - it contains no secret, only the FIFO's path.
 2. iTerm2 runs that launcher as the session's **command**, so no shell is
    involved: nothing appears in the tab's scrollback, and nothing is recorded in
-   `~/.zsh_history`.
+   `~/.zsh_history`. (On macOS Terminal, which has no equivalent, the launcher's
+   path is typed into the tab's shell - see
+   [Which terminal your sessions open in](#which-terminal-your-sessions-open-in).)
 3. If a secret is needed, `ssh` asks Connectify's askpass helper
    (`SSH_ASKPASS` + `SSH_ASKPASS_REQUIRE=force`), which reads it once from a
    FIFO. The bytes go from Connectify straight into `ssh` - never to disk, never
@@ -270,10 +323,10 @@ way of whatever the session prints next. ssh tells Connectify the moment the
 session is actually up (via `LocalCommand`), so the spinner gives the line back
 before the remote prompt arrives.
 
-Connectify waits for iTerm2 to confirm the tab before reporting success, so the
-tile keeps its spinner until the session is really open and a failure is
+Connectify waits for the terminal to confirm the tab before reporting success,
+so the tile keeps its spinner until the session is really open and a failure is
 reported instead of being swallowed. Launches are serialized, so opening several
-sessions at once queues them rather than having them race inside iTerm2.
+sessions at once queues them rather than having them race inside the terminal.
 
 The same mechanism answers **SSH key passphrase** prompts, so passphrase-protected
 keys work - store the passphrase alongside the key path in its credential.
@@ -348,7 +401,7 @@ Configuration is stored at `~/.connectify/hosts.json`. On first run, a sample co
 | `username` | SSH username | Unless the credential has one |
 | `port` | SSH port (default: 22) | No |
 | `credential` | Name of a credential in the vault | To connect |
-| `iterm_profile` | iTerm2 profile name | No |
+| `iterm_profile` | iTerm2 profile name (ignored on macOS Terminal) | No |
 | `group` | Group used to organize the host list | No |
 | `theme` | Tile theme: `default`, `red`, `orange`, `amber`, `green`, `teal`, `blue`, `violet` or `pink` | No |
 | `tags` | Array of tags for search and filtering | No |
@@ -538,9 +591,24 @@ is ticked - it asks for `password,keyboard-interactive`, and servers that
 authenticate through PAM accept only the latter. If the host was created by
 Connectify 2.0.x, restarting the UI server rewrites the old option for you.
 
-### iTerm2 not opening
+### The terminal doesn't open
 
-Verify iTerm2 is installed and set as default terminal.
+Run `connectify configure` to see which terminal Connectify is using and whether
+it has the permissions it needs. Both terminals need *Automation*; macOS Terminal
+also needs *Accessibility* to open tabs rather than windows. Both live under
+**System Settings → Privacy & Security**.
+
+### Sessions open in a new window instead of a tab
+
+You're on macOS Terminal without Accessibility permission. Grant Connectify
+access under **System Settings → Privacy & Security → Accessibility**, or install
+iTerm2 and run `connectify configure iterm`.
+
+### I installed iTerm2, but nothing changed
+
+Run `connectify configure iterm` to import the profiles and switch over, then
+`connectify ui restart`. The installer skips the import when iTerm2 isn't
+present, so it has to be done once explicitly.
 
 ## Security
 
@@ -550,8 +618,10 @@ Verify iTerm2 is installed and set as default terminal.
   through an askpass helper reading a private FIFO - a kernel rendezvous point
   that stores nothing - so no password file is ever created
 - **Secrets never appear on a command line**, so they can't be seen in `ps`
-- **Nothing is typed into a shell.** iTerm2 runs the session directly, so the
-  SSH command never lands in the terminal scrollback or your shell history
+- **Nothing is typed into a shell** on iTerm2, which runs the session directly,
+  so the SSH command never lands in the terminal scrollback or your shell
+  history. macOS Terminal has no equivalent and receives the launcher's path -
+  which holds no secret, only the FIFO's location
 - No `sshpass`: password authentication uses OpenSSH's own `SSH_ASKPASS`
   mechanism, which also unlocks passphrase-protected SSH keys
 - UI server runs locally on 127.0.0.1 (not exposed to network by default)
@@ -559,7 +629,7 @@ Verify iTerm2 is installed and set as default terminal.
 ## Requirements
 
 - macOS (Apple Silicon or Intel)
-- iTerm2
+- iTerm2 - recommended, but Connectify falls back to the built-in macOS Terminal
 
 That's it! No Python or build tools needed for installation.
 

@@ -259,23 +259,31 @@ def _applescript_app_path(bundle_id):
     return path or None
 
 
-def _find_app(bundle_id, app_name):
+def find_app(bundle_id, app_name, search_paths=None):
     """Locate an app by bundle id, falling back to the usual app folders.
 
     The fallback matters right after a download: an app copied into
     /Applications may not be registered with LaunchServices yet, so the
     AppleScript lookup fails even though the app is there.
+
+    ``search_paths`` overrides where that fallback looks, for apps that live
+    somewhere other than /Applications - Terminal.app, for one.
     """
     path = _applescript_app_path(bundle_id)
     if path:
         return path
 
-    for base in APP_SEARCH_PATHS:
+    for base in (search_paths or APP_SEARCH_PATHS):
         candidate = Path(base).expanduser() / app_name
         if candidate.exists():
             return str(candidate)
 
     return None
+
+
+# The private spelling this module has always used internally, and which the
+# tests reach for.
+_find_app = find_app
 
 
 def find_iterm2():

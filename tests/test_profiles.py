@@ -145,14 +145,38 @@ def test_ensure_profiles_installed_skips_non_macos(fake_home, monkeypatch):
 def test_ssh_manager_installs_profiles_on_startup(fake_home, monkeypatch, capsys):
     monkeypatch.setattr(sys, "platform", "darwin")
     monkeypatch.delenv("CONNECTIFY_SKIP_PROFILE_INSTALL", raising=False)
+    monkeypatch.delenv("CONNECTIFY_TERMINAL", raising=False)
 
     import main
+    import terminals
+
+    # Profiles are only installed for the terminal that can read them
+    monkeypatch.setattr(iterm_profiles, "find_iterm2", lambda: "/Applications/iTerm.app")
+    terminals.reset_cache()
 
     main.SSHManager(str(fake_home / ".connectify/hosts.json"))
 
     for name in SHIPPED_PROFILES:
         assert (dynamic_dir(fake_home) / f"{name}.json").exists()
     assert "Installed Connectify iTerm2 profiles" in capsys.readouterr().out
+
+
+def test_ssh_manager_skips_profiles_when_sessions_open_in_terminal(fake_home, monkeypatch):
+    """No iTerm2 means no DynamicProfiles folder - it would be litter."""
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.delenv("CONNECTIFY_SKIP_PROFILE_INSTALL", raising=False)
+    monkeypatch.delenv("CONNECTIFY_TERMINAL", raising=False)
+
+    import main
+    import terminals
+
+    monkeypatch.setattr(iterm_profiles, "find_iterm2", lambda: None)
+    terminals.reset_cache()
+
+    manager = main.SSHManager(str(fake_home / ".connectify/hosts.json"))
+
+    assert manager.terminal.key == terminals.APPLE_TERMINAL
+    assert not dynamic_dir(fake_home).exists()
 
 
 # --- discovery ---------------------------------------------------------------

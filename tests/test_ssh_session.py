@@ -480,16 +480,29 @@ def test_openssh_accepts_the_passphrase_from_our_helper(runtime, tmp_path):
         session.cleanup()
 
 
-# --- the iTerm2 hand-off -----------------------------------------------------
+# --- the terminal hand-off ---------------------------------------------------
+
+def iterm_manager(tmp_path, monkeypatch, config_extra=""):
+    """An SSHManager wired to iTerm2, with the app itself stubbed out."""
+    import main
+    import terminals
+
+    config = tmp_path / "hosts.json"
+    config.write_text('{"hosts": []%s}' % config_extra)
+    monkeypatch.setattr(terminals.iterm_profiles, "find_iterm2",
+                        lambda: "/Applications/iTerm.app")
+    terminals.reset_cache()
+
+    manager = main.SSHManager(str(config))
+    monkeypatch.setattr(manager.terminal, "ensure_running", lambda timeout=20: True)
+    return manager
+
 
 def test_launch_passes_a_command_to_iterm_and_never_types_the_secret(runtime, tmp_path, monkeypatch):
     """The old implementation typed `sshpass -f <file> ssh ...` into a shell."""
-    import main
+    import terminals
 
-    config = tmp_path / "hosts.json"
-    config.write_text('{"hosts": []}')
-    manager = main.SSHManager(str(config))
-    monkeypatch.setattr(manager, "_ensure_iterm_running", lambda: True)
+    manager = iterm_manager(tmp_path, monkeypatch)
 
     scripts = []
 
@@ -498,7 +511,7 @@ def test_launch_passes_a_command_to_iterm_and_never_types_the_secret(runtime, tm
         # iTerm2 answers with the new session's id
         return subprocess.CompletedProcess(argv, 0, 'w0t1p0:9C1D-session-id', '')
 
-    monkeypatch.setattr(main.subprocess, "run", fake_run)
+    monkeypatch.setattr(terminals.subprocess, "run", fake_run)
 
     host = {**HOST, "iterm_profile": "connectify-PROD",
             "ssh_options": ["StrictHostKeyChecking=no"]}
@@ -524,15 +537,13 @@ def test_launch_passes_a_command_to_iterm_and_never_types_the_secret(runtime, tm
 def test_launch_fails_loudly_when_iterm_does_not_confirm_the_tab(runtime, tmp_path, monkeypatch):
     """A silent AppleScript used to look like success; now it's an error."""
     import main
+    import terminals
 
-    config = tmp_path / "hosts.json"
-    config.write_text('{"hosts": []}')
-    manager = main.SSHManager(str(config))
-    monkeypatch.setattr(manager, "_ensure_iterm_running", lambda: True)
+    manager = iterm_manager(tmp_path, monkeypatch)
     monkeypatch.setattr(main.SSHManager, "LAUNCH_SETTLE_SECONDS", 0)
 
     # No session id back = iTerm2 never opened anything
-    monkeypatch.setattr(main.subprocess, "run",
+    monkeypatch.setattr(terminals.subprocess, "run",
                         lambda argv, **kw: subprocess.CompletedProcess(argv, 0, '', ''))
 
     with pytest.raises(RuntimeError, match="Could not open a session"):
@@ -542,11 +553,9 @@ def test_launch_fails_loudly_when_iterm_does_not_confirm_the_tab(runtime, tmp_pa
 def test_launch_retries_a_transient_applescript_error(runtime, tmp_path, monkeypatch):
     """iTerm2 busy mid-launch shouldn't lose the session."""
     import main
+    import terminals
 
-    config = tmp_path / "hosts.json"
-    config.write_text('{"hosts": []}')
-    manager = main.SSHManager(str(config))
-    monkeypatch.setattr(manager, "_ensure_iterm_running", lambda: True)
+    manager = iterm_manager(tmp_path, monkeypatch)
     monkeypatch.setattr(main.SSHManager, "LAUNCH_SETTLE_SECONDS", 0)
 
     calls = []
@@ -558,7 +567,7 @@ def test_launch_retries_a_transient_applescript_error(runtime, tmp_path, monkeyp
                 1, argv, stderr="iTerm got an error: Can't get current window")
         return subprocess.CompletedProcess(argv, 0, 'session-id', '')
 
-    monkeypatch.setattr(main.subprocess, "run", flaky)
+    monkeypatch.setattr(terminals.subprocess, "run", flaky)
 
     assert manager.launch_iterm_session({**HOST, "iterm_profile": "Default"},
                                         PASSWORD_CREDENTIAL) is True
@@ -568,10 +577,8 @@ def test_launch_retries_a_transient_applescript_error(runtime, tmp_path, monkeyp
 def test_a_failed_launch_cleans_up_its_session_directory(runtime, tmp_path, monkeypatch):
     import main
 
-    config = tmp_path / "hosts.json"
-    config.write_text('{"hosts": []}')
-    manager = main.SSHManager(str(config))
-    monkeypatch.setattr(manager, "_ensure_iterm_running", lambda: False)
+    manager = iterm_manager(tmp_path, monkeypatch)
+    monkeypatch.setattr(manager.terminal, "ensure_running", lambda timeout=20: False)
     monkeypatch.setattr(main.SSHManager, "LAUNCH_SETTLE_SECONDS", 0)
 
     with pytest.raises(RuntimeError):
@@ -582,14 +589,12 @@ def test_a_failed_launch_cleans_up_its_session_directory(runtime, tmp_path, monk
 
 
 def test_rapid_launches_are_serialized_and_spaced(runtime, tmp_path, monkeypatch):
-    """Firing several connects at once must not have them race in iTerm2."""
+    """Firing several connects at once must not have them race in the terminal."""
     import threading
     import main
+    import terminals
 
-    config = tmp_path / "hosts.json"
-    config.write_text('{"hosts": []}')
-    manager = main.SSHManager(str(config))
-    monkeypatch.setattr(manager, "_ensure_iterm_running", lambda: True)
+    manager = iterm_manager(tmp_path, monkeypatch)
     monkeypatch.setattr(main.SSHManager, "LAUNCH_SETTLE_SECONDS", 0.05)
     monkeypatch.setattr(main.SSHManager, "_last_launch_at", 0.0)
 
@@ -606,7 +611,7 @@ def test_rapid_launches_are_serialized_and_spaced(runtime, tmp_path, monkeypatch
             in_flight.pop()
         return subprocess.CompletedProcess(argv, 0, 'session-id', '')
 
-    monkeypatch.setattr(main.subprocess, "run", watch)
+    monkeypatch.setattr(terminals.subprocess, "run", watch)
 
     threads = [threading.Thread(
         target=manager.launch_iterm_session,
