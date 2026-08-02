@@ -98,6 +98,7 @@ export function EmojiMartPicker({ value, onChange, id, label = 'icon' }: {
   const [position, setPosition] = React.useState<Position | null>(null)
   const triggerRef = React.useRef<HTMLButtonElement>(null)
   const panelRef = React.useRef<HTMLDivElement>(null)
+  const scrollerRef = React.useRef<HTMLElement | null>(null)
 
   // Portal into the dialog rather than the body when there is one: Radix traps
   // focus inside its content, and a panel outside that tree would have focus
@@ -136,6 +137,43 @@ export function EmojiMartPicker({ value, onChange, id, label = 'icon' }: {
       window.removeEventListener('scroll', reposition, true)
     }
   }, [open, reposition])
+
+  // The emoji list scrolls inside the picker's shadow root, and a wheel event
+  // crossing that boundary is retargeted to the host element. The dialog's
+  // scroll lock therefore sees a wheel over an `em-emoji-picker` with no
+  // scrollable ancestor it can find, assumes the page behind would scroll, and
+  // cancels the event - so the list never moves. It scrolls perfectly well when
+  // driven directly, so that is what this does.
+  React.useEffect(() => {
+    const panel = panelRef.current
+    if (!open || !panel) return
+    scrollerRef.current = null
+
+    const findScroller = () => {
+      const shadow = panel.querySelector('em-emoji-picker')?.shadowRoot
+      if (!shadow) return null
+      // emoji-mart's own class for it, with a search by behaviour as a fallback
+      // so a renamed class degrades to slower rather than broken
+      return shadow.querySelector<HTMLElement>('.scroll')
+        ?? [...shadow.querySelectorAll<HTMLElement>('*')].find(
+          (el) => el.scrollHeight > el.clientHeight
+            && /auto|scroll/.test(getComputedStyle(el).overflowY),
+        ) ?? null
+    }
+
+    const onWheel = (event: WheelEvent) => {
+      if (!scrollerRef.current?.isConnected) scrollerRef.current = findScroller()
+      const scroller = scrollerRef.current
+      if (!scroller) return
+      scroller.scrollTop += event.deltaY
+      // we are the only one scrolling anything here
+      event.preventDefault()
+    }
+
+    panel.addEventListener('wheel', onWheel, { passive: false })
+    return () => panel.removeEventListener('wheel', onWheel)
+    // `position` is in here because the panel only mounts once it is placed
+  }, [open, position])
 
   return (
     // data-popup-open tells an enclosing dialog that Escape is spoken for -

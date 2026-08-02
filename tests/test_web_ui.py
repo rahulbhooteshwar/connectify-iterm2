@@ -687,3 +687,16 @@ def test_the_card_under_the_pointer_is_not_the_one_left_behind():
 
     assert 'DragOverlay' in page, "the carried copy is what makes the drag read as a drag"
     assert 'opacity-40' in page, "and the tile it came from should read as a gap"
+
+
+def test_the_emoji_list_can_be_scrolled_inside_a_dialog():
+    """The list scrolls inside the picker's shadow root, and a wheel crossing
+    that boundary is retargeted to the host element. The dialog's scroll lock
+    then sees a wheel over something with no scrollable ancestor it can find and
+    cancels it, so nothing moves - the delta has to be applied by hand."""
+    picker = read(UI_SRC, 'components', 'EmojiMartPicker.tsx')
+
+    assert "addEventListener('wheel'" in picker
+    assert 'passive: false' in picker, "preventDefault needs a non-passive listener"
+    assert 'shadowRoot' in picker and 'scrollTop' in picker, \
+        "the scroll container is behind the shadow boundary"
