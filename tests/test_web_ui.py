@@ -732,28 +732,55 @@ def test_the_search_box_takes_focus_on_the_host_list():
 
 
 def test_the_filters_come_before_the_search_box():
-    """Tag filter first, then the group chip, then search - the filters read as
-    one cluster instead of the chip being stranded beside the host count once
-    search started absorbing the slack."""
+    """Tag filter first, then the search field with the group chip riding
+    inside it - the filters read as one cluster instead of being stranded
+    beside the host count once search started absorbing the slack."""
     page = read(UI_SRC, 'pages', 'HostsPage.tsx')
     header = page[page.index('{/* toolbar */}'):page.index('Grid view')]
 
     assert header.index('setTagFilter(') < header.index('id="searchBox"'), \
         "the tag filter should be left of the search box"
-    assert header.index('Clear group filter') < header.index('id="searchBox"'), \
-        "the group chip belongs with the tag filter, not out by the host count"
+    assert header.index('id="searchBox"') < header.index('Clear group filter') < header.index('ml-auto'), \
+        "the group chip belongs inside the search field, not out by the host count"
 
 
 def test_the_search_box_takes_the_leftover_width():
     """It was capped at max-w-md, which left a band of empty toolbar on a wide
     screen while host addresses were still being truncated."""
     page = read(UI_SRC, 'pages', 'HostsPage.tsx')
-    wrapper = re.search(r'<div className="(relative[^"]*)">\s*\n\s*<Search ', page)
+    wrapper = re.search(r'<div className="(relative[^"]*)">\s*\n\s*<div className=\{cn\([\s\S]*?<Search ', page)
 
     assert wrapper, "the search box should still be wrapped for its icons"
     classes = wrapper.group(1)
     assert 'flex-1' in classes, classes
     assert 'max-w-' not in classes, f"a max width caps the search box: {classes}"
+
+
+def test_picking_a_group_clears_a_stale_search():
+    """Switching to a group from the sidebar starts a fresh look at it - a
+    search term left over from a different group would just hide hosts the
+    person has no reason to expect missing. Clearing the group filter is the
+    opposite move (broadening back to every host), so a search in progress
+    should survive that instead of vanishing with it."""
+    page = read(UI_SRC, 'pages', 'HostsPage.tsx')
+    effect = page[page.index('prevGroupFilter'):page.index('const matches')]
+
+    assert 'React.useEffect(' in effect
+    assert re.search(r"if\s*\(groupFilter !== null[^)]*\)\s*setSearch\(''\)", effect), \
+        "search should only be cleared when a group is actually applied"
+    assert '[groupFilter]' in effect, "the effect should run off the group filter prop"
+
+
+def test_the_group_chip_lives_inside_the_search_field():
+    """The group filter and the keyword are one act of narrowing the list, so
+    the chip rides inside the search field - 'api' 'in' '[Prod Apps x]' reads
+    as a single unit - instead of floating in its own box beside it."""
+    page = read(UI_SRC, 'pages', 'HostsPage.tsx')
+    field = page[page.index('id="searchBox"'):page.index('{search && (')]
+
+    assert "groupFilter &&" in field
+    assert 'bg-primary/' in field, "the chip should stand out with its own tint, not blend into the field"
+    assert 'Clear group filter' in field
 
 
 def test_coming_back_to_the_window_refocuses_the_search_box():

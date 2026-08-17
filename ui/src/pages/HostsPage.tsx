@@ -17,7 +17,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { effectiveLogin, UNGROUPED, type Host } from '../lib/types'
 import { themeById } from '../lib/themes'
-import { Badge, Button, cn, Input, Spinner } from '../components/ui'
+import { Badge, Button, cn, Spinner } from '../components/ui'
 import { HostDialog } from '../components/HostDialog'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { GroupDialog } from '../components/GroupDialog'
@@ -81,6 +81,17 @@ export function HostsPage({ groupFilter, clearGroupFilter }: {
       document.removeEventListener('visibilitychange', onVisible)
     }
   }, [gateOpen])
+
+  // Picking a group from the sidebar starts a fresh look at that group - a
+  // search term left over from browsing a different group would just hide
+  // hosts the person has no reason to expect missing. Clearing the group
+  // filter is the opposite move - broadening back to every host - so a
+  // search already in progress carries over instead of vanishing with it.
+  const prevGroupFilter = React.useRef(groupFilter)
+  React.useEffect(() => {
+    if (groupFilter !== null && groupFilter !== prevGroupFilter.current) setSearch('')
+    prevGroupFilter.current = groupFilter
+  }, [groupFilter])
 
   const matches = React.useCallback((host: Host) => {
     if (tagFilter && !(host.tags ?? []).includes(tagFilter)) return false
@@ -182,35 +193,50 @@ export function HostsPage({ groupFilter, clearGroupFilter }: {
           </div>
         )}
 
-        {groupFilter && (
-          <Badge className="border-primary/40 bg-accent text-accent-foreground">
-            <FolderOpen size={11} />
-            {groupFilter === UNGROUPED ? 'Ungrouped' : `${groupIcon(hostsByGroup, groupFilter)}${groupFilter}`}
-            <button type="button" aria-label="Clear group filter" onClick={clearGroupFilter} className="cursor-pointer hover:text-foreground">
-              <X size={11} />
-            </button>
-          </Badge>
-        )}
-
-        <div className="relative min-w-52 flex-1">
-          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            id="searchBox"
-            ref={searchRef}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search hosts or tags…"
-            className="pl-9 pr-8"
-          />
-          {search && (
-            <button
-              type="button" aria-label="Clear search"
-              onClick={() => setSearch('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:text-foreground cursor-pointer"
-            >
-              <X size={14} />
-            </button>
-          )}
+        {/* The group filter rides inside the search field rather than beside
+            it - the two are one act of narrowing the list, and a chip
+            floating in its own box read as a second, unrelated filter. */}
+        <div className="relative min-w-64 flex-1">
+          <div className={cn(
+            'flex h-9 items-center gap-1.5 rounded-lg border border-input bg-card pl-3 pr-2',
+            'transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/25',
+          )}>
+            <Search size={15} className="shrink-0 text-muted-foreground" />
+            <input
+              id="searchBox"
+              ref={searchRef}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={groupFilter ? 'Search…' : 'Search hosts or tags…'}
+              autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck={false}
+              className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+            />
+            {groupFilter && (
+              <>
+                <span className="shrink-0 text-xs text-muted-foreground">in</span>
+                <span className="flex shrink-0 items-center gap-1 rounded-md border border-primary/40 bg-primary/15 py-0.5 pl-1.5 pr-1 text-[11px] font-medium text-primary">
+                  <FolderOpen size={11} />
+                  {groupFilter === UNGROUPED ? 'Ungrouped' : `${groupIcon(hostsByGroup, groupFilter)}${groupFilter}`}
+                  <button
+                    type="button" aria-label="Clear group filter"
+                    onClick={clearGroupFilter}
+                    className="cursor-pointer rounded-sm p-0.5 hover:bg-primary/20 hover:text-primary"
+                  >
+                    <X size={11} />
+                  </button>
+                </span>
+              </>
+            )}
+            {search && (
+              <button
+                type="button" aria-label="Clear search"
+                onClick={() => setSearch('')}
+                className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground cursor-pointer"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* ml-auto is a no-op while search is absorbing the slack, but it still
